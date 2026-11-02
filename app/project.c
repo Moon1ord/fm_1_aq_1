@@ -63,7 +63,7 @@ static int pars_ok(const int16_t *par)
     return 1;
 }
 
-static int project_valid(void)                  /* an older format: the recipes again */
+static int project_valid(void)                  /* another or a damaged save: the defaults */
 {
     int i;
     if (proj.magic != PROJ_MAGIC || !pool_ok(proj.pool) || !pars_ok(proj.par))
@@ -83,7 +83,7 @@ int project_load(void)
     memset(&buf, 0, sizeof buf);
     n = plat_store_load(OBJ_PROJ, &buf, sizeof buf);
     proj = buf;
-    if (n >= 8 && project_valid())
+    if (n == (int)sizeof buf && project_valid())
         return 0;
     project_defaults();
     return -1;

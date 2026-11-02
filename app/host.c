@@ -59,7 +59,7 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
         return 1;
     }
     if (!strcmp(cmd, "storeamb")) {               /* what AMB-1 leaves in the store: its magic, its format */
-        static const uint32_t o[2] = {0x314F4E45u, 4u};
+        static const uint32_t o[2] = {0x314F4E45u /* "ENO1" */, 4u};
         plat_store_save(OBJ_PROJ, o, sizeof o);
         return 1;
     }

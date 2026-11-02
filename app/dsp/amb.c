@@ -764,7 +764,8 @@ static void lead_to(const int8_t *ch, uint32_t tones, const int *from, int root,
  * others stand.
  *
  * The tonic stays out of the bass. A chord on the tonic exists only over its third, or its fifth where that fits better or
- * there is no third, is gated (at least TONIC_GAP chords apart) and weighs little: a glimpse of home, the waiting goes on.
+ * there is no third, stays at least TONIC_GAP chords apart even when its phrase comes again, is never near the start, and
+ * weighs little: a glimpse of home, the waiting goes on.
  *
  * The key stays clear without any walk home: a chord of the tonic area (the tonic chord, and the relatives: FN_T, FN_M) gets
  * heavier with every chord since the last one (away), more so in calm or falling sections, and a colour that has the tonic
@@ -959,7 +960,7 @@ void en_gen_start(en_gen_t *st)
     for (i = 0; i < (int)sizeof *st; i++)
         b[i] = 0u;
     st->prev_root = st->prev2 = st->prev3 = 0xFFu;
-    st->since_t = TONIC_GAP;
+    st->since_t = 0u;                            /* it does not open on it, nor near it */
     st->since_b = BORROW_GAP / 2u;
 }
 
@@ -1068,6 +1069,8 @@ static int gen_colour(const en_gen_t *st, const gen_ctx_t *x, int r, int not_sh,
                 held += !d;
             }
             wt = x->character >= 3 ? g->bright : x->character == 2 ? (uint32_t)(g->calm + g->bright + 1) / 2u : g->calm;
+            if (sh == SH_ADD9 && IN_POOL(x->p, r, 3) && !IN_POOL(x->p, r, 4))
+                wt = 1u;                         /* a minor add9 is a little sad for this: rarely */
             if (sh >= SH_7SUS && sh <= SH_13SUS && fn == FN_D)
                 wt *= 3u;                        /* a sus chord is a dominant that does not insist */
             if (c.tones & 1u && st->away >= 2u)
@@ -1132,7 +1135,7 @@ static int gen_root(const en_gen_t *st, const gen_ctx_t *x, uint32_t off, uint32
             uint32_t a = st->away;
             if (x->character <= 1)
                 a += 1u;
-            wt *= 2u + (a > 1u ? a - 1u : 0u) + (a > 6u ? 2u * (a - 6u) : 0u);
+            wt *= 2u + (a > 1u ? a - 1u : 0u) + (a > 6u ? 4u * (a - 6u) : 0u);
             wt /= 2u;
             if (!wt)
                 wt = 1u;
@@ -1331,7 +1334,8 @@ void en_gen_next(en_gen_t *st, uint32_t p, int key, uint32_t seed, int evolve, i
         en_chord_make(p, id.root, id.shape, &c);
         x.avoid_root = nx.root;
         x.avoid_bass = nx.bass;
-        redo = id.shape == SH_BORROW || id.root == st->prev_root || (st->n && c.bass == st->prev_bass);
+        redo = id.shape == SH_BORROW || id.root == st->prev_root || (st->n && c.bass == st->prev_bass) ||
+               (!id.root && st->since_t < TONIC_GAP);   /* a glimpse of the tonic is not kept: it goes when the phrase returns */
         if (st->var_kind == 1u && st->var_slot == i && !redo) {
             sh = gen_colour(st, &x, id.root, id.shape, 0, hhash(seed, st->n, 64u));
             if (sh >= 0)

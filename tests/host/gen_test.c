@@ -187,7 +187,8 @@ static void mode_checks(void)
                 with_tonic += c->tones & 1u;
                 if (!c->root) {
                     CHECK(c->bass != 0u, "%s: a tonic chord on the tonic", m->name);
-                    CHECK(last_tonic > i || i - last_tonic >= 2u, "%s: tonic chords %u apart", m->name, i - last_tonic);   /* (a phrase may bring it back) */
+                    CHECK(last_tonic > i || i - last_tonic >= 6u, "%s: tonic chords %u apart", m->name, i - last_tonic);
+                    CHECK(i >= 6u, "%s: a chord on the tonic among the first (%u)", m->name, i);
                     last_tonic = i;
                     tonic++;
                 }

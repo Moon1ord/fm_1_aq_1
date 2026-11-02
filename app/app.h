@@ -61,7 +61,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t gain_q12);   /* audio interrup
 #define APP_OVERLOAD                     /* the render took over 90 % of its time: fewer bells */
 void app_overload(void);
 extern volatile uint32_t app_render_max_us;   /* the worst block so far, in microseconds (Setup shows it as a %) */
-extern volatile uint32_t app_sheds;           /* how many times the guard shed voices */
+extern volatile uint32_t app_sheds;           /* overloaded blocks seen (voices are shed on a second one within 64 blocks) */
 void app_panic(void);                    /* silence now (before an update rewrites the flash) */
 void app_ui_init(void);
 void app_frame(void);

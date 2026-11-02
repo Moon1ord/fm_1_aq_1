@@ -41,7 +41,7 @@ static const char *const KNOB_LABEL[NVIEWS][4] = {
 
 /* the screen's colours: the cover of Ambient 1: Music for Airports (1978), as the web app and the site.
  * The map's paper, its ink; the land's greens for the pad (the chord) and the scale, its rivers for the
- * bells; the bass and the pulse in darker inks. Each layer has a pale tint for the shapes at rest. */
+ * bells; the bass and the break in darker inks. Each layer has a pale tint for the shapes at rest. */
 #define K_BG RGB(246, 238, 181)
 #define K_PANEL RGB(255, 251, 224)
 #define K_LINE RGB(208, 214, 150)
@@ -301,8 +301,10 @@ static void set_view(int v)
 static void button(int b)
 {
     int v;
-    if (b == B_GLO)
-        app_render_max_us = 0;                   /* Setup's worst block counts afresh */
+    if (b == B_GLO && ui.view == V_SETUP) {      /* GLO on Setup: the reading starts afresh */
+        app_render_max_us = 0;
+        app_sheds = 0;
+    }
     for (v = 0; v < NVIEWS; v++)                 /* a page's button: its page */
         if (VIEW_BTN[v] == b) {
             set_view(v);
@@ -671,7 +673,7 @@ static void draw_header(void)
                       (uint32_t)proj.par[P_TEMPO] | (ui.view == V_SETUP ? plat_cpu_pct() << 8 : 0u) |
                       (uint32_t)(batt() + 1) << 24);
     if (ui.view == V_SETUP)
-        h = hash(h, app_render_max_us | plat_xruns() << 16);
+        h = hash(h, app_render_max_us | plat_xruns() << 16 | app_sheds << 24);
     if (msg)
         h = hash(hash(h, (uint32_t)ui.msg[0][0] << 8 | ui.msg[0][1]), ui.msg_until);
     if (en_playing)
@@ -703,13 +705,13 @@ static void draw_header(void)
             itoa_u((uint32_t)proj.par[P_TEMPO], t);
         }
         if (ui.view == V_SETUP) {                 /* Setup: the audio load: smoothed, worst block %, missed, shed */
-            char c[28] = "CPU ";
+            char c[52] = "CPU ";
             uint32_t k = 4;
             itoa_u(plat_cpu_pct(), c + k);
             while (c[k]) k++;
             c[k++] = ' ';
             c[k++] = 'M';
-            itoa_u(app_render_max_us * 100u / 5805u, c + k);
+            itoa_u(app_render_max_us * 100u / (APP_BLOCK * 1000000u / 44100u), c + k);
             while (c[k]) k++;
             c[k++] = ' ';
             c[k++] = 'X';
@@ -747,8 +749,8 @@ static void draw_header(void)
 }
 
 /* the garden: the scale as a ring of twelve, the chord lit in it; the four bell loops around it, each
- * a ring of its steps with its notes on it and its playhead going round; the three pulses on the
- * right, the four layers' levels on the left */
+ * a ring of its steps with its notes on it and its playhead going round; the break's hits counted
+ * on the right, the four layers' levels on the left */
 #define CX 120
 #define CY 84
 static const int32_t LOOP_R[EN_NLOOP] = {36, 43, 50, 57};
@@ -898,7 +900,7 @@ static void draw_main(void)
         for (s = 0; s < EN_LOOP_LEN[i]; s++)
             h = hash(h, (uint32_t)(en_loop_note[i][s] >= 0));
     }
-    h = hash(h, en_hits);
+    h = hash(h, en_hits | (uint32_t)q16(en_break_level) << 24);
     h = hash(h, (uint32_t)(en_drift * 40.0f) | (uint32_t)q16(en_pad_level) << 8 | (uint32_t)q16(en_bass_level) << 13);
     for (i = 0; i < 4; i++)
         h = hash(h, (uint32_t)proj.par[i]);
@@ -1143,7 +1145,7 @@ static void sp_page(int all)
 }
 
 /* the garden: the chord and how far to the next, the scale from the root up ("F and F sharp": one letter's
- * two notes joined, so they are heard as two), the pulse sitting out */
+ * two notes joined, so they are heard as two), the break's level */
 static void sp_garden(void)
 {
     uint32_t ap = pool_abs();

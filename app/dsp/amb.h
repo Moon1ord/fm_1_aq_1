@@ -17,7 +17,7 @@
  *           BUSY sets how much of the top sounds; EVOLVE how often it moves.
  *
  * Over it all, the ARC: a slow tide, minutes long, between sparse (fewer bells, a darker vowel, a quieter
- * pulse, more reverb) and full; MOTION sets how far it goes. And rests: with EVOLVE, the
+ * break, more reverb) and full; MOTION sets how far it goes. And rests: with EVOLVE, the
  * bass a chord, a bell loop a pass.
  * Then, after Discreet Music's chain, an Echoplex (160 ms, fed back) and a tape loop (to ~5.6 s, two
  * heads, each repeat darker), and Dattorro's plate (from FoMni), fed generously: the space is most of

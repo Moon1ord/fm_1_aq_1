@@ -17,10 +17,12 @@ void app_init(void)
     project_apply();
 }
 volatile uint32_t app_render_max_us, app_sheds;
+static uint32_t blocks, last_over = 0xFFFFFFFFu;
 
 void app_render(int32_t *lr, uint32_t n, uint32_t gain_q12)
 {
     uint32_t t0 = plat_ticks24(), us;
+    blocks++;
     en_render(lr, n, gain_q12);
     us = (plat_ticks24() - t0) / PLAT_TICKS_PER_US;
     if (us > app_render_max_us)
@@ -29,7 +31,9 @@ void app_render(int32_t *lr, uint32_t n, uint32_t gain_q12)
 void app_overload(void)
 {
     app_sheds++;
-    en_shed();
+    if (last_over != 0xFFFFFFFFu && blocks - last_over <= 64u)   /* one heavy block is not a trend */
+        en_shed();
+    last_over = blocks;
 }
 void app_panic(void)
 {

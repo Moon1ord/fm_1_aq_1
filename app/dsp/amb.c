@@ -1070,7 +1070,7 @@ static void pool_set(uint32_t p)
     bass_to(chord_pcs[0]);
 }
 
-static void regrow(void)                        /* a new piece: fresh loops, home chord, patterns home */
+static void regrow(void)                        /* a new piece: fresh loops, home chord */
 {
     int l;
     for (l = 0; l < EN_NLOOP; l++) {

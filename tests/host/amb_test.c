@@ -208,11 +208,13 @@ int main(void)
     /* freeze: the chord holds */
     {
         int held = en_chord[0] + 128 * en_chord[1], k;
+        uint32_t h0 = en_hits;
         en_freeze(1);
         for (k = 0; k < 60; k++) {
             run(1.0f);
             CHECK(en_chord[0] + 128 * en_chord[1] == held, "the chord moved while frozen");
         }
+        CHECK(en_hits == h0, "the break kept stepping while frozen: %u", en_hits - h0);
         en_freeze(0);
     }
 
@@ -242,6 +244,48 @@ int main(void)
         run(0.1f);
         for (i = 0; i < 4; i++)
             CHECK(pent >> ((en_chord[i] - 2 + 120) % 12) & 1u, "chord note %d not in the pool", en_chord[i]);
+    }
+
+    /* the break alone: it sounds, and with its level at 0 it is silent after the block's tail */
+    {
+        en_init();
+        en_set(P_PAD, 0);
+        en_set(P_BELLS, 0);
+        en_set(P_BASS, 0);
+        en_set(P_WATER, 0);
+        en_set(P_ECHO, 0);
+        en_set(P_REVERB, 0);
+        en_play(1);
+        run(0.5f);
+        peak = 0.0f;
+        run(10.0f);
+        printf("  break alone: peak %.3f\n", (double)peak);
+        CHECK(peak > 0.05f, "the break alone is silent (%f)", (double)peak);
+        en_set(P_BREAK, 0);
+        run(0.5f);
+        peak = 0.0f;
+        run(2.0f);
+        printf("  break at 0: peak %g\n", (double)peak);
+        CHECK(peak == 0.0f, "the break at 0 still sounds (%g)", (double)peak);
+    }
+
+    /* shed, then a new piece: the bells still ring (the limit's restoring is not visible from outside) */
+    {
+        float gl = 0.0f;
+        int k;
+        en_init();
+        en_set(P_DENSITY, 100);
+        en_play(1);
+        en_shed();
+        en_regrow();
+        bad = 0;
+        for (k = 0; k < 40; k++) {
+            int l;
+            run(0.5f);
+            for (l = 0; l < EN_NLOOP; l++)
+                gl = en_loop_glow[l] > gl ? en_loop_glow[l] : gl;
+        }
+        CHECK(!bad && gl > 0.1f, "after a shed and a new piece: NaN %d, bell glow %f", bad, (double)gl);
     }
 
     /* every setting at its extremes: still bounded */

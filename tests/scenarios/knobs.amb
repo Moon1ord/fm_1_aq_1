@@ -1,0 +1,59 @@
+# the seven pages: each knob reaches its parameter, the names fit their cells, each page can be looked at
+wait 300
+expect unfit 0
+shot home.png
+spin K2 -3
+expect par1 67
+spin K3 3
+expect par2 53
+spin K4 3
+expect par3 3
+tap ENV
+wait 100
+shot keys.png
+spin K2 3
+expect par5 53
+spin K3 3
+expect par6 53
+spin K4 -1
+expect par7 2
+tap ARP
+wait 100
+shot motifs.png
+spin K2 3
+expect par9 53
+spin K3 3
+expect par10 53
+spin K4 1
+expect par11 1
+tap LFO
+wait 100
+shot bass.png
+spin K1 3
+expect par12 53
+spin K2 3
+expect par13 53
+spin K3 3
+expect par14 13
+spin K4 1
+expect par15 1
+tap SEQ
+wait 100
+shot drums.png
+spin K1 3
+expect par16 48
+spin K2 3
+expect par17 53
+spin K3 3
+expect par18 53
+spin K4 1
+expect par19 1
+wait 100
+shot drums2.png
+# the octave buttons are the motifs' octave, from any page
+tap OCT-
+expect par11 0
+# and the first page's knobs back from where they were: Style names itself
+tap HOME
+spin K4 -3
+expect par3 0

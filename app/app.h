@@ -20,7 +20,7 @@
 enum { OBJ_PROJ, OBJ_PANEL, OBJ_NOBJ };
 #define APP_STORE_MAP {0xFC000u, 0xDC000u}
 #define PROJ_MAGIC 0x31555141u           /* "AQU1" */
-#define PROJ_FORMAT 2u                   /* 2: with Energy, Style, Breaks (AMB-1's and older saves are not read) */
+#define PROJ_FORMAT 3u                   /* 3: the seven pages' knobs (AMB-1's and older saves are not read: the recipes) */
 #define NPIECES EN_NPIECES
 
 typedef struct {

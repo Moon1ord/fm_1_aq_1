@@ -2,11 +2,20 @@
 wait 300
 tap ENV
 spin K1 -10
-expect par0 <60
+expect par4 <60
 tap SAVE
 expect store_writes 1
 storeamb
 reboot
 wait 300
 expect piece 0
-expect par0 60
+expect par4 60
+# one of ours in the format before this one: refused too, though nothing else about it is wrong
+tap ARP
+spin K1 3
+expect par8 63
+storeold
+reboot
+wait 300
+expect par8 60
+expect par4 60

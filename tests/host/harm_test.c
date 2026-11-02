@@ -797,10 +797,9 @@ static void hat_checks(void)
     en_trace = 0;
     en_trace_chord = 0;
     en_seed(HAT_SEED);
-    en_set(P_PAD, 0);
-    en_set(P_BELLS, 0);
+    en_set(P_MOTIFS, 0);
     en_set(P_BASS, 0);
-    en_set(P_SWELL, 0);
+    en_set(P_KEYS, 0);
     en_play(1);
     while (i + 256u < 44100u * 40u) {
         int j;

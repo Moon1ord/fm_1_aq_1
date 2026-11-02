@@ -23,34 +23,32 @@ const uint16_t EN_MODE_POOL[EN_NMODES] = {
 const uint8_t EN_LOOP_LEN[EN_NLOOP] = {13, 17, 23, 29};
 
 static const en_param_t PARAMS[P_NPARAMS] = {
-    {"Pad", 0, 100, 60},      {"Bells", 0, 100, 60},    {"Bass", 0, 100, 50},     {"Break", 0, 100, 45},
-    {"Density", 0, 100, 40},  {"Evolve", 0, 100, 50},   {"Drift", 0, 100, 25},    {"Busy", 0, 100, 35},
-    {"Echo", 0, 100, 40},     {"Echo time", 0, 5, 3},   {"Reverb", 0, 100, 65},   {"Size", 0, 100, 80},
-    {"Bright", 0, 100, 55},   {"Swell", 0, 100, 60},    {"Bell tone", 0, 100, 60}, {"Motion", 0, 100, 60},
-    {"Tune", -50, 50, 0},     {"MIDI out", 0, 1, 1},    {"Tempo", 150, 180, 170}, {"Root", 0, 11, 2},
-    {"Mode", 0, EN_NMODES - 1, 3}, {"Bell oct", -2, 2, 0}, {"Pad tone", 0, 1, 0},
-    {"Bass oct", -1, 1, 0},   {"Glide", 0, 100, 10},    {"Fifth", 0, 100, 35},
-    {"Water", 0, 100, 30},    {"Kit", 0, 1, 0},         {"Tide", 0, 100, 50},
-    {"Energy", 0, 100, 70},   {"Style", 0, EN_NSTYLES - 1, EN_ST_LIQUID}, {"Breaks", 0, 100, 50},
+    {"Tempo", 150, 180, 170}, {"Energy", 0, 100, 70},  {"Evolve", 0, 100, 50},  {"Style", 0, EN_NSTYLES - 1, EN_ST_LIQUID},
+    {"Keys", 0, 100, 60},     {"Bloom", 0, 100, 50},   {"Bright", 0, 100, 50},  {"Notes", 0, 3, 3},
+    {"Motifs", 0, 100, 60},   {"Rate", 0, 100, 50},    {"Tone", 0, 100, 50},    {"Motif oct", -2, 2, 0},
+    {"Bass", 0, 100, 50},     {"Move", 0, 100, 50},    {"Glide", 0, 100, 10},   {"Bass oct", -1, 1, 0},
+    {"Drums", 0, 100, 45},    {"Breaks", 0, 100, 50},  {"Hats", 0, 100, 50},    {"Kit", 0, 1, 0},
+    {"Echo", 0, 100, 40},     {"Echo time", 0, 5, 3},  {"Reverb", 0, 100, 65},  {"Size", 0, 100, 80},
+    {"Root", 0, 11, 2},       {"Tune", -50, 50, 0},    {"MIDI out", 0, 1, 1},
+    {"Mode", 0, EN_NMODES - 1, 3},
 };
 const en_param_t *en_param_info(int i) { return (i >= 0 && i < P_NPARAMS) ? &PARAMS[i] : &PARAMS[0]; }
 
-/* the pieces: eight recipes for the whole garden (the FM-1's PRESETS, the web app's cards). Tune and
- * MIDI out are taken from here by neither: they belong to the player, not the piece */
-/*                     Pad Bel Bas Brk  Den Evo Dri Bsy  Ech ET Rev Siz  Bri Swe Ton Mot  Tun MI Tem  Rt Md Oc  PT  BO Gli Fif  Wat Kit Tid  En St Br
- * (PT: the pad's colour, 0 Rhodes, 1 Voices; BO: the bass's octave) */
+/* the pieces: eight recipes for the whole instrument (the FM-1's PRESETS). Tune and MIDI out are taken from here by neither:
+ * they belong to the player, not the piece */
+/*                     Tem  En Evo St  Key Blo Bri No  Mot Rat Ton Oc  Bas Mov Gli BO  Drm Brk Hat Ki  Ech ET Rev Siz  Rt Tun MI  Md */
 static const struct {
     const char *name;
     int16_t v[P_NPARAMS];
 } PIECES[EN_NPIECES] = {
-    {"Aqua",      {60, 60, 50, 45, 40, 50, 25, 35, 40, 3, 65, 80, 55, 60, 60, 60, 0, 1, 170, 2, 3, 0, 0, 0, 10, 35, 30, 0, 50, 70, 0, 50}},
-    {"Skyline",   {55, 65, 50, 50, 50, 40, 20, 45, 40, 3, 60, 75, 70, 50, 70, 65, 0, 1, 172, 7, 0, 0, 0, 0, 10, 40, 15, 0, 30, 70, 0, 50}},
-    {"Bubble",    {45, 80, 45, 45, 65, 45, 25, 40, 45, 3, 60, 75, 60, 50, 80, 60, 0, 1, 174, 9, 6, 1, 0, 0, 10, 30, 25, 0, 40, 70, 0, 50}},
-    {"Rainfall",  {65, 45, 45, 35, 30, 30, 35, 25, 45, 4, 70, 85, 45, 70, 40, 55, 0, 1, 165, 5, 0, 0, 1, 0, 15, 25, 60, 0, 80, 70, 0, 50}},
-    {"Aurora",    {70, 50, 45, 40, 35, 35, 40, 30, 50, 4, 80, 95, 50, 80, 50, 70, 0, 1, 168, 4, 3, 0, 1, 0, 15, 30, 25, 1, 60, 70, 0, 50}},
-    {"Lagoon",    {55, 55, 60, 45, 40, 40, 25, 35, 40, 3, 65, 80, 45, 60, 45, 60, 0, 1, 170, 0, 4, 0, 0, 0, 20, 45, 35, 1, 50, 70, 0, 50}},
-    {"Dawn",      {70, 40, 35, 25, 25, 25, 50, 20, 45, 4, 80, 90, 40, 80, 35, 50, 0, 1, 160, 10, 0, 0, 1, 0, 20, 20, 45, 0, 100, 70, 0, 50}},
-    {"Afterglow", {60, 55, 50, 40, 35, 40, 30, 35, 45, 4, 70, 85, 40, 65, 45, 60, 0, 1, 165, 5, 1, 0, 0, 0, 15, 40, 20, 1, 50, 70, 0, 50}},
+    {"Aqua",      {170, 70, 50, 0,  60, 50, 50, 3,  60, 50, 50, 0,  50, 50, 10, 0,  45, 50, 50, 0,  40, 3, 65, 80,  2, 0, 1,  3}},
+    {"Skyline",   {172, 70, 40, 0,  50, 50, 50, 3,  65, 50, 50, 0,  50, 50, 10, 0,  50, 50, 50, 0,  40, 3, 60, 75,  7, 0, 1,  0}},
+    {"Bubble",    {174, 70, 45, 0,  50, 50, 50, 3,  80, 50, 50, 1,  45, 50, 10, 0,  45, 50, 50, 0,  45, 3, 60, 75,  9, 0, 1,  6}},
+    {"Rainfall",  {165, 70, 30, 0,  70, 50, 50, 3,  45, 50, 50, 0,  45, 50, 15, 0,  35, 50, 50, 0,  45, 4, 70, 85,  5, 0, 1,  0}},
+    {"Aurora",    {168, 70, 35, 0,  80, 50, 50, 3,  50, 50, 50, 0,  45, 50, 15, 0,  40, 50, 50, 1,  50, 4, 80, 95,  4, 0, 1,  3}},
+    {"Lagoon",    {170, 70, 40, 0,  60, 50, 50, 3,  55, 50, 50, 0,  60, 50, 20, 0,  45, 50, 50, 1,  40, 3, 65, 80,  0, 0, 1,  4}},
+    {"Dawn",      {160, 70, 25, 0,  80, 50, 50, 3,  40, 50, 50, 0,  35, 50, 20, 0,  25, 50, 50, 0,  45, 4, 80, 90, 10, 0, 1,  0}},
+    {"Afterglow", {165, 70, 40, 0,  65, 50, 50, 3,  55, 50, 50, 0,  50, 50, 15, 0,  40, 50, 50, 1,  45, 4, 70, 85,  5, 0, 1,  1}},
 };
 
 const char *en_piece_name(int i) { return PIECES[(unsigned)i < EN_NPIECES ? i : 0].name; }
@@ -85,8 +83,6 @@ static char *itoa_s(int v, char *b)
     return b;
 }
 
-static float drift_secs(int v) { return 20.0f * fm_exp2f((float)v * 0.039069f); }   /* 20 s .. 5 min */
-
 void en_param_text(int i, int v, char *b)
 {
     static const char *const ONOFF[2] = {"Off", "On"};
@@ -95,8 +91,6 @@ void en_param_text(int i, int v, char *b)
         s = ETIME_NAME[(unsigned)v < 6u ? v : 0];
     else if (i == P_MIDI)
         s = ONOFF[v ? 1 : 0];
-    else if (i == P_PADTONE)
-        s = v ? "Voices" : "Rhodes";
     else if (i == P_KIT)
         s = v ? "Moss" : "Glass";
     else if (i == P_STYLE)
@@ -114,22 +108,7 @@ void en_param_text(int i, int v, char *b)
         b[k] = 0;
         return;
     }
-    if (i == P_DRIFT) {
-        int sec = (int)(drift_secs(v) + 0.5f);
-        if (sec < 60) {
-            b = itoa_s(sec, b);
-            *b++ = 's';
-            *b = 0;
-        } else {
-            b = itoa_s(sec / 60, b);
-            *b++ = ':';
-            *b++ = (char)('0' + sec % 60 / 10);
-            *b++ = (char)('0' + sec % 10);
-            *b = 0;
-        }
-        return;
-    }
-    if ((i == P_TUNE || i == P_BOCT || i == P_BASSOCT) && v > 0)
+    if ((i == P_TUNE || i == P_MOCT || i == P_BASSOCT) && v > 0)
         *b++ = '+';
     itoa_s(v, b);
 }
@@ -271,7 +250,6 @@ volatile uint8_t en_loop_pos[EN_NLOOP];
 volatile int8_t en_loop_note[EN_NLOOP][EN_LOOP_MAX];
 volatile float en_loop_glow[EN_NLOOP];
 volatile uint32_t en_bars;
-volatile float en_arc;
 volatile uint32_t en_hits;
 volatile float en_break_level;
 volatile uint8_t en_pad_note[EN_NPAD];
@@ -337,7 +315,8 @@ static void mods_step(uint32_t n)
         mod[i].v += (mod[i].tgt - mod[i].v) * fm_minf(mod[i].rate, 1.0f);
     }
 }
-static float motion;                            /* 0..1: Motion */
+/* how far the slow motion goes: the pad's pan and pitch, the echo's heads. No knob: what the approved sound had */
+static const float motion = 60.0f * 0.0058f;
 
 /* ----------------------------------------------------------------- break --- */
 static float break_vol;
@@ -1567,13 +1546,12 @@ static void ep_chord(float vel, int with_root)
     int notes[5], nn = 0, i, k, covered[5], todo = 0;
     float roll;
     int32_t wait, gap;
-    const int oct = 12 * par[P_BOCT];
     if (with_root) {
         const int r = (h_root + ch_now.ch.bass) % 12;
-        notes[nn++] = (r < 4 ? 48 : 36) + r + oct;
+        notes[nn++] = (r < 4 ? 48 : 36) + r;
     }
     for (k = 0; k < 4; k++)
-        notes[nn++] = ch_now.keys_v[k] + oct;
+        notes[nn++] = ch_now.keys_v[k];
     for (k = 0; k < nn; k++)
         covered[k] = 0;
     for (i = 0; i < ep_lim; i++) {
@@ -1647,7 +1625,7 @@ static void ep_inner(const inner_t *g)
     } else {
         n = v0 + 12;
     }
-    n = live_note(n) + 12 * par[P_BOCT];
+    n = live_note(n);
     for (i = 0; i < ep_lim; i++)
         if (ep[i].on && ep[i].note == n && ep[i].held)
             return;                              /* the hand has it already: leave it */
@@ -1672,7 +1650,6 @@ static void ep_fresh(void)
     fresh = 0u;
     if (n == top)
         n += 12;
-    n += 12 * par[P_BOCT];
     for (i = 0; i < ep_lim; i++)
         if (ep[i].on && ep[i].note == n && ep[i].held)
             return;
@@ -2181,7 +2158,7 @@ static void song_step(uint32_t s)
         int n;
         for (n = 0; n < 4; n++)
             if (MOTIF[motif_on][n].step == cs && motif_fits(motif_on, n, ch_steps)) {
-                const int note = live_note(72 + h_root + motif_now[n]) + 12 * par[P_BOCT];
+                const int note = live_note(72 + h_root + motif_now[n]) + 12 * par[P_MOCT];
                 bell_strike(motif_on, note, (float)MOTIF[motif_on][n].vel * 0.01f, irand(180));
                 en_loop_pos[motif_on] = (uint8_t)n;
             }
@@ -2479,11 +2456,10 @@ static void apply(int p, int v)
         v = pi->hi;
     par[p] = (int16_t)v;
     switch (p) {
-    case P_PAD: pad_vol = (float)(v * v) * 0.0001f; break;
-    case P_BELLS: bell_vol = (float)(v * v) * 0.0001f; break;
+    case P_KEYS: ep_vol = pad_vol = (float)(v * v) * 0.0001f; break;   /* the pad follows the piano's level, one to one */
+    case P_MOTIFS: bell_vol = (float)(v * v) * 0.0001f; break;
     case P_BASS: bass_vol = (float)(v * v) * 0.0001f; break;
-    case P_BREAK: break_vol = (float)(v * v) * 0.0001f; break;
-    case P_SWELL: ep_vol = (float)(v * v) * 0.0001f; break;   /* in this demo, the electric piano's level */
+    case P_DRUMS: break_vol = (float)(v * v) * 0.0001f; break;
     case P_KIT: brk_set_kit(v); break;
     case P_STYLE: en_style = (uint8_t)v; break;
     case P_ECHO: echo_send = (float)(v * v) * 0.0001f; break;
@@ -2493,7 +2469,6 @@ static void apply(int p, int v)
         pl_decay_t = 0.6f + 0.258f * (float)v * 0.01f;     /* shorter than AMB's: there is a beat to leave room for */
         echo_fb = 0.5f + 0.22f * (float)v * 0.01f;
         break;
-    case P_MOTION: motion = (float)v * 0.0058f; break;   /* the demo sits still: only a little of it */
     case P_TUNE: tunefac = fm_exp2f((float)v * (1.0f / 1200.0f)); break;
     case P_TEMPO:
         tempo_set();
@@ -2598,8 +2573,10 @@ void en_init(void)
     motif_on = -1;
     en_section = en_drum_level = en_break_bars = 0u;
     brk_init();                                  /* before apply: it resets what apply sets */
-    for (i = 0; i < P_NPARAMS; i++)
-        apply(i, PARAMS[i].def);
+    for (i = 0; i < P_NPARAMS; i++)              /* the tempo last: until it is set, what needs all of them waits (echo_time, harmony) */
+        if (i != P_TEMPO)
+            apply(i, PARAMS[i].def);
+    apply(P_TEMPO, PARAMS[P_TEMPO].def);
     pool = EN_MODE_POOL[par[P_MODE]];
     fresh = 0u;
     ep_lone = 0u;
@@ -3125,7 +3102,6 @@ static void control(uint32_t n)                 /* once a chunk: the slow things
     const float slow = (float)n * (1.0f / (6.0f * EN_SR));
     mods_step(n);
     heads_step(n);
-    en_arc = 0.0f;
     brk_fc += (brk_fc_t - brk_fc) * fm_minf(slow * (lift_t > 0.0f ? 4.0f : 1.0f), 1.0f);
     pad_fc += (pad_fc_t - pad_fc) * fm_minf(slow * (lift_t > 0.0f ? 4.0f : 1.0f), 1.0f);
     bass_song = fm_flush(bass_song + (bass_song_t - bass_song) * slow);

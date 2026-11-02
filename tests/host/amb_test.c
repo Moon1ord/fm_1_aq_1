@@ -58,7 +58,6 @@ int main(void)
         uint16_t pl;
         int pc, p;
         CHECK(en_param_info(P_TEMPO)->lo == 150 && en_param_info(P_TEMPO)->hi == 180, "tempo range");
-        CHECK(en_param_info(P_TIDE)->hi == 100, "tide range");
         for (pc = 0; pc < EN_NPIECES; pc++) {
             en_piece(pc, par, &pl);
             for (p = 0; p < P_NPARAMS; p++)
@@ -114,14 +113,10 @@ int main(void)
     /* texts */
     {
         char t[12];
-        en_param_text(P_DRIFT, 0, t);
-        CHECK(!strcmp(t, "20s"), "drift 0: %s", t);
-        en_param_text(P_DRIFT, 100, t);
-        CHECK(!strcmp(t, "5:00"), "drift 100: %s", t);
         en_param_text(P_ETIME, 3, t);
         CHECK(!strcmp(t, "1/4."), "etime: %s", t);   /* (demo-loading) the default place is the dotted quarter */
-        en_param_text(P_BOCT, 1, t);
-        CHECK(!strcmp(t, "+1"), "boct: %s", t);
+        en_param_text(P_MOCT, 1, t);
+        CHECK(!strcmp(t, "+1"), "motif octave: %s", t);
     }
 
     /* the render: silent at rest, sound when growing, never NaN, bounded */
@@ -176,10 +171,9 @@ int main(void)
     /* the break alone: it sounds, and with its level at 0 it is silent after the block's tail */
     {
         en_init();
-        en_set(P_PAD, 0);
-        en_set(P_BELLS, 0);
+        en_set(P_MOTIFS, 0);
         en_set(P_BASS, 0);
-        en_set(P_SWELL, 0);                      /* in this demo, the electric piano's level */
+        en_set(P_KEYS, 0);
         en_set(P_ECHO, 0);
         en_set(P_REVERB, 0);
         en_play(1);
@@ -188,7 +182,7 @@ int main(void)
         run(10.0f);
         printf("  break alone: peak %.3f\n", (double)peak);
         CHECK(peak > 0.05f, "the break alone is silent (%f)", (double)peak);
-        en_set(P_BREAK, 0);
+        en_set(P_DRUMS, 0);
         run(0.5f);
         peak = 0.0f;
         run(2.0f);
@@ -201,7 +195,6 @@ int main(void)
         float gl = 0.0f;
         int k;
         en_init();
-        en_set(P_DENSITY, 100);
         en_play(1);
         en_shed();
         en_regrow();

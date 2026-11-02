@@ -1,32 +1,8 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Charles Vestal */
 /* AQ-1: an arranger (en_arr_*) and chords composed one at a time (en_gen_*) play an electric piano over a dark pad, two motifs,
- * a sub and drum patterns; Swell is the piano's level. What follows is AMB-1's design, of which the space (echo, plate) and the
- * parameters remain.
- *
- * The instrument: a generative ambient garden. Four layers draw on one pool of notes (a scale:
- * the root plus up to eleven more pitch classes) and one chord that drifts slowly through it:
- *
- *   PAD     four breathing voices: each swells in, hangs and fades on its own cycle (unequal lengths,
- *           as the loops of Music for Airports), taking its note of the chord as it starts, so the
- *           chord forms and dissolves. Two colours, by piece: a filtered Rhodes (FM, blooming brighter
- *           as it swells) or Voices (saws through two formants, as "2/1"); then a soft low-pass and an
- *           ensemble chorus. The chord moves every DRIFT (20 s .. 5 min): voices on shared
- *           notes hold, the others breathe in anew.
- *   BELLS   soft two-operator FM bells played by four tape loops of unequal length (13, 17, 23, 29
- *           quarter notes), each holding a short phrase that shifts against the others, each its own
- *           shade of bell. EVOLVE changes a note now and then; DENSITY sets how many notes a loop holds.
- *   BASS    a sine and its sub-octave on the chord's root (now and then its fifth), gliding.
- *   BREAK   a drum break played a slice a sixteenth, in two stems (core and top) of a kit: see brk.h.
- *           BUSY sets how much of the top sounds; EVOLVE how often it moves.
- *
- * Over it all, the ARC: a slow tide, minutes long, between sparse (fewer bells, a darker vowel, a quieter
- * break, more reverb) and full; MOTION sets how far it goes. And rests: with EVOLVE, the
- * bass a chord, a bell loop a pass.
- * Then, after Discreet Music's chain, an Echoplex (160 ms, fed back) and a tape loop (to ~5.6 s, two
- * heads, each repeat darker), and Dattorro's plate (from FoMni), fed generously: the space is most of
- * what is heard.
- * FREEZE holds the chord and lets the plate ring on forever.
+ * a sub and drum patterns, through AMB-1's space: an Echoplex and a tape loop after Discreet Music's chain, then Dattorro's
+ * plate. FREEZE holds the chord and lets the plate ring on.
  *
  * Threads: en_render() runs in the audio interrupt. Everything else posts commands, which the render
  * drains at the start of a block; the state below marked (UI) is written by the render and only read
@@ -48,18 +24,16 @@ extern const uint16_t EN_MODE_POOL[EN_NMODES];
 extern const char *const EN_NOTE_NAME[12];
 extern const uint8_t EN_LOOP_LEN[EN_NLOOP];
 
-/* parameters: value ranges in en_param_info() */
+/* parameters, a page's four knobs at a time: value ranges and defaults in en_param_info() */
 enum {
-    P_PAD, P_BELLS, P_BASS, P_BREAK,                  /* layer levels */
-    P_DENSITY, P_EVOLVE, P_DRIFT, P_BUSY,             /* motion */
-    P_ECHO, P_ETIME, P_REVERB, P_SIZE,                /* space */
-    P_BRIGHT, P_SWELL, P_BTONE, P_MOTION,             /* tone */
-    P_TUNE, P_MIDI, P_TEMPO, P_ROOT, P_MODE, P_BOCT,  /* setup, panel encoders, bell octave */
-    P_PADTONE,                                        /* the pad's colour, set by the piece: Rhodes, Voices */
-    P_BASSOCT, P_GLIDE, P_FIFTH,                      /* bass: its octave, its glide, how often it leans on the fifth */
-    P_WATER, P_KIT,                                   /* the water's level; the break's kit: Glass, Moss */
-    P_TIDE,                                           /* how much of the tide is calm: set by the piece, no knob */
-    P_ENERGY, P_STYLE, P_BREAKS,                      /* the arranger: how far it may rise, its style, how often a break */
+    P_TEMPO, P_ENERGY, P_EVOLVE, P_STYLE,             /* Home */
+    P_KEYS, P_BLOOM, P_BRIGHT, P_NOTES,               /* Keys: the level (the pad follows it), the bloom, the brightness, lone notes */
+    P_MOTIFS, P_MRATE, P_MTONE, P_MOCT,               /* Motifs: the level, how often, the tone, the octave */
+    P_BASS, P_BMOVE, P_GLIDE, P_BASSOCT,              /* Bass: the level, which figures, the glide, the octave */
+    P_DRUMS, P_BREAKS, P_HATS, P_KIT,                 /* Drums: the level, how often a break, the hats' level, the kit */
+    P_ECHO, P_ETIME, P_REVERB, P_SIZE,                /* Space */
+    P_ROOT, P_TUNE, P_MIDI,                           /* Setup (its fourth knob, the lights, is the panel's: not the engine's) */
+    P_MODE,                                           /* the ALGORITHM encoder */
     P_NPARAMS
 };
 typedef struct {
@@ -102,7 +76,6 @@ extern volatile uint8_t en_loop_pos[EN_NLOOP];
 extern volatile int8_t en_loop_note[EN_NLOOP][EN_LOOP_MAX];   /* -1 rest, else the slot's offset */
 extern volatile float en_loop_glow[EN_NLOOP];  /* 0..1: a bell just rang from this loop */
 extern volatile uint32_t en_bars;              /* sixteenths played since start (for tests) */
-extern volatile float en_arc;                  /* the arc, -1 sparse .. +1 full (times Motion) */
 extern volatile uint32_t en_hits;              /* the break's kicks and snares played: the screen counts them */
 extern volatile float en_break_level;          /* the break's level, for the meter */
 extern volatile uint8_t en_pad_note[EN_NPAD];  /* the note each voice sings now (MIDI) */

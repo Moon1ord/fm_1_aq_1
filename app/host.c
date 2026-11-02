@@ -4,8 +4,10 @@
  * "expect", its command, a reboot and the screen reader's dump.
  *
  * AMB-1's checks: playing frozen view piece pool dirty sixteenths ext pad_level bass_level chordroot chordN loopnotes
- * parN battery section style level (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min). Its commands:
- * storeamb (what AMB-1 leaves in the store: its magic and format, nothing of ours); battery N (the battery read as N,
+ * parN battery section style level (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
+ * values, help lines and messages wider than their places. Its commands:
+ * storeamb (what AMB-1 leaves in the store: its magic and format, nothing of ours); storeold (the project as it is, whole, but
+ * for the format before this one); battery N (the battery read as N,
  * plat.h's plat_battery: -1..4; "battery off" the simulator's own, full); seed N (the musical seed, from the next choice on;
  * until told it is EN_HARM_SEED); setpar P V (parameter P to V, as a knob would); style NAME; energy N; breaks N; trace FILE
  * (a line for each bar: step section level character break's bars; a line for each chord: "chord" step name bars character key tones bass, the last two above the key)
@@ -76,6 +78,8 @@ int app_expect(const char *what, int *got)
         for (l = 0; l < EN_NLOOP; l++)
             for (i = 0; i < EN_LOOP_MAX; i++)
                 g += en_loop_note[l][i] >= 0;
+    } else if (!strcmp(what, "unfit")) {          /* what does not fit its place on the screen */
+        g = ui_unfit();
     } else if (!strncmp(what, "par", 3))          /* parN: parameter N (amb.h P_*) */
         g = proj.par[atoi(what + 3)];
     else
@@ -127,6 +131,14 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
     if (!strcmp(cmd, "storeamb")) {               /* what AMB-1 leaves in the store: its magic, its format */
         static const uint32_t o[2] = {0x314F4E45u /* "ENO1" */, 4u};
         plat_store_save(OBJ_PROJ, o, sizeof o);
+        return 1;
+    }
+    if (!strcmp(cmd, "storeold")) {               /* our magic, our size, every value in range: only the format is old */
+        static project_t old;
+        project_save();
+        old = proj;
+        old.format = PROJ_FORMAT - 1u;
+        plat_store_save(OBJ_PROJ, &old, sizeof old);
         return 1;
     }
     return 0;

@@ -3,7 +3,7 @@
 wait 200
 listen
 wait 100
-said Home page: Tempo 170, Evolve 50, Motion 60, Drift 39 seconds. Piece Aqua, D Lydian, growing
+said Home page: Tempo 170, Energy 70, Evolve 50, Style Liquid. Piece Aqua, D Lydian, growing
 # (the garden follows, queued: the chord, how far to the next, the scale from the root up)
 listen
 where
@@ -11,7 +11,7 @@ said Scale D, E, F#, Ab and A, B, C#
 # a page settles before it is said
 tap ENV
 wait 300
-said Pad page: Level 60, Swell 60, Bright 55, Colour Rhodes
+said Keys page: Level 60, Bloom 50, Bright 50, Notes 3
 tap GLO
 wait 300
 said Setup page: Root D, Tune 0, MIDI out On, Lights On
@@ -34,9 +34,9 @@ said Echo time 1/2.
 tap HOME
 wait 300
 said Home page
-spin K4 20
+spin K4 2
 wait 300
-said Drift 1 minute 8 seconds
+said Style Jungle
 # HOME + SELECT: the tempo (the first knob of Home says it)
 press HOME
 turn SELECT 2 200
@@ -80,9 +80,9 @@ said GROWING
 wait 300
 unsaid RESTING
 tap OCT+
-said BELL OCTAVE +1
+said MOTIF OCTAVE +1
 tap OCT-
-said BELL OCTAVE 0
+said MOTIF OCTAVE 0
 tap EDIT
 said NEXT CHORD ON THE BAR
 # a help card: its button, then its lines
@@ -112,4 +112,4 @@ wait 1000
 said Tempo 172
 # WHERE: everything again
 where
-said Home page: Tempo 172, Evolve 50, Motion 60, Drift 1 minute 8 seconds. Piece Aqua, D Lydian, resting
+said Home page: Tempo 172, Energy 70, Evolve 50, Style Jungle. Piece Aqua, D Lydian, resting

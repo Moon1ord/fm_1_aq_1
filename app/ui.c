@@ -4,37 +4,36 @@
  * simulator includes it too.
  *
  *   keys           the scale: each key adds or removes its note from the pool (the root stays)
- *   PLAY           the garden grows / rests        ARP   the next chord, now
- *   REC            FREEZE: the chord holds, the reverb rings on    OCT- / OCT+   the bells' octave
- *   ENV            the pad's colour: Rhodes / Voices (lit: Voices), kept with the piece
- *   SELECT tempo   ALGORITHM mode (loads a pool)   PRESETS the piece (Root is on the Setup page)
- *   HOME SEQ FX SEL GLO   the pages: LAYERS, MOTION, SPACE, TONE, SETUP (EDIT steps through them)
+ *   PLAY           it plays / rests                ARP   the next chord, now
+ *   REC            FREEZE: the chord holds, the reverb rings on    OCT- / OCT+   the motifs' octave
+ *   HOME + SELECT  tempo   ALGORITHM mode (loads a pool)   PRESETS the piece (Root is on the Setup page)
+ *   HOME ENV ARP LFO SEQ FX GLO   the pages: Home, Keys, Motifs, Bass, Drums, Space, Setup (the SELECT encoder steps through them)
  *   KNOB 1-4       the page's four values
  *   SAVE           saves (it also saves by itself a few seconds after a change, while resting);
  *                  held 1.5 s: the piece back to its recipe */
 #include "fastmath.h"
 
 /* the pages, one a layer (a button each); SELECT steps through them in this order */
-enum { V_GARDEN, V_PAD, V_BELLS, V_BASS, V_BREAK, V_SPACE, V_SETUP, NVIEWS };
-static const char *const VIEW_NAME[NVIEWS] = {"Home", "Pad", "Bells", "Bass", "Break", "Space", "Setup"};
+enum { V_GARDEN, V_KEYS, V_MOTIFS, V_BASS, V_DRUMS, V_SPACE, V_SETUP, NVIEWS };
+static const char *const VIEW_NAME[NVIEWS] = {"Home", "Keys", "Motifs", "Bass", "Drums", "Space", "Setup"};
 static const uint8_t VIEW_BTN[NVIEWS] = {B_HOME, B_ENV, B_ARP, B_LFO, B_SEQ, B_FX, B_GLO};
 /* the four knobs of each page: a parameter, or one of these; and what the knob is called there */
 enum { K_LEDS = 100, K_CPU, K_NONE };
 static const uint8_t VIEW_KNOB[NVIEWS][4] = {
-    {P_TEMPO, P_EVOLVE, P_MOTION, P_DRIFT},
-    {P_PAD, P_SWELL, P_BRIGHT, P_PADTONE},
-    {P_BELLS, P_DENSITY, P_BTONE, P_BOCT},
-    {P_BASS, P_BASSOCT, P_GLIDE, P_FIFTH},
-    {P_BREAK, P_BUSY, P_WATER, P_KIT},
+    {P_TEMPO, P_ENERGY, P_EVOLVE, P_STYLE},
+    {P_KEYS, P_BLOOM, P_BRIGHT, P_NOTES},
+    {P_MOTIFS, P_MRATE, P_MTONE, P_MOCT},
+    {P_BASS, P_BMOVE, P_GLIDE, P_BASSOCT},
+    {P_DRUMS, P_BREAKS, P_HATS, P_KIT},
     {P_ECHO, P_ETIME, P_REVERB, P_SIZE},
     {P_ROOT, P_TUNE, P_MIDI, K_LEDS},
 };
 static const char *const KNOB_LABEL[NVIEWS][4] = {
-    {"Tempo", "Evolve", "Motion", "Drift"},
-    {"Level", "Swell", "Bright", "Colour"},
-    {"Level", "Density", "Tone", "Octave"},
-    {"Level", "Octave", "Glide", "Fifth"},
-    {"Level", "Busy", "Water", "Kit"},
+    {"Tempo", "Energy", "Evolve", "Style"},
+    {"Level", "Bloom", "Bright", "Notes"},
+    {"Level", "Rate", "Tone", "Octave"},
+    {"Level", "Move", "Glide", "Octave"},
+    {"Level", "Breaks", "Hats", "Kit"},
     {"Echo", "Echo time", "Reverb", "Size"},
     {"Root", "Tune", "MIDI out", "Lights"},
 };
@@ -343,11 +342,11 @@ static void button(int b)
         en_freeze(!en_frozen);                   /* the engine takes it at its next block */
         break;
     case B_OCTDN: case B_OCTUP:
-        knob_set(P_BOCT, proj.par[P_BOCT] + (b == B_OCTUP ? 1 : -1));
+        knob_set(P_MOCT, proj.par[P_MOCT] + (b == B_OCTUP ? 1 : -1));
         {
             char t[8];
-            en_param_text(P_BOCT, proj.par[P_BOCT], t);
-            say("BELL OCTAVE", t);
+            en_param_text(P_MOCT, proj.par[P_MOCT], t);
+            say("MOTIF OCTAVE", t);
         }
         break;
     case B_SAVE:
@@ -835,8 +834,8 @@ static void draw_meters(void)                    /* left: the four layers */
     int i;
     for (i = 0; i < EN_NLOOP; i++)
         bm = fm_maxf(bm, en_loop_glow[i]);
-    lv[0] = en_pad_level * (float)proj.par[P_PAD] * 0.01f;
-    lv[1] = bm * (float)proj.par[P_BELLS] * 0.01f;
+    lv[0] = en_pad_level * (float)proj.par[P_KEYS] * 0.01f;
+    lv[1] = bm * (float)proj.par[P_MOTIFS] * 0.01f;
     lv[2] = en_bass_level * (float)proj.par[P_BASS] * 0.01f;
     lv[3] = en_break_level * 4.0f;
     for (i = 0; i < 4; i++) {
@@ -857,17 +856,17 @@ static int help_lines(int b, const char *l[HELP_LINES])
     int n = 0;
 #define L(t) (l[n++] = (t))
     switch (b) {
-    case B_HOME: L("HOME"); L("TEMPO, EVOLVE, MOTION, DRIFT"); L("+ SELECT: TEMPO"); break;
-    case B_ENV: L("THE PAD"); L("LEVEL, SWELL, BRIGHT,"); L("COLOUR"); break;
-    case B_ARP: L("THE BELLS"); L("LEVEL, DENSITY, TONE,"); L("OCTAVE"); break;
-    case B_LFO: L("THE BASS"); L("LEVEL, OCTAVE, GLIDE, FIFTH"); break;
-    case B_SEQ: L("THE BREAK"); L("LEVEL, BUSY, WATER, KIT"); break;
+    case B_HOME: L("HOME"); L("TEMPO, ENERGY, EVOLVE, STYLE"); L("+ SELECT: TEMPO"); break;
+    case B_ENV: L("THE KEYS"); L("LEVEL, BLOOM, BRIGHT, NOTES"); break;
+    case B_ARP: L("THE MOTIFS"); L("LEVEL, RATE, TONE, OCTAVE"); break;
+    case B_LFO: L("THE BASS"); L("LEVEL, MOVE, GLIDE, OCTAVE"); break;
+    case B_SEQ: L("THE DRUMS"); L("LEVEL, BREAKS, HATS, KIT"); break;
     case B_FX: L("THE SPACE"); L("ECHO, ECHO TIME, REVERB,"); L("SIZE"); break;
     case B_GLO: L("SETUP"); L("ROOT, TUNE, MIDI OUT, LIGHTS"); break;
     case B_EDIT: L("THE NEXT CHORD,"); L("ON THE NEXT BAR"); break;
     case B_REC: L("FREEZE: THE CHORD HOLDS"); L(" AND THE REVERB RINGS ON"); L("AGAIN: THAW"); break;
-    case B_OCTDN: L("THE BELLS AN OCTAVE DOWN"); L("WITH OCT+, 5 S: UPDATE MODE"); break;
-    case B_OCTUP: L("THE BELLS AN OCTAVE UP"); L("WITH OCT-, 5 S: UPDATE MODE"); break;
+    case B_OCTDN: L("THE MOTIFS AN OCTAVE DOWN"); L("WITH OCT+, 5 S: UPDATE MODE"); break;
+    case B_OCTUP: L("THE MOTIFS AN OCTAVE UP"); L("WITH OCT-, 5 S: UPDATE MODE"); break;
     case B_SAVE: L("SAVES ALL EIGHT PIECES"); L("KEEP HOLDING: THE PIECE"); L(" BACK TO ITS RECIPE"); break;
     default: break;
     }
@@ -913,8 +912,7 @@ static void draw_main(void)
     }
     h = hash(h, en_hits | (uint32_t)q16(en_break_level) << 24);
     h = hash(h, (uint32_t)(en_drift * 40.0f) | (uint32_t)q16(en_pad_level) << 8 | (uint32_t)q16(en_bass_level) << 13);
-    for (i = 0; i < 4; i++)
-        h = hash(h, (uint32_t)proj.par[i]);
+    h = hash(h, (uint32_t)proj.par[P_KEYS] | (uint32_t)proj.par[P_MOTIFS] << 8 | (uint32_t)proj.par[P_BASS] << 16);
     if (h == ui.sig[1])
         return;
     ui.sig[1] = h;
@@ -1060,35 +1058,13 @@ static int sp_same(const char *a, const char *b)
     return *a == *b;
 }
 
-/* a value as it is said: Drift in minutes and seconds (the screen's "1:05", "45s"), the rest as shown */
-static void sp_value(int k)
+static void sp_value(int k)                    /* a value as it is said: as shown */
 {
     char t[16];
     knob_text(k, t);
-    if (k == P_DRIFT) {
-        uint32_t m = 0, s = 0, i;
-        for (i = 0; t[i] >= '0' && t[i] <= '9'; i++)
-            s = s * 10u + (uint32_t)(t[i] - '0');
-        if (t[i] == ':') {
-            m = s;
-            s = 0;
-            for (i++; t[i] >= '0' && t[i] <= '9'; i++)
-                s = s * 10u + (uint32_t)(t[i] - '0');
-        }
-        if (m) {
-            sp_int(m);
-            sp_cat(m == 1u ? " minute" : " minutes");
-            if (!s)
-                return;
-            sp_cat(" ");
-        }
-        sp_int(s);
-        sp_cat(s == 1u ? " second" : " seconds");
-        return;
-    }
     sp_cat(t);
 }
-static void sp_knob(int view, int i)           /* "Swell 60": the name the page gives it, then its value */
+static void sp_knob(int view, int i)           /* "Bloom 60": the name the page gives it, then its value */
 {
     sp_cat(KNOB_LABEL[view][i]);
     sp_cat(" ");
@@ -1184,7 +1160,7 @@ static void sp_garden(void)
     }
 }
 
-/* a help card: its button, then its lines ("ENV button. THE PAD. LEVEL, SWELL, BRIGHT, COLOUR") */
+/* a help card: its button, then its lines ("ENV button. THE KEYS. LEVEL, BLOOM, BRIGHT, NOTES") */
 static void sp_line(const char *s)
 {
     char p = sp_n ? sp_buf[sp_n - 1] : 0;
@@ -1334,6 +1310,62 @@ static void speak(void)
 /* every page, knob value, help card, chord and message as a screen reader gets them (the "speakdump"
  * command): KIND <tab> the text sent (fm1-reader/tools/audit.mjs puts it in words with web/words/ and checks it) */
 static void sp_print(const char *kind, const char *t) { printf("%s\t%s\n", kind, t); }
+static int unfit_one(const felucca_font_t *f, const char *s, int32_t room, const char *what)
+{
+    if (text_w(f, s) <= room)
+        return 0;
+    printf("unfit: %s \"%s\": %d in %d\n", what, s, (int)text_w(f, s), (int)room);
+    return 1;
+}
+static int unfit_msg(const char *a, const char *b)   /* a message: in the header, its two parts 8 apart */
+{
+    char t[48];
+    int w = text_w(&FONT_B, a) + (b ? 8 + text_w(&FONT_B, b) : 0);
+    if (w <= 230)
+        return 0;
+    msg_text(a, b, t);
+    printf("unfit: message \"%s\": %d in 230\n", t, w);
+    return 1;
+}
+#define KNOB_ROOM 58                                  /* a cell is 60 wide */
+#define CARD_ROOM 204                                 /* a card's text: its panel is 208 */
+static int ui_unfit(void)                             /* the host's "unfit": what does not fit its place on the screen */
+{
+    const project_t keep = proj;
+    int n = 0, v, i, x, lo, hi;
+    char t[16];
+    for (v = 0; v < NVIEWS; v++) {
+        n += unfit_one(&FONT_XS, VIEW_NAME[v], 60, "page");
+        for (i = 0; i < 4; i++) {
+            const int k = VIEW_KNOB[v][i];
+            caps(t, KNOB_LABEL[v][i], sizeof t);
+            n += unfit_one(&FONT_XS, t, KNOB_ROOM, "label");
+            knob_range(k, &lo, &hi);
+            for (x = lo; x <= hi; x++) {
+                if (k < P_NPARAMS)
+                    proj.par[k] = (int16_t)x;
+                else
+                    proj.leds = (uint8_t)x;
+                knob_text(k, t);
+                n += unfit_one(&FONT_B, t, KNOB_ROOM, "value");
+            }
+            proj = keep;
+        }
+    }
+    for (i = 0; i < NB; i++) {
+        const char *l[HELP_LINES];
+        const int c = help_lines(i, l);
+        for (x = 0; x < c; x++)
+            n += unfit_one(&FONT_S, l[x] + (l[x][0] == ' '), CARD_ROOM, "help");
+    }
+    for (x = -2; x <= 2; x++) {
+        en_param_text(P_MOCT, x, t);
+        n += unfit_msg("MOTIF OCTAVE", t);
+    }
+    n += unfit_msg("THE ROOT STAYS", "(SETUP)");
+    n += unfit_msg("3 NOTES", "AT LEAST");
+    return n;
+}
 static void speak_dump(void)
 {
     static const char *const MSG[][2] = {{"UPDATE MODE IN", "3.."}, {"UPDATE MODE", "CANCELLED"},
@@ -1420,8 +1452,8 @@ static void speak_dump(void)
     }
     for (x = -2; x <= 2; x++) {
         char o[8];
-        en_param_text(P_BOCT, x, o);
-        msg_text("BELL OCTAVE", o, t);
+        en_param_text(P_MOCT, x, o);
+        msg_text("MOTIF OCTAVE", o, t);
         sp_print("MSG", t);
     }
     for (x = 150; x <= 180; x += 15) {

@@ -10,21 +10,21 @@ tapkey 9
 expect pool 0xAD5
 # the next mode: Mixolydian
 turn ALGO 1
-expect par20 4
+expect par27 4
 expect pool 0x6B5
 turn ALGO -1
 expect pool 0xAD5
 # the root up a tone (Setup page, KNOB 1): E Lydian
 tap GLO
 spin K1 2
-expect par19 4
+expect par24 4
 tap HOME
 expect pool 0xAD5
 wait 300
 shot e_lydian.png
 # pentatonic minor, then strip it down to three notes and try a fourth removal
 turn ALGO 4
-expect par20 7
+expect par27 7
 expect pool 0x4A9
 # E pent min: E G A B D. Remove G (key 2 = G3) and A (key 4 = A3)
 tapkey 2

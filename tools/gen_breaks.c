@@ -172,7 +172,7 @@ static void render_top(const kit_t *k)
     ghost(k, 13, 3, (int)(0.022 * SR), 0.42, 0.75);                          /* f: softer, later */
     rim(16, 2, (int)(0.008 * SR), 0.5);                                      /* r */
     hat(18, 2, 0, 0.34, k->hat_hp * 0.7, 0.009, 0.024);                      /* x: a shaker's push */
-    swell(20, 12, 1.25);                                                     /* ~ */
+    swell(20, 12, 0.85);                                                     /* ~ */
 }
 
 /* IMA ADPCM (the standard's tables) */

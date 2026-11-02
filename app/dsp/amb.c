@@ -693,7 +693,7 @@ static const part_t PART[] = {
     {SONG_STEPS, 0, 0, 0},
 };
 /* per level: the stems' levels, the low-pass on the break (Hz), its pull on the melodic bus */
-static const float CORE_LVL[4] = {0.0f, 0.0f, 0.85f, 1.0f}, TOP_LVL[4] = {0.0f, 0.50f, 0.19f, 0.23f};
+static const float CORE_LVL[4] = {0.0f, 0.0f, 0.85f, 1.0f}, TOP_LVL[4] = {0.0f, 0.50f, 0.26f, 0.32f};
 static const float BRK_FC[4] = {3000.0f, 3000.0f, 4300.0f, 7000.0f};
 static const float PAD_FC[4] = {640.0f, 680.0f, 760.0f, 900.0f};
 
@@ -1266,7 +1266,7 @@ static void render_pad(uint32_t n)
     int i;
     float lvl = 0.0f, c;
     uint32_t j;
-    const float g = pad_vol * 0.097f;
+    const float g = pad_vol * 0.135f;
     for (j = 0; j < n; j++)
         padl[j] = padr[j] = 0.0f;
     pad_gain += (pad_gate - pad_gain) * fm_minf((float)n / ((pad_gate > 0.0f ? 2.5f : 2.2f) * EN_SR), 1.0f);

@@ -1,43 +1,48 @@
 # the pieces: PRESETS picks one, each remembers its settings, SAVE held resets one, all saved
 wait 500
 expect piece 0
-# Garden's pad down (the Pad page: ENV)
+# Aqua's pad down (the Pad page: ENV)
 tap ENV
 spin K1 -10
 expect par0 50
-# the next piece: Departures, its recipe (tempo 60, no pulse, C# Ionian)
+# the next piece: Skyline, its recipe (tempo 172, G Ionian)
 turn PRESET 1
 expect piece 1
-expect par18 60
-expect par3 0
-expect par19 1
+expect par18 172
+expect par3 50
+expect par19 7
 expect pool 0xAB5
 wait 8000
-shot departures.png
-# and Voices
+shot skyline.png
+# and Bubble
 turn PRESET 1
 expect piece 2
-expect par1 0
+expect par18 174
+expect par1 80
+wait 3000
+# and Rainfall
+turn PRESET 1
+expect piece 3
 wait 20000
-shot voices.png
+shot rainfall.png
 expect pad_level >10
-# the pad's colour (the Pad page's fourth knob), kept with the piece (Voices starts as Voices)
+# the pad's colour (the Pad page's fourth knob), kept with the piece (Rainfall starts as Voices)
 expect par22 1
 spin K4 -1
 expect par22 0
 wait 3000
-# back to Garden: as it was left
-turn PRESET -2
+# back to Aqua: as it was left
+turn PRESET -3
 expect par22 0
 expect piece 0
 expect par0 50
 spin K4 1
 expect par22 1
-turn PRESET 2
+turn PRESET 3
 expect par22 0
-turn PRESET -2
+turn PRESET -3
 expect par22 1
-# SAVE held: Garden's recipe again
+# SAVE held: Aqua's recipe again
 press SAVE
 wait 1700
 release SAVE
@@ -47,7 +52,7 @@ expect store_writes 0
 # a tweak, saved, survives a reboot, on the piece it was made on (the Bells page: ARP)
 tap ARP
 spin K1 5
-expect par1 70
+expect par1 65
 turn PRESET 6
 expect piece 6
 tap SAVE
@@ -57,4 +62,4 @@ wait 300
 expect piece 6
 turn PRESET 2
 expect piece 0
-expect par1 70
+expect par1 65

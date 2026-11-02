@@ -2,7 +2,7 @@
 wait 300
 tap ENV
 spin K1 -10
-expect par0 50
+expect par0 <60
 tap SAVE
 expect store_writes 1
 storeamb

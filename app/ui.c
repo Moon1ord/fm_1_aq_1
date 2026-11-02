@@ -15,8 +15,8 @@
 #include "fastmath.h"
 
 /* the pages, one a layer (a button each); SELECT steps through them in this order */
-enum { V_GARDEN, V_PAD, V_BELLS, V_BASS, V_PULSE, V_SPACE, V_SETUP, NVIEWS };
-static const char *const VIEW_NAME[NVIEWS] = {"Garden", "Pad", "Bells", "Bass", "Pulse", "Space", "Setup"};
+enum { V_GARDEN, V_PAD, V_BELLS, V_BASS, V_BREAK, V_SPACE, V_SETUP, NVIEWS };
+static const char *const VIEW_NAME[NVIEWS] = {"Home", "Pad", "Bells", "Bass", "Break", "Space", "Setup"};
 static const uint8_t VIEW_BTN[NVIEWS] = {B_HOME, B_ENV, B_ARP, B_LFO, B_SEQ, B_FX, B_GLO};
 /* the four knobs of each page: a parameter, or one of these; and what the knob is called there */
 enum { K_LEDS = 100, K_CPU, K_NONE };
@@ -25,7 +25,7 @@ static const uint8_t VIEW_KNOB[NVIEWS][4] = {
     {P_PAD, P_SWELL, P_BRIGHT, P_PADTONE},
     {P_BELLS, P_DENSITY, P_BTONE, P_BOCT},
     {P_BASS, P_BASSOCT, P_GLIDE, P_FIFTH},
-    {P_PULSE, P_HITS, P_SWING, P_HATS},
+    {P_BREAK, P_BUSY, P_WATER, P_KIT},
     {P_ECHO, P_ETIME, P_REVERB, P_SIZE},
     {P_ROOT, P_TUNE, P_MIDI, K_LEDS},
 };
@@ -34,7 +34,7 @@ static const char *const KNOB_LABEL[NVIEWS][4] = {
     {"Level", "Swell", "Bright", "Colour"},
     {"Level", "Density", "Tone", "Octave"},
     {"Level", "Octave", "Glide", "Fifth"},
-    {"Level", "Hits", "Swing", "Hats"},
+    {"Level", "Busy", "Water", "Kit"},
     {"Echo", "Echo time", "Reverb", "Size"},
     {"Root", "Tune", "MIDI out", "Lights"},
 };
@@ -810,7 +810,7 @@ static void draw_meters(void)                    /* left: the four layers */
     lv[0] = en_pad_level * (float)proj.par[P_PAD] * 0.01f;
     lv[1] = bm * (float)proj.par[P_BELLS] * 0.01f;
     lv[2] = en_bass_level * (float)proj.par[P_BASS] * 0.01f;
-    lv[3] = dm * (float)proj.par[P_PULSE] * 0.01f;
+    lv[3] = dm * (float)proj.par[P_BREAK] * 0.01f;
     for (i = 0; i < 4; i++) {
         int32_t x = 10 + i * 11, h = (int32_t)(fm_clampf(lv[i], 0.0f, 1.0f) * 80.0f + 0.5f);
         cv_round(x, 46, 7, 86, 3, T[i]);
@@ -854,11 +854,11 @@ static int help_lines(int b, const char *l[HELP_LINES])
     int n = 0;
 #define L(t) (l[n++] = (t))
     switch (b) {
-    case B_HOME: L("THE GARDEN"); L("TEMPO, EVOLVE, MOTION, DRIFT"); L("+ SELECT: TEMPO"); break;
+    case B_HOME: L("HOME"); L("TEMPO, EVOLVE, MOTION, DRIFT"); L("+ SELECT: TEMPO"); break;
     case B_ENV: L("THE PAD"); L("LEVEL, SWELL, BRIGHT,"); L("COLOUR"); break;
     case B_ARP: L("THE BELLS"); L("LEVEL, DENSITY, TONE,"); L("OCTAVE"); break;
     case B_LFO: L("THE BASS"); L("LEVEL, OCTAVE, GLIDE, FIFTH"); break;
-    case B_SEQ: L("THE PULSE"); L("LEVEL, HITS, SWING, HATS"); break;
+    case B_SEQ: L("THE BREAK"); L("LEVEL, BUSY, WATER, KIT"); break;
     case B_FX: L("THE SPACE"); L("ECHO, ECHO TIME, REVERB,"); L("SIZE"); break;
     case B_GLO: L("SETUP"); L("ROOT, TUNE, MIDI OUT, LIGHTS"); break;
     case B_EDIT: L("THE NEXT CHORD,"); L("ON THE NEXT BAR"); break;
@@ -1180,7 +1180,7 @@ static void sp_garden(void)
             last = pc;
         }
     }
-    if (en_pulse_rest && proj.par[P_PULSE])
+    if (en_pulse_rest && proj.par[P_BREAK])
         sp_cat(". Pulse resting");
 }
 
@@ -1426,7 +1426,7 @@ static void speak_dump(void)
         msg_text("BELL OCTAVE", o, t);
         sp_print("MSG", t);
     }
-    for (x = 30; x <= 120; x += 45) {
+    for (x = 150; x <= 180; x += 15) {
         char o[8];
         itoa_u((uint32_t)x, o);
         msg_text("TEMPO", o, t);
@@ -1441,7 +1441,7 @@ static void speak_dump(void)
     }
     proj = keep;
     sp_print("MSG", "Tempo EXT");
-    sp_print("MSG", "Tempo 72");
+    sp_print("MSG", "Tempo 170");
     for (x = 0; x <= 4; x++)                          /* the battery, at the end of WHERE's first part */
         sp_print("WHERE", batt_words(x));
 }

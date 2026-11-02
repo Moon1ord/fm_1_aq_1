@@ -72,6 +72,24 @@ int main(void)
     int pcs[4], n, i;
     char name[16];
 
+    /* the settings: the tempo's range, the recipes in it */
+    {
+        int16_t par[P_NPARAMS];
+        uint16_t pl;
+        int pc, p;
+        CHECK(en_param_info(P_TEMPO)->lo == 150 && en_param_info(P_TEMPO)->hi == 180, "tempo range");
+        CHECK(en_param_info(P_TIDE)->hi == 100, "tide range");
+        for (pc = 0; pc < EN_NPIECES; pc++) {
+            en_piece(pc, par, &pl);
+            for (p = 0; p < P_NPARAMS; p++)
+                CHECK(par[p] >= en_param_info(p)->lo && par[p] <= en_param_info(p)->hi, "piece %d par %d = %d", pc, p, par[p]);
+        }
+        en_piece(0, par, &pl);
+        CHECK(!strcmp(en_piece_name(0), "Aqua") && par[P_TEMPO] == 170 && par[P_ROOT] == 2 && par[P_MODE] == MODE_LYDIAN, "Aqua");
+        en_piece(7, par, &pl);
+        CHECK(!strcmp(en_piece_name(7), "Afterglow") && par[P_MODE] == MODE_DORIAN, "Afterglow");
+    }
+
     /* Euclid: the classic patterns */
     CHECK(en_euclid(3, 8, 0) == pat("x..x..x."), "E(3,8) %x", en_euclid(3, 8, 0));
     CHECK(en_euclid(5, 8, 0) == pat("x.xx.xx."), "E(5,8) %x", en_euclid(5, 8, 0));
@@ -275,7 +293,7 @@ int main(void)
             en_init();
             en_set(P_PAD, 0);
             en_set(P_BASS, 0);
-            en_set(P_PULSE, 0);
+            en_set(P_BREAK, 0);
             en_set(P_ECHO, 0);
             en_set(P_REVERB, 0);
             en_set(P_DENSITY, 100);

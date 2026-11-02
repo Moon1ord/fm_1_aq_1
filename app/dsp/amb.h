@@ -47,14 +47,15 @@ extern const uint8_t EN_DRUM_N[EN_NDRUM];
 
 /* parameters: value ranges in en_param_info() */
 enum {
-    P_PAD, P_BELLS, P_BASS, P_PULSE,                  /* layer levels */
-    P_DENSITY, P_EVOLVE, P_DRIFT, P_HITS,             /* motion */
+    P_PAD, P_BELLS, P_BASS, P_BREAK,                  /* layer levels */
+    P_DENSITY, P_EVOLVE, P_DRIFT, P_BUSY,             /* motion */
     P_ECHO, P_ETIME, P_REVERB, P_SIZE,                /* space */
     P_BRIGHT, P_SWELL, P_BTONE, P_MOTION,             /* tone */
     P_TUNE, P_MIDI, P_TEMPO, P_ROOT, P_MODE, P_BOCT,  /* setup, panel encoders, bell octave */
     P_PADTONE,                                        /* the pad's colour, set by the piece: Rhodes, Voices */
     P_BASSOCT, P_GLIDE, P_FIFTH,                      /* bass: its octave, its glide, how often it leans on the fifth */
-    P_SWING, P_HATS,                                  /* pulse: swing, the hats' colour */
+    P_WATER, P_KIT,                                   /* the water's level; the break's kit: Glass, Moss */
+    P_TIDE,                                           /* how much of the tide is calm: set by the piece, no knob */
     P_NPARAMS
 };
 typedef struct {

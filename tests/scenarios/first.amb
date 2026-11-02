@@ -2,7 +2,7 @@
 wav first.wav
 wait 200
 expect playing 1
-expect pool 0x6AD
+expect pool 0xAD5
 wait 6000
 shot garden.png
 expect pad_level >40

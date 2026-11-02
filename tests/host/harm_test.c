@@ -312,6 +312,31 @@ static void flow_checks(void)
     flow_run("live", EN_MODE_POOL[MODE_LYDIAN], 2, 1);
 }
 
+/* someone at the keys all the time, a note in, a note out: a chord's lone notes stay under the limit for its length */
+static void lone_checks(void)
+{
+    static const uint8_t NOTES[3] = {1, 3, 8};
+    const uint32_t ion = EN_MODE_POOL[MODE_IONIAN];
+    uint32_t k = 0u, full[5] = {0u, 0u, 0u, 0u, 0u};
+    int i, c;
+    engine_start(ion, 2, 606u);
+    while (en_bars < 6000u) {
+        render_until(en_bars + 2u);
+        en_pool(k % 2u ? ion : ion | 1u << NOTES[(k / 2u) % 3u]);
+        k++;
+    }
+    CHECK(!bad_out, "at the keys: %u bad samples", bad_out);
+    for (c = 0; c + 1 < nch; c++) {
+        uint32_t lone = 0u;
+        for (i = 0; i < nev; i++)
+            lone += ev[i].kind == 1 && ev[i].step >= chs[c].step && ev[i].step < chs[c + 1].step;
+        CHECK(lone <= LONE_LIMIT(chs[c].g.bars), "at the keys: %u lone notes on a chord of %d bars", lone, chs[c].g.bars);
+        full[chs[c].g.bars] += lone == LONE_LIMIT(chs[c].g.bars);
+    }
+    printf("  at the keys: chords at their limit of lone notes: of 1 bar %u, 2 %u, 4 %u\n", full[1], full[2], full[4]);
+    CHECK(full[2] > 0u && full[4] > 0u, "the limit never reached");
+}
+
 /* the bass as a pure function: every set of figures on chords of 1, 2 and 4 bars: long notes, on the chord, never the tonic, the
  * time filled, the leading tone to the next chord's bass. The first note of a chord is its bass */
 static void bass_checks(void)
@@ -511,9 +536,9 @@ static void live_checks(void)
     change_seen("a note out", ion, 2, ion & ~(1u << 4), 2, 1100u, 0);
     change_seen("into a pentatonic", lyd, 2, EN_MODE_POOL[MODE_PENT_MIN], 2, 1276u, 0);
     {
-        static const int BACK[5] = {12, 8, 4, 2, 1};
+        static const int BACK[6] = {12, 8, 4, 2, 1, 0};   /* 0: the last step has run, the chord's has not */
         int b;
-        for (b = 0; b < 5; b++)
+        for (b = 0; b < 6; b++)
             change_late(lyd, EN_MODE_POOL[MODE_PENT_MIN], BACK[b]);
     }
     /* a motif under way: its remaining notes obey at once */
@@ -823,6 +848,7 @@ int main(void)
     engine_checks();
     live_checks();
     flow_checks();
+    lone_checks();
     bass_checks();
     motif_checks();
     hour_checks();

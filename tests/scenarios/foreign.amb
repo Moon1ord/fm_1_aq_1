@@ -1,0 +1,11 @@
+# a project saved by AMB-1 is not ours: the recipes, nothing carried over
+wait 300
+tap ENV
+spin K1 -10
+tap SAVE
+expect store_writes 1
+storeamb
+reboot
+wait 300
+expect piece 0
+expect par0 60

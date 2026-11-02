@@ -248,8 +248,8 @@ static void break_checks(void)
 }
 
 /* ---- the harmony, as the arranger leads it ---- */
-#define WALK_CYCLES 100u
-#define HOME_WITHIN (EN_HOME_CYCLES + 10)        /* its own limit, and a peak that began just before it */
+/* the chords of whole passes, with the character the arranger says at each chord's first bar */
+#define WALK_CHORDS 240u
 static void harmony_checks(void)
 {
     static const int ENERGY[] = {0, 30, DEF_ENERGY, 100};
@@ -260,73 +260,65 @@ static void harmony_checks(void)
             for (p = 0; p < 2; p++) {
                 uint32_t sd, elsewhere = 0u, seconds = 0u;
                 int worst = 0;
-                for (sd = 0u; sd < (p ? 30u : NSEEDS); sd++) {
+                for (sd = 0u; sd < (p ? 10u : 60u); sd++) {
                     en_arr_t a;
-                    en_harm_t h;
-                    en_hchord_t ch[4];
-                    uint8_t hk[4][4], hp[4][4], k[4][4], q[4][4];
-                    uint32_t bar = 0u, cy = 0u, in = 0u, lastpass = 0u, passes = 1u, borrowed = 0u;
-                    int gap = 0, s, v, second = 0, counted = 0;
-                    en_home_voicing(POOLS[p], 2, hk, hp);
-                    memcpy(k, hk, sizeof k);
-                    memcpy(q, hp, sizeof q);
+                    en_gen_t g;
+                    en_gchord_t c;
+                    uint32_t bar = 0u, in = 0u, i, lastpass = 0u, first_root = 0u, passes = 1u, last_b = 0u;
+                    int gap = 0, v, counted = 0, any_b = 0;
+                    en_gen_start(&g);
                     en_arr_first(&a, sd, st, ENERGY[e]);
-                    while (cy < WALK_CYCLES) {
-                        if (in >= a.bars) {
+                    for (i = 0u; i < WALK_CHORDS; i++) {
+                        en_part_t pt;
+                        const int prev_root = g.prev_root, prev_bass = g.prev_bass;
+                        while (in >= a.bars) {
+                            in -= a.bars;
                             en_arr_next(&a, sd, st, ENERGY[e]);
-                            in = 0u;
                         }
-                        if (!(bar % 16u)) {
-                            en_part_t pt;
-                            en_harm_t was = h;
-                            int home = 1;
-                            en_arr_part(&a, in, st, ENERGY[e], &pt);
-                            if (a.pass != lastpass) {
-                                en_harm_new_pass(&h);
-                                lastpass = a.pass;
-                                passes++;
-                                borrowed = 0u;
-                                was = h;
-                            }
-                            en_harm_walk(&h, POOLS[p], 2, cy, sd, pt.character, ch);
-                            if (cy)
-                                en_voice_cycle(&was, &h, ch, 0, 2, (const uint8_t (*)[4])hk, (const uint8_t (*)[4])hp, k, q);
-                            for (s = 0; s < 4; s++) {
-                                home &= h.chord[s] == en_harm_home(s);
-                                borrowed += ch[s].borrowed;
-                                CHECK(ch[s].bass != 0, "%s: the tonic in the bass", EN_STYLE_NAME[st]);
-                                for (v = 0; v < 4; v++) {
-                                    CHECK(k[s][v] >= 54 && k[s][v] <= 77, "%s seed %u: keys %d", EN_STYLE_NAME[st], sd, k[s][v]);
-                                    CHECK(q[s][v] >= 51 && q[s][v] <= 74, "%s seed %u: pad %d", EN_STYLE_NAME[st], sd, q[s][v]);
-                                }
-                                second |= h.chord[s] == en_harm_section(s) && h.section;
-                            }
-                            CHECK(borrowed <= 1u, "%s seed %u: %u borrowed chords in a pass", EN_STYLE_NAME[st], sd, borrowed);
-                            gap = home ? 0 : gap + 1;
-                            worst = gap > worst ? gap : worst;
-                            if (passes == 2u && !counted) {       /* the second pass's first chords: a chord of another function */
-                                int sub = 0;
-                                for (s = 0; s < 4; s++)
-                                    sub += en_harm_plain(h.chord[s]) != en_harm_home(s);
-                                elsewhere += sub > 0;
-                                counted = 1;
-                            }
-                            cy++;
+                        en_arr_part(&a, in, st, ENERGY[e], &pt);
+                        if (a.pass != lastpass) {
+                            lastpass = a.pass;
+                            passes++;
                         }
-                        bar++;
-                        in++;
+                        en_gen_next(&g, POOLS[p], 2, sd, 50, pt.character, &c);
+                        if (!i)
+                            first_root = c.ch.root;
+                        CHECK(c.ch.bass != 0, "%s: the tonic in the bass", EN_STYLE_NAME[st]);
+                        if (i) {
+                            CHECK(c.ch.root != prev_root, "%s seed %u: the same root twice", EN_STYLE_NAME[st], sd);
+                            CHECK(c.ch.bass != prev_bass, "%s seed %u: the same bass twice", EN_STYLE_NAME[st], sd);
+                        }
+                        for (v = 0; v < 4; v++) {
+                            CHECK(c.keys_v[v] >= 54 && c.keys_v[v] <= 77, "%s seed %u: keys %d", EN_STYLE_NAME[st], sd, c.keys_v[v]);
+                            CHECK(c.pad_v[v] >= 51 && c.pad_v[v] <= 74, "%s seed %u: pad %d", EN_STYLE_NAME[st], sd, c.pad_v[v]);
+                        }
+                        if (c.ch.borrowed) {
+                            CHECK(!any_b || i - last_b >= 40u, "%s seed %u: borrowed chords %u apart", EN_STYLE_NAME[st], sd, i - last_b);
+                            any_b = 1;
+                            last_b = i;
+                        }
+                        /* the key stays clear, in every style: the tonic area comes round. Lydian: F#, B and the tonic; Aeolian: C, F and the tonic */
+                        gap = c.ch.root == (p ? 3 : 4) || c.ch.root == (p ? 8 : 9) || !c.ch.root ? 0 : gap + 1;
+                        worst = gap > worst ? gap : worst;
+                        if (passes == 2u && !counted) {       /* the second pass starts from where the music has got to, not from the top */
+                            elsewhere += c.ch.root != first_root;
+                            counted = 1;
+                        }
+                        seconds += pt.character == 3u;
+                        bar += c.bars;
+                        in += c.bars;
                     }
-                    seconds += (uint32_t)second;
+                    (void)bar;
                 }
-                CHECK(worst <= HOME_WITHIN, "%s energy %d: %d cycles away from home", EN_STYLE_NAME[st], ENERGY[e], worst);
+                CHECK(worst <= 24, "%s energy %d: %d chords away from the tonic area", EN_STYLE_NAME[st], ENERGY[e], worst);
                 if (!p) {
-                    printf("  %-8s energy %3d: of %u seeds, %u start their second pass away from the home chords; at most %d cycles from home\n", EN_STYLE_NAME[st], ENERGY[e], NSEEDS, elsewhere, worst);
-                    CHECK(elsewhere > NSEEDS * 8u / 10u, "%s energy %d: the second pass starts where the first did: %u", EN_STYLE_NAME[st], ENERGY[e], elsewhere);
-                    /* the peak's second cycle: at the energy that reaches it, and never below */
+                    printf("  %-8s energy %3d: of 60 seeds, %u start their second pass on another root; at most %d chords from the tonic area\n", EN_STYLE_NAME[st], ENERGY[e], elsewhere, worst);
+                    CHECK(elsewhere > 60u / 2u, "%s energy %d: the second pass starts where the first did: %u", EN_STYLE_NAME[st], ENERGY[e], elsewhere);
+                    /* the peak: at the energy that reaches it, and never below */
                     if (ENERGY[e] < 60)
-                        CHECK(seconds == 0u, "%s energy %d: the second cycle %u times", EN_STYLE_NAME[st], ENERGY[e], seconds);
+                        CHECK(seconds == 0u, "%s energy %d: the peak %u times", EN_STYLE_NAME[st], ENERGY[e], seconds);
                     else
-                        CHECK(seconds > 0u, "%s energy %d: never the second cycle", EN_STYLE_NAME[st], ENERGY[e]);
+                        CHECK(seconds > 0u, "%s energy %d: never the peak", EN_STYLE_NAME[st], ENERGY[e]);
                 }
             }
 }
@@ -536,6 +528,15 @@ static void tempo_checks(void)
     }
 }
 
+static uint32_t hand_n[2];
+static double hand_top[2];
+static void hand_seen(uint32_t step, const en_gchord_t *g, int character)
+{
+    (void)step;
+    hand_n[character == 3]++;
+    hand_top[character == 3] += g->keys_v[3];
+}
+
 static void energy_engine_checks(void)
 {
     int st;
@@ -567,30 +568,20 @@ static void energy_engine_checks(void)
             CHECK(brk_kicks > 0u, "no kicks");
         }
     }
-    /* the second cycle, at the first seam in the peak */
+    /* the peak: over a good many songs the hand sits higher than elsewhere, with no fixed second cycle */
     {
-        uint32_t sd, seen = 0u;
+        uint32_t sd;
+        en_trace_chord = hand_seen;
+        hand_n[0] = hand_n[1] = 0u;
+        hand_top[0] = hand_top[1] = 0.0;
         for (sd = 0u; sd < 12u; sd++) {
-            uint32_t left = 5000u, in_full = 0u;
             engine_start(EN_ST_LIQUID, DEF_ENERGY, 50, 300u + sd);
-            while (left--) {
-                drive(1u, 32u);
-                if (en_section == EN_SEC_FULL && !in_full) {
-                    in_full = en_bars;
-                }
-                if (in_full && en_section != EN_SEC_FULL)
-                    in_full = 0u;
-                if (in_full && en_bars > in_full + 256u + 8u) {
-                    int s, peak = 0;
-                    for (s = 0; s < 4; s++)
-                        peak += en_cycle_now[s] == en_harm_section(s);
-                    CHECK(peak >= 2, "seed %u, a cycle into the peak: the chords are not its own", sd);
-                    seen++;
-                    break;
-                }
-            }
+            drive(7000u, 16u);
         }
-        CHECK(seen > 6u, "the peak's chords seen only %u times", seen);
+        en_trace_chord = 0;
+        CHECK(hand_n[0] > 30u && hand_n[1] > 30u, "the peak seen %u times, the rest %u", hand_n[1], hand_n[0]);
+        printf("  the top of the hand: %.1f elsewhere, %.1f at the peak (%u and %u chords)\n", hand_top[0] / hand_n[0], hand_top[1] / hand_n[1], hand_n[0], hand_n[1]);
+        CHECK(hand_top[1] / hand_n[1] > hand_top[0] / hand_n[0] + 1.0, "the top of the hand at the peak %.1f, elsewhere %.1f", hand_top[1] / hand_n[1], hand_top[0] / hand_n[0]);
     }
 }
 
@@ -601,21 +592,15 @@ static void hours_checks(void)
     int st;
     bad_out = 0u;
     for (st = 0; st < EN_NSTYLES; st++) {
-        uint32_t moves = 0u, gap = 0u, worst = 0u, last = 0u, sects = 0u, sect_was = 99u;
-        uint8_t was[4];
+        uint32_t moves = 0u, sects = 0u, sect_was = 99u, was;
         engine_start(st, DEF_ENERGY, 50, 2024u + (uint32_t)st);
-        memcpy(was, (const void *)en_cycle_now, 4);
+        was = en_chord[0] | (uint32_t)en_chord[1] << 8 | (uint32_t)en_chord[2] << 16 | (uint32_t)en_chord[3] << 24;
         while (en_bars < steps) {
-            int s, home = 1;
+            uint32_t now;
             drive(1u, 16u);
-            for (s = 0; s < 4; s++)
-                home &= en_cycle_now[s] == en_harm_home(s);
-            if (home)
-                last = en_bars;
-            gap = (en_bars - last) / 256u;
-            worst = gap > worst ? gap : worst;
-            if (memcmp(was, (const void *)en_cycle_now, 4)) {
-                memcpy(was, (const void *)en_cycle_now, 4);
+            now = en_chord[0] | (uint32_t)en_chord[1] << 8 | (uint32_t)en_chord[2] << 16 | (uint32_t)en_chord[3] << 24;
+            if (now != was) {
+                was = now;
                 moves++;
             }
             if (en_section != sect_was) {
@@ -623,11 +608,9 @@ static void hours_checks(void)
                 sects++;
             }
         }
-        printf("  %-8s 2 h: %u steps, %u sections, %u chord moves, longest from home %u cycles, %u kicks, peak %d voices\n", EN_STYLE_NAME[st], en_bars, sects, moves, worst, brk_kicks,
-               en_ep_peak);
+        printf("  %-8s 2 h: %u steps, %u sections, %u chord moves, %u kicks, peak %d voices\n", EN_STYLE_NAME[st], en_bars, sects, moves, brk_kicks, en_ep_peak);
         CHECK(sects > 100u, "%s: only %u sections in two hours", EN_STYLE_NAME[st], sects);
-        CHECK(moves > 50u, "%s: only %u chord moves", EN_STYLE_NAME[st], moves);
-        CHECK(worst <= HOME_WITHIN, "%s: %u cycles from home", EN_STYLE_NAME[st], worst);
+        CHECK(moves > 1000u, "%s: only %u chord moves", EN_STYLE_NAME[st], moves);
         CHECK(en_pad_level > 0.1f, "%s: the pad has gone (%f)", EN_STYLE_NAME[st], (double)en_pad_level);
         CHECK(en_ep_peak <= 12, "%s: %d voices", EN_STYLE_NAME[st], en_ep_peak);
         CHECK(!bad_out, "%s: hours: %u bad samples", EN_STYLE_NAME[st], bad_out);

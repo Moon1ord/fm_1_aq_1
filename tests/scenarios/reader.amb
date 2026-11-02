@@ -3,7 +3,7 @@
 wait 200
 listen
 wait 100
-said Home page: Tempo 170, Evolve 35, Motion 60, Drift 39 seconds. Piece Aqua, D Lydian, growing
+said Home page: Tempo 170, Evolve 50, Motion 60, Drift 39 seconds. Piece Aqua, D Lydian, growing
 # (the garden follows, queued: the chord, how far to the next, the scale from the root up)
 listen
 where
@@ -112,4 +112,4 @@ wait 1000
 said Tempo 172
 # WHERE: everything again
 where
-said Home page: Tempo 172, Evolve 35, Motion 60, Drift 1 minute 8 seconds. Piece Aqua, D Lydian, resting
+said Home page: Tempo 172, Evolve 50, Motion 60, Drift 1 minute 8 seconds. Piece Aqua, D Lydian, resting

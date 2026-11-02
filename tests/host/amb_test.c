@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <math.h>
 #include "amb.h"
-#include "demo_script.h"
 
 static int fails;
 #define CHECK(c, ...)                                                                                              \
@@ -139,25 +138,22 @@ int main(void)
     CHECK(en_bars / 16u >= 5u, "the grid ran (%u sixteenths)", en_bars);
     CHECK(en_pad_level > 0.5f, "the pad swelled (%f)", (double)en_pad_level);
 
-    /* a four-chord cycle: each chord its own, and it comes again (over the demo's fixed song, demo_script.h) */
+    /* the chords move, on and on: each change another root, none longer than four bars */
     {
-        uint8_t seen[4];
-        int k, changes = 0, again = 0;
+        uint8_t was;
+        int k, changes = 0;
         en_init();
-        en_test_script(DEMO_SCRIPT, DEMO_SCRIPT_N);
         en_play(1);
         run(0.1f);
-        for (k = 0; k < 4; k++) {
-            seen[k] = en_chord_root;
-            run(5.647f);
+        was = en_chord_root;
+        for (k = 0; k < 120; k++) {              /* a minute, in half seconds */
+            run(0.5f);
+            if (en_chord_root != was) {
+                changes++;
+                was = en_chord_root;
+            }
         }
-        for (k = 0; k < 4; k++) {
-            again += en_chord_root == seen[k];
-            run(5.647f);
-        }
-        for (k = 0; k < 4; k++)
-            changes += seen[k] != seen[(k + 1) & 3];
-        CHECK(changes == 4 && again == 4, "the cycle: %d changes, %d of 4 came again", changes, again);
+        CHECK(changes >= 10, "the chords: %d changes in a minute", changes);
     }
 
     /* freeze: the chord holds */
@@ -173,14 +169,13 @@ int main(void)
         en_freeze(0);
     }
 
-    /* (demo-loading) a new key and the pool no longer move the voices at once: the cycle takes the new key at its next
-     * chord, and has its own notes whatever the scale. Those two checks do not apply. */
+    /* (demo-loading) a new key and the pool no longer move the voices at once: the next chord takes the new key, and has
+     * its own notes whatever the scale. Those two checks do not apply. */
     run(0.1f);                                   /* (the un-freeze arrives) */
 
     /* the break alone: it sounds, and with its level at 0 it is silent after the block's tail */
     {
         en_init();
-        en_test_script(DEMO_SCRIPT, DEMO_SCRIPT_N);
         en_set(P_PAD, 0);
         en_set(P_BELLS, 0);
         en_set(P_BASS, 0);
@@ -188,7 +183,7 @@ int main(void)
         en_set(P_ECHO, 0);
         en_set(P_REVERB, 0);
         en_play(1);
-        run(140.0f);                             /* to level 3 */
+        run(140.0f);                             /* to the drums */
         peak = 0.0f;
         run(10.0f);
         printf("  break alone: peak %.3f\n", (double)peak);
@@ -206,7 +201,6 @@ int main(void)
         float gl = 0.0f;
         int k;
         en_init();
-        en_test_script(DEMO_SCRIPT, DEMO_SCRIPT_N);
         en_set(P_DENSITY, 100);
         en_play(1);
         en_shed();
@@ -240,7 +234,6 @@ int main(void)
     /* (demo-loading) Bell tone no longer shapes the motifs (each has its fixed timbre) and they are too sparse for this
      * test's 20 s: the Bell tone and Bell oct checks do not apply */
     en_init();
-    en_test_script(DEMO_SCRIPT, DEMO_SCRIPT_N);
     en_play(1);
     run(20.0f);
 

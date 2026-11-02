@@ -158,6 +158,7 @@ static void mode_checks(void)
     for (mi = 0; mi < EN_NMODES; mi++) {
         const mode_t_ *m = &MODES[mi];
         uint32_t sd, deg_all = 0u, n_all = 0u, common = 0u, moved = 0u, tonic = 0u, area_gap = 0u, with_tonic = 0u;
+        uint32_t huddle = 0u, ninths = 0u;
         uint32_t len[5] = {0u, 0u, 0u, 0u, 0u}, deg_n[12];
         memset(deg_n, 0, sizeof deg_n);
         for (sd = 0u; sd < 60u; sd++) {
@@ -173,6 +174,12 @@ static void mode_checks(void)
                 CHECK(!(bar % g[i].bars) || g[i].bars == 1u, "%s: %d bars at bar %u", m->name, g[i].bars, bar);
                 CHECK(bar / 8u == (bar + g[i].bars - 1u) / 8u, "%s: a chord across the phrase's edge at bar %u", m->name, bar);
                 len[g[i].bars]++;
+                huddle += g[i].keys_v[3] - g[i].keys_v[0] < 7;
+                for (v = 0u; v < 3u; v++) {
+                    uint32_t u;
+                    for (u = v + 1u; u < 4u; u++)
+                        ninths += g[i].keys_v[u] - g[i].keys_v[v] == 13;
+                }
                 if (!c->borrowed) {
                     deg |= 1u << c->root;
                     deg_n[c->root]++;
@@ -212,7 +219,9 @@ static void mode_checks(void)
             }
             deg_all |= deg;
         }
-        printf("  %-10s roots%s", m->name, "");
+        CHECK(huddle * 100u <= n_all, "%s: the hand huddled in %.1f%% of chords", m->name, 100.0 * huddle / n_all);
+        CHECK(ninths * 100u <= n_all, "%s: two hand notes a minor ninth apart in %.1f%% of chords", m->name, 100.0 * ninths / n_all);
+        printf("  %-10s hand: under a fifth wide %.2f%%, a minor ninth inside %.2f%%; roots", m->name, 100.0 * huddle / n_all, 100.0 * ninths / n_all);
         {
             int r;
             for (r = 0; r < 12; r++)
@@ -225,7 +234,7 @@ static void mode_checks(void)
         CHECK(!(deg_all & ~(WANT[mi] | 1u)), "%s: a root not expected: %03x", m->name, deg_all);
         CHECK(tonic * 100u <= n_all * 8u, "%s: tonic chords %.1f%%", m->name, 100.0 * tonic / n_all);
         CHECK(tonic > 0u, "%s: never a tonic chord", m->name);
-        CHECK(common * 10u >= n_all * 12u, "%s: %.2f common tones", m->name, (double)common / n_all);
+        CHECK(common * 10u >= n_all * 24u, "%s: %.2f common tones", m->name, (double)common / n_all);
         CHECK(moved <= n_all * 11u, "%s: the hand moves %.1f", m->name, (double)moved / n_all);
         CHECK(len[2] + len[4] >= len[1] * 5u, "%s: too many short chords", m->name);
         CHECK(len[1] > 0u, "%s: no 1-bar chords", m->name);
@@ -472,8 +481,57 @@ static void tonic_gap_checks(void)
     }
 }
 
+/* the families, by name: what a colour comes to in the stock modes */
+static void family_checks(void)
+{
+    static const struct {
+        int mode, key, fam, root, shape;
+        const char *name;
+    } T[] = {
+        {MODE_IONIAN, 2, EN_FAM_MAJOR, 5, SH_7, "GM7"},
+        {MODE_IONIAN, 2, EN_FAM_MAJOR, 9, SH_9, "Bm9"},
+        {MODE_IONIAN, 2, EN_FAM_MAJOR, 7, SH_ADD9, "Aadd9"},
+        {MODE_IONIAN, 2, EN_FAM_MAJOR, 7, SH_13SUS, "A13sus"},
+        {MODE_IONIAN, 2, EN_FAM_MAJOR, 2, SH_9, "Em9"},
+        {MODE_IONIAN, 2, EN_FAM_MAJOR, 0, SH_7_3, "DM7"},
+        {MODE_LYDIAN, 2, EN_FAM_MAJOR, 2, SH_69, "E6/9"},
+        {MODE_MIXOLYDIAN, 2, EN_FAM_MAJOR, 10, SH_7, "CM7"},
+        {MODE_DORIAN, 2, EN_FAM_MINOR, 3, SH_7, "FM7"},
+        {MODE_AEOLIAN, 9, EN_FAM_MINOR, 5, SH_9, "Dm9"},
+        {MODE_PHRYGIAN, 4, EN_FAM_MINOR, 5, SH_7, "Am7"},
+        {MODE_PENT_MAJ, 2, EN_FAM_SPARSE, 7, SH_S2, "Asus2"},
+        {MODE_PENT_MIN, 2, EN_FAM_SPARSE, 10, SH_S4_7, "Csus4"},
+        {MODE_IONIAN, 2, EN_FAM_MAJOR, 0, SH_BORROW, "CM9"},
+        {MODE_LYDIAN, 2, EN_FAM_MAJOR, 0, SH_BORROW, "GM9"},
+        {MODE_MIXOLYDIAN, 2, EN_FAM_MAJOR, 0, SH_BORROW, "FM9"},
+        {MODE_DORIAN, 2, EN_FAM_MINOR, 0, SH_BORROW, "BbM9"},
+        {MODE_AEOLIAN, 9, EN_FAM_MINOR, 0, SH_BORROW, "Dadd9"},
+        {MODE_PHRYGIAN, 4, EN_FAM_MINOR, 0, SH_BORROW, "Aadd9"},
+    };
+    unsigned t;
+    char nm[24];
+    for (t = 0u; t < sizeof T / sizeof T[0]; t++) {
+        const uint32_t p = EN_MODE_POOL[T[t].mode];
+        en_hchord_t c;
+        CHECK(en_pool_family(p) == T[t].fam, "mode %d: family %d", T[t].mode, en_pool_family(p));
+        CHECK(en_chord_make(p, T[t].root, T[t].shape, &c), "mode %d: no %s", T[t].mode, T[t].name);
+        c.tonic = (uint8_t)T[t].key;
+        CHECK(!strcmp(en_hchord_name(&c, nm), T[t].name), "mode %d root %d shape %d: %s, not %s", T[t].mode, T[t].root, T[t].shape, nm, T[t].name);
+    }
+    {
+        en_hchord_t c;
+        CHECK(!en_chord_make(EN_MODE_POOL[MODE_PENT_MAJ], 0, SH_BORROW, &c), "a borrowed chord in a pentatonic");
+    }
+    /* a custom pool goes by its third; no third, or under six notes: sparse */
+    CHECK(en_pool_family(0xAB5u & ~(1u << 11)) == EN_FAM_MAJOR, "Ionian less its seventh");
+    CHECK(en_pool_family(0x5ADu & ~(1u << 10)) == EN_FAM_MINOR, "Aeolian less its seventh");
+    CHECK(en_pool_family(1u | 1u << 2 | 1u << 5 | 1u << 7 | 1u << 9 | 1u << 11) == EN_FAM_SPARSE, "no third");
+    CHECK(en_pool_family(1u | 1u << 4 | 1u << 7) == EN_FAM_SPARSE, "three notes");
+}
+
 int main(void)
 {
+    family_checks();
     pool_checks();
     tonic_gap_checks();
     mode_checks();

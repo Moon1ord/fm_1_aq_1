@@ -8,7 +8,8 @@
  * storeamb (what AMB-1 leaves in the store: its magic and format, nothing of ours); battery N (the battery read as N,
  * plat.h's plat_battery: -1..4; "battery off" the simulator's own, full); seed N (the musical seed, from the next choice on;
  * until told it is EN_HARM_SEED); setpar P V (parameter P to V, as a knob would); style NAME; energy N; breaks N; trace FILE
- * (a line for each bar: step section level character break's bars) and trace off. */
+ * (a line for each bar: step section level character break's bars; a line for each chord: "chord" step name bars character)
+ * and trace off. */
 #include <stdio.h>
 #include <strings.h>
 static FILE *trace_f;
@@ -16,6 +17,13 @@ static void trace_bar(uint32_t step, int section, int level, int character, int 
 {
     if (trace_f)
         fprintf(trace_f, "%u %d %d %d %d\n", step, section, level, character, break_bars);
+}
+static void trace_chord(uint32_t step, const en_gchord_t *g, int character)
+{
+    if (trace_f) {
+        char nm[24];
+        fprintf(trace_f, "chord %u %s %d %d\n", step, en_gchord_name(g, nm), g->bars, character);
+    }
 }
 static void host_par(int p, int v)
 {
@@ -113,6 +121,7 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
             fclose(trace_f);
         trace_f = strcmp(a, "off") ? fopen(a, "w") : 0;
         en_trace = trace_f ? trace_bar : 0;
+        en_trace_chord = trace_f ? trace_chord : 0;
         return 1;
     }
     if (!strcmp(cmd, "storeamb")) {               /* what AMB-1 leaves in the store: its magic, its format */

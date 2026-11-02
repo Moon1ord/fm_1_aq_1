@@ -1,0 +1,16 @@
+# Six minutes of the chords in D dorian, with a fixed seed. Not one of the tests.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/chords_dorian.amb app/build/listen
+master 2430
+tap PLAY
+wait 200
+seed 2002
+style liquid
+turn ALGO -2
+expect pool 0x6AD
+wait 200
+trace app/build/listen/chords_dorian.trace
+wav chords_dorian.wav
+tap PLAY
+wait 360000
+wavstop
+trace off

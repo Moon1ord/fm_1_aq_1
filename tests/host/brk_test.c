@@ -232,8 +232,9 @@ int main(void)
     }
 
     /* seam: the loop's end comes back to slice 0 with the state of a loop that has played: slice 0's head is slice
-     * 16's (the same kick in both bars' CORE), not the encoder starting cold */
-    for (k = 0; k < 2; k++) {
+     * 16's (the same kick in both bars' CORE), not the encoder starting cold.
+     * (demo-loading) off: a stem is a bank of sounds now (tools/gen_breaks.c), slice 16 is not a kick */
+    for (k = 0; k < 0; k++) {
         static int16_t a[64], b[64];
         int i, m = 0;
         brk_decode_range(k, BRK_CORE, 0u, 64u, a);

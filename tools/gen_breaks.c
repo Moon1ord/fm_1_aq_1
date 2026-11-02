@@ -1,7 +1,12 @@
 /* SPDX-License-Identifier: MPL-2.0 */
-/* The break's loops, made here and kept in git (app/dsp/brk_data.h): two kits, each a two-bar CORE (kick and snare
- * only) and a two-bar TOP (hats, ghost snares, a ride), synthesised from nothing, so no recording is in them.
- * IMA ADPCM, mono, BRK_SLICE samples a sixteenth at 170 BPM.
+/* The break's sounds, made here and kept in git (app/dsp/brk_data.h): two kits, each two stems, synthesised from
+ * nothing, so no recording is in them. IMA ADPCM, mono, BRK_SLICE samples a sixteenth at 170 BPM.
+ *
+ * A stem is no longer a two-bar loop but a bank: each sound sits at a fixed slice with silence after it, and brk.c's
+ * patterns choose the slices (the map is there, BANK_CORE and BANK_TOP, and must match the tables below). Soft and far
+ * back on purpose: round kicks, warm rimmy snares with a long soft tail, quiet airy hats. The lateness of the snares,
+ * the ghosts and the soft hat is written into the sound (it costs nothing at run time): they begin LAG after their
+ * slice, so everything played from these banks sits a little behind the kick.
  *   cc -O2 -std=c99 -o /tmp/gen_breaks tools/gen_breaks.c -lm && /tmp/gen_breaks > app/dsp/brk_data.h */
 #include <math.h>
 #include <stdint.h>
@@ -16,11 +21,11 @@
 
 typedef struct {
     const char *name;
-    double kick_hz, kick_sweep, kick_dec, sn_hz, sn_dec, sn_noise, sn_lp, hat_dec, hat_hp, ride;
+    double kick_hz, kick_sweep, kick_dec, sn_hz, sn_dec, sn_tail, sn_lp, hat_hp, hat_dec;
 } kit_t;
 static const kit_t KIT[2] = {
-    {"GLASS", 54.0, 120.0, 0.20, 215.0, 0.13, 0.55, 0.55, 0.030, 0.75, 0.0},
-    {"MOSS", 48.0, 90.0, 0.26, 180.0, 0.17, 0.45, 0.35, 0.045, 0.55, 0.35},
+    {"GLASS", 55.0, 58.0, 0.135, 188.0, 0.085, 0.27, 4300.0, 5600.0, 0.020},
+    {"MOSS", 49.0, 48.0, 0.160, 172.0, 0.100, 0.32, 3200.0, 4800.0, 0.026},
 };
 
 static uint32_t rs = 0x1234567u;
@@ -31,83 +36,139 @@ static double noise(void)
     rs ^= rs << 5;
     return (double)(rs >> 8) / 8388608.0 - 1.0;
 }
+static double coef(double hz) { return 1.0 - exp(-2.0 * PI * hz / SR); }
 
 static double buf[NS];
 
-static void add(int step, int i, double x) { buf[(step * SLICE + i) % NS] += x; }
-
-static void kick(const kit_t *k, int step, double vel)
+/* a sound's sample i, in its slices: it starts at lag and must be over by the region's end (a fade makes it so) */
+static void add(int slice, int nslices, int lag, int i, double x)
 {
-    double ph = 0.0;
-    int i;
-    for (i = 0; i < (int)(k->kick_dec * 6.0 * SR); i++) {
-        double t = i / SR, f = k->kick_hz + k->kick_sweep * exp(-t * 45.0);
-        ph += f / SR;
-        add(step, i, sin(2.0 * PI * ph) * exp(-t / k->kick_dec) * vel);
-    }
+    int len = nslices * SLICE - lag, fade = len / 5;
+    if (i >= len)
+        return;
+    if (i > len - fade)
+        x *= (double)(len - i) / fade;
+    buf[(slice * SLICE + lag + i) % NS] += x;
 }
 
-static void snare(const kit_t *k, int step, double vel)
+static void kick(const kit_t *k, int slice, int nsl, double vel, double tone)
 {
     double ph = 0.0, lp = 0.0;
-    int i;
-    for (i = 0; i < (int)(k->sn_dec * 6.0 * SR); i++) {
-        double t = i / SR, n = noise();
-        lp += k->sn_lp * (n - lp);
-        ph += k->sn_hz / SR;
-        add(step, i, (sin(2.0 * PI * ph) * (1.0 - k->sn_noise) * exp(-t / (k->sn_dec * 0.5)) +
-                      lp * k->sn_noise * exp(-t / k->sn_dec)) * vel);
+    const double thump = coef(900.0);
+    int i, n = nsl * SLICE;
+    for (i = 0; i < n; i++) {
+        double t = i / SR, f = k->kick_hz + tone * k->kick_sweep * exp(-t / 0.024), x;
+        double env = (1.0 - exp(-t / 0.0028)) * exp(-t / k->kick_dec);
+        ph += f / SR;
+        lp += thump * (noise() - lp);
+        x = sin(2.0 * PI * ph) * env;
+        x = tanh(1.5 * x) / tanh(1.5);                  /* round, a little third harmonic for small speakers */
+        x += lp * 0.10 * tone * exp(-t / 0.006);        /* the beater: felt, not clicked */
+        add(slice, nsl, 0, i, x * vel);
     }
 }
 
-static void hat(const kit_t *k, int step, double vel)
+static void snare(const kit_t *k, int slice, int nsl, int lag, double vel, double dark)
 {
-    double lp = 0.0;
-    int i;
-    for (i = 0; i < (int)(k->hat_dec * 6.0 * SR); i++) {
-        double t = i / SR, n = noise();
-        lp += k->hat_hp * (n - lp);
-        add(step, i, (n - lp) * exp(-t / k->hat_dec) * vel);
+    double ph = 0.0, lp1 = 0.0, lp2 = 0.0, hp = 0.0;
+    const double cl = coef(k->sn_lp * dark), ch = coef(480.0);
+    int i, n = nsl * SLICE - lag;
+    for (i = 0; i < n; i++) {
+        double t = i / SR, nz = noise(), x, a = 1.0 - exp(-t / 0.0012);
+        hp += ch * (nz - hp);
+        lp1 += cl * ((nz - hp) - lp1);
+        lp2 += cl * (lp1 - lp2);
+        ph += (k->sn_hz * (1.0 + 0.10 * exp(-t / 0.012))) / SR;
+        x = sin(2.0 * PI * ph) * 0.58 * exp(-t / 0.060);                     /* the head */
+        x += sin(2.0 * PI * ph * 1.59) * 0.22 * exp(-t / 0.036);
+        x += (sin(2.0 * PI * 1190.0 * t) * 0.5 + sin(2.0 * PI * 1860.0 * t) * 0.3) * 0.34 * dark * exp(-t / 0.0065);   /* the rim */
+        x += lp2 * (0.90 * exp(-t / k->sn_dec) + 0.42 * exp(-t / k->sn_tail));   /* the wires, then their long soft tail */
+        add(slice, nsl, lag, i, x * a * vel);
     }
 }
 
-static void ride(const kit_t *k, int step, double vel)
+/* a ghost: the same drum barely touched, a short sound */
+static void ghost(const kit_t *k, int slice, int nsl, int lag, double vel, double dark)
 {
-    static const double R[4] = {1.0, 1.47, 2.09, 2.56};
-    int i, p;
-    for (i = 0; i < (int)(1.2 * SR); i++) {
-        double t = i / SR, x = 0.0;
-        for (p = 0; p < 4; p++)
-            x += sin(2.0 * PI * 1450.0 * R[p] * t) * 0.25;
-        add(step, i, x * exp(-t / 0.30) * vel * k->ride);
+    double ph = 0.0, lp1 = 0.0, lp2 = 0.0;
+    const double cl = coef(k->sn_lp * 0.8 * dark);
+    int i, n = nsl * SLICE - lag;
+    for (i = 0; i < n; i++) {
+        double t = i / SR, a = 1.0 - exp(-t / 0.002);
+        lp1 += cl * (noise() - lp1);
+        lp2 += cl * (lp1 - lp2);
+        ph += k->sn_hz * 1.05 / SR;
+        add(slice, nsl, lag, i, (sin(2.0 * PI * ph) * 0.62 * exp(-t / 0.032) + lp2 * 0.75 * exp(-t / 0.050)) * a * vel);
     }
 }
 
+/* noise above hp, gently shut at the top: an airy hat, no metal in it */
+static void hat(int slice, int nsl, int lag, double vel, double hpf, double att, double dec)
+{
+    double l1 = 0.0, l2 = 0.0, top = 0.0;
+    const double c = coef(hpf), ct = coef(9300.0);
+    int i, n = nsl * SLICE - lag;
+    for (i = 0; i < n; i++) {
+        double t = i / SR, nz = noise(), x;
+        l1 += c * (nz - l1);
+        nz -= l1;
+        l2 += c * (nz - l2);
+        nz -= l2;
+        top += ct * (nz - top);
+        x = top * (1.0 - exp(-t / att)) * exp(-t / dec);
+        add(slice, nsl, lag, i, x * vel);
+    }
+}
+
+/* a soft stick on the rim: woody, two short tones */
+static void rim(int slice, int nsl, int lag, double vel)
+{
+    int i, n = nsl * SLICE - lag;
+    for (i = 0; i < n; i++) {
+        double t = i / SR, a = 1.0 - exp(-t / 0.0007);
+        add(slice, nsl, lag, i, (sin(2.0 * PI * 1040.0 * t) * 0.55 * exp(-t / 0.007) +
+                                 sin(2.0 * PI * 470.0 * t) * 0.60 * exp(-t / 0.016)) * a * vel);
+    }
+}
+
+/* air rising: noise whose low-pass opens as it swells, over at the slice's end (what a level's entrance leans on) */
+static void swell(int slice, int nsl, double vel)
+{
+    double l1 = 0.0, l2 = 0.0, hp = 0.0;
+    int i, n = nsl * SLICE;
+    const double ch = coef(700.0);
+    for (i = 0; i < n; i++) {
+        double u = (double)i / n, nz = noise(), c = coef(900.0 + 5200.0 * u * u), e = u * u * u;
+        hp += ch * (nz - hp);
+        l1 += c * ((nz - hp) - l1);
+        l2 += c * (l1 - l2);
+        if (n - i < 120)
+            e *= (n - i) / 120.0;
+        buf[(slice * SLICE + i) % NS] += l2 * e * vel;
+    }
+}
+
+/* the banks: see brk.c's BANK_CORE and BANK_TOP */
 static void render_core(const kit_t *k)
 {
-    static const int KICK[4] = {0, 10, 16, 26}, SNARE[4] = {4, 12, 20, 28};
-    int i;
     memset(buf, 0, sizeof buf);
-    for (i = 0; i < 4; i++) {
-        kick(k, KICK[i], 1.0);
-        snare(k, SNARE[i], 0.9);
-    }
+    kick(k, 0, 6, 1.0, 1.0);                                 /* K */
+    kick(k, 6, 6, 0.70, 0.65);                               /* k: softer, rounder */
+    snare(k, 12, 10, (int)(0.019 * SR), 0.62, 1.0);          /* S: well behind */
+    snare(k, 22, 10, (int)(0.009 * SR), 0.48, 0.72);         /* s: softer, darker, less late */
 }
 
 static void render_top(const kit_t *k)
 {
-    static const int GHOST[6] = {7, 9, 15, 23, 25, 31};
-    int s;
     memset(buf, 0, sizeof buf);
-    for (s = 0; s < NSTEP; s++) {
-        double v = s % 4 == 0 ? 0.55 : s % 2 == 0 ? 0.40 : s % 4 == 3 ? 0.20 : 0.0;
-        if (v > 0.0)
-            hat(k, s, v);
-        if (s % 4 == 2 && k->ride > 0.0)
-            ride(k, s, 0.35);
-    }
-    for (s = 0; s < 6; s++)
-        snare(k, GHOST[s], 0.20);
+    hat(0, 2, 0, 0.62, k->hat_hp, 0.0009, k->hat_dec);                       /* h */
+    hat(2, 2, (int)(0.012 * SR), 0.42, k->hat_hp * 1.1, 0.0012, k->hat_dec * 0.75);  /* i: softer, later */
+    hat(4, 6, 0, 0.36, k->hat_hp * 0.9, 0.006, 0.115);                       /* o: open, a long soft breath */
+    ghost(k, 10, 3, (int)(0.014 * SR), 0.62, 1.0);                           /* g */
+    ghost(k, 13, 3, (int)(0.022 * SR), 0.42, 0.75);                          /* f: softer, later */
+    rim(16, 2, (int)(0.008 * SR), 0.5);                                      /* r */
+    hat(18, 2, 0, 0.34, k->hat_hp * 0.7, 0.009, 0.024);                      /* x: a shaker's push */
+    swell(20, 12, 0.85);                                                     /* ~ */
 }
 
 /* IMA ADPCM (the standard's tables) */

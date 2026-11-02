@@ -25,8 +25,14 @@ void brk_set_busy(float b);              /* 0..1: TOP sounds on 40 .. 100 % of i
 void brk_levels(float core, float top, float ramp_samples);   /* call on a change, not continuously: each call
                                          restarts the ramp from the remaining distance */
 void brk_step(uint32_t sixteenth);       /* one call a sixteenth, counted from the start */
+/* the demo's patterns: one call a sixteenth, instead of brk_step. A level, 0 none .. 3 two-step (the tables are in
+ * brk.c); flags: BRK_DROP the kit holds its breath, BRK_SWELL the rising air starts here. Returns the kick's strength,
+ * 0 none, what the melodic bus ducks under. */
+enum { BRK_DROP = 1, BRK_SWELL = 2 };
+float brk_pattern_step(uint32_t step, int level, int flags);
 void brk_stop(void);                     /* what sounds fades out; the next step starts cleanly */
 void brk_render(float *out, uint32_t n); /* ADDS mono */
+void brk_render_stem(int stem, float *out, uint32_t n);   /* ADDS one stem, mono */
 
 /* for the screen and the tests */
 extern volatile uint32_t brk_hits;       /* CORE's kicks and snares played */

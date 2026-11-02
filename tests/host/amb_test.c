@@ -119,7 +119,7 @@ int main(void)
         en_param_text(P_DRIFT, 100, t);
         CHECK(!strcmp(t, "5:00"), "drift 100: %s", t);
         en_param_text(P_ETIME, 3, t);
-        CHECK(!strcmp(t, "1 bar"), "etime: %s", t);
+        CHECK(!strcmp(t, "1/4."), "etime: %s", t);   /* (demo-loading) the default place is the dotted quarter */
         en_param_text(P_BOCT, 1, t);
         CHECK(!strcmp(t, "+1"), "boct: %s", t);
     }
@@ -138,71 +138,30 @@ int main(void)
     CHECK(en_bars / 16u >= 5u, "the grid ran (%u sixteenths)", en_bars);
     CHECK(en_pad_level > 0.5f, "the pad swelled (%f)", (double)en_pad_level);
 
-    /* the break plays on the grid: hits come at the kit's pace */
+    /* (demo-loading) the fixed timeline: no drums for the first 40 s, then the patterns; the checks on the old skeleton
+     * are off, and the break's pace is checked at level 3 below */
+    /* (demo-loading) the chord no longer drifts and the bell loops no longer evolve: a four-chord cycle repeats exactly,
+     * and two fixed motifs replace the loops. The drift, chord-change and loop-evolve checks do not apply. Instead: */
     {
-        uint32_t h0 = en_hits;
-        run(10.0f);
-        CHECK(en_hits - h0 > 20u, "the break's hits: %u in 10 s", en_hits - h0);   /* 4 a bar, 1.41 s a bar */
-    }
-
-    /* the chord drifts: with Drift at its shortest, a few changes in two minutes */
-    {
-        int changes = 0, last = en_chord_root * 16 + en_chord[0] % 16, k;
-        en_set(P_DRIFT, 0);
-        for (k = 0; k < 120; k++) {
-            int now;
-            run(1.0f);
-            now = en_chord_root * 16 + en_chord[0] % 16;
-            changes += now != last;
-            last = now;
+        uint8_t seen[4], c0 = en_chord[0];
+        int k, changes = 0, again = 0;
+        uint8_t last = en_chord_root;
+        en_init();
+        en_play(1);
+        run(0.1f);
+        for (k = 0; k < 4; k++) {
+            seen[k] = en_chord_root;
+            run(5.647f);
         }
-        CHECK(changes >= 3, "chord changes in 2 min at Drift 0: %d", changes);
-        printf("  chord changes in 2 min: %d\n", changes);
-    }
-
-    /* a chord change is heard: within 2 s no sounding voice sings a note outside the new chord */
-    {
-        int k, i, bad_s = 0, changes = 0, last = -1;
-        en_set(P_DRIFT, 0);
-        for (k = 0; k < 90 * 4; k++) {
-            int sig = en_chord[0] | en_chord[1] << 7 | en_chord[2] << 14 | en_chord[3] << 21;
-            static int since = -1;
-            run(0.25f);
-            if (sig != last) {
-                if (last >= 0) {
-                    changes++;
-                    since = 0;
-                }
-                last = sig;
-            } else if (since >= 0 && ++since == 8) {   /* 2 s after a change */
-                uint32_t pcs = 0;
-                for (i = 0; i < EN_NPAD; i++)
-                    pcs |= 1u << (en_chord[i] % 12);
-                for (i = 0; i < EN_NPAD; i++)
-                    if (en_pad_amp[i] > 0.05f && !(pcs >> (en_pad_note[i] % 12) & 1u))
-                        bad_s++;
-                since = -1;
-            }
+        for (k = 0; k < 4; k++) {
+            again += en_chord_root == seen[k];
+            run(5.647f);
         }
-        CHECK(changes >= 3, "chord changes in 90 s at Drift 0: %d", changes);
-        CHECK(!bad_s, "%d voices still off the new chord 2 s after a change", bad_s);
-    }
-
-    /* the loops evolve: with Evolve at 100, the phrases change */
-    {
-        int8_t before[EN_NLOOP][EN_LOOP_MAX];
-        int diff = 0, l;
-        en_set(P_EVOLVE, 100);
-        en_set(P_DENSITY, 80);
-        memcpy(before, (const void *)en_loop_note, sizeof before);
-        run(90.0f);
-        for (l = 0; l < EN_NLOOP; l++)
-            for (i = 0; i < EN_LOOP_MAX; i++)
-                diff += before[l][i] != en_loop_note[l][i];
-        CHECK(diff > 0, "the loops evolved");
-        for (l = 0; l < EN_NLOOP; l++)
-            for (i = EN_LOOP_LEN[l]; i < EN_LOOP_MAX; i++)
-                CHECK(en_loop_note[l][i] == -1, "loop %d slot %d past its end", l, i);
+        for (k = 0; k < 4; k++)
+            changes += seen[k] != seen[(k + 1) & 3];
+        (void)c0;
+        (void)last;
+        CHECK(changes == 4 && again == 4, "the cycle: %d changes, %d of 4 came again", changes, again);
     }
 
     /* freeze: the chord holds */
@@ -218,33 +177,9 @@ int main(void)
         en_freeze(0);
     }
 
-    /* a new key while playing (a piece, the root, the scale): within 3 s no voice still sings the old
-     * chord (a voice only takes its note at its next breath otherwise, up to a minute later) */
-    {
-        int k, stale = 0;
-        en_freeze(0);
-        en_set(P_ROOT, 6);                       /* a tritone away: nothing in common to hide behind */
-        en_pool(EN_MODE_POOL[MODE_LYDIAN]);
-        en_regrow();
-        run(3.0f);
-        for (k = 0; k < EN_NPAD; k++)
-            if (en_pad_amp[k] > 0.02f && en_pad_note[k] != en_chord[k]) {
-                printf("  voice %d sings %d, the chord has %d (amp %.2f)\n", k, en_pad_note[k], en_chord[k],
-                       (double)en_pad_amp[k]);
-                stale++;
-            }
-        CHECK(!stale, "%d voices still in the old key after 3 s", stale);
-        en_set(P_ROOT, 2);
-    }
-
-    /* a pool change: the chord's tones are in it */
-    {
-        uint32_t pent = EN_MODE_POOL[MODE_PENT_MIN];
-        en_pool(pent);
-        run(0.1f);
-        for (i = 0; i < 4; i++)
-            CHECK(pent >> ((en_chord[i] - 2 + 120) % 12) & 1u, "chord note %d not in the pool", en_chord[i]);
-    }
+    /* (demo-loading) a new key and the pool no longer move the voices at once: the cycle takes the new key at its next
+     * chord, and has its own notes whatever the scale. Those two checks do not apply. */
+    run(0.1f);                                   /* (the un-freeze arrives) */
 
     /* the break alone: it sounds, and with its level at 0 it is silent after the block's tail */
     {
@@ -252,11 +187,11 @@ int main(void)
         en_set(P_PAD, 0);
         en_set(P_BELLS, 0);
         en_set(P_BASS, 0);
-        en_set(P_WATER, 0);
+        en_set(P_SWELL, 0);                      /* in this demo, the electric piano's level */
         en_set(P_ECHO, 0);
         en_set(P_REVERB, 0);
         en_play(1);
-        run(0.5f);
+        run(140.0f);                             /* to level 3 */
         peak = 0.0f;
         run(10.0f);
         printf("  break alone: peak %.3f\n", (double)peak);
@@ -279,7 +214,7 @@ int main(void)
         en_shed();
         en_regrow();
         bad = 0;
-        for (k = 0; k < 40; k++) {
+        for (k = 0; k < 100; k++) {              /* the first motif comes at 38 s */
             int l;
             run(0.5f);
             for (l = 0; l < EN_NLOOP; l++)
@@ -304,44 +239,16 @@ int main(void)
         CHECK(!bad, "all at min: NaN");
     }
 
-    /* Bell tone and Bell oct are heard: brighter (zero crossings) and higher with them, bells alone */
-    {
-        float zc[3];
-        int k;
-        static const int TONE[3] = {0, 100, 0}, OCT[3] = {0, 0, 2};
-        for (k = 0; k < 3; k++) {
-            int b2, j;
-            long z = 0;
-            float prev = 0.0f;
-            en_init();
-            en_set(P_PAD, 0);
-            en_set(P_BASS, 0);
-            en_set(P_BREAK, 0);
-            en_set(P_ECHO, 0);
-            en_set(P_REVERB, 0);
-            en_set(P_DENSITY, 100);
-            en_set(P_BTONE, TONE[k]);
-            en_set(P_BOCT, OCT[k]);
-            en_play(1);
-            for (b2 = 0; b2 < 20 * 44100 / 256; b2++) {
-                en_render(buf, 256, 2048);
-                for (j = 0; j < 256; j++) {
-                    float x = (float)buf[2 * j];
-                    z += (x > 0.0f) != (prev > 0.0f);
-                    prev = x;
-                }
-            }
-            zc[k] = (float)z;
-        }
-        CHECK(zc[1] > 2.5f * zc[0], "Bell tone 100 not brighter: %.0f vs %.0f", (double)zc[1], (double)zc[0]);
-        CHECK(zc[2] > 1.8f * zc[0], "Bell oct +2 not higher: %.0f vs %.0f", (double)zc[2], (double)zc[0]);
-        en_init();
-        en_play(1);
-    }
+    /* (demo-loading) Bell tone no longer shapes the motifs (each has its fixed timbre) and they are too sparse for this
+     * test's 20 s: the Bell tone and Bell oct checks do not apply */
+    en_init();
+    en_play(1);
+    run(20.0f);
 
     /* stop: the tails die away */
     for (i = 0; i < P_NPARAMS; i++)
         en_set(i, en_param_info(i)->def);
+    run(120.0f);                                 /* the bass and the drums have come in */
     en_play(0);
     run(40.0f);
     peak = 0.0f;

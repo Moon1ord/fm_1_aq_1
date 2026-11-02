@@ -27,7 +27,7 @@ wait 300
 # SELECT turns the pages
 turn SELECT -1
 wait 300
-said Space page: Echo 40, Echo time 1 bar, Reverb 65, Size 80
+said Space page: Echo 40, Echo time 1/4., Reverb 65, Size 80
 spin K2 -1
 wait 300
 said Echo time 1/2.

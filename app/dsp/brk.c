@@ -743,10 +743,9 @@ static void bk_snares(bk_t *b, uint32_t *x, int half, int sy, int last)
 }
 
 /* The hats of a break: the off-beats go on (a rest takes them too); an element may run sixteenths into the end, rising */
-static void bk_hats(brk_bar_t *o, uint32_t *x, int level, int fill_from, int rest_from, int rest_to, int last, int d)
+static void bk_hats(brk_bar_t *o, uint32_t *x, int fill_from, int rest_from, int rest_to, int last, int d)
 {
     int i;
-    (void)level;
     for (i = 2; i < 16; i += 4)
         if (i < rest_from || i >= rest_to)
             hat_put(o, i, 'h', x, 100);
@@ -768,7 +767,7 @@ static void bk_hats(brk_bar_t *o, uint32_t *x, int level, int fill_from, int res
     }
 }
 
-static void break_bar(brk_gen_t *g, const brk_rhythm_t *r, int level, int energy, int evolve, uint32_t seed, uint32_t bar, int len, uint32_t in, brk_bar_t *o)
+static void break_bar(brk_gen_t *g, const brk_rhythm_t *r, int energy, int evolve, uint32_t seed, uint32_t bar, int len, uint32_t in, brk_bar_t *o)
 {
     const int d = clamp100((int)r->density + (energy - 70) / 5), sy = r->synco;
     const int gh = !r->ghost ? 0 : clamp100((int)r->ghost + (energy - 70) / 5);
@@ -886,7 +885,7 @@ static void break_bar(brk_gen_t *g, const brk_rhythm_t *r, int level, int energy
                 bk_put(&b, p, 'c', 74 + (int)(rn(&x) >> 8) % 26, 1);
         }
     }
-    bk_hats(o, &x, level, fill, rest_from, rest_to, last, d);
+    bk_hats(o, &x, fill, rest_from, rest_to, last, d);
     b.tail = 0;
     for (i = 15; i >= 0 && bk_occ(o, i); i--)
         b.tail++;
@@ -933,7 +932,7 @@ void brk_gen_bar(brk_gen_t *g, const brk_rhythm_t *r, int level, int energy, int
     g->next = bar + 1u;
     bar_clear(o);
     if (is_brk)
-        break_bar(g, r, lv, energy, evolve, seed, bar, len, break_in, o);
+        break_bar(g, r, energy, evolve, seed, bar, len, break_in, o);
     else
         plain_bar(g, lv, seed, bar, o);
 }

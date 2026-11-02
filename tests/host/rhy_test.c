@@ -644,6 +644,70 @@ static void break_variety(void)
     }
 }
 
+/* it really rises, not just never falls: the last bar of a long break against its first, on average */
+static void break_rise(void)
+{
+    int st;
+    printf("  hits a bar, breaks of 4 bars without a rest, bars 1 2 3 4:\n");
+    for (st = 0; st < EN_NSTYLES; st++) {
+        uint64_t sum[4] = {0u, 0u, 0u, 0u}, n = 0u;
+        uint32_t sd;
+        for (sd = 1u; sd <= 200u; sd++) {
+            brk_gen_t g;
+            uint32_t bar;
+            brk_gen_start(&g);
+            for (bar = 0u; bar < 800u; bar++) {
+                const uint32_t at = bar % PHRASE;
+                brk_bar_t o;
+                int hits[4], ok = 1, k;
+                if (at != PHRASE - 4u) {
+                    brk_gen_bar(&g, en_style_rhythm(st), 3, DEF_ENERGY, DEF_EVOLVE, sd, bar, 0, 0u, &o);
+                    continue;
+                }
+                for (k = 0; k < 4; k++, bar++) {
+                    int i;
+                    hits[k] = 0;
+                    brk_gen_bar(&g, en_style_rhythm(st), 3, DEF_ENERGY, DEF_EVOLVE, sd, bar, 4, (uint32_t)k, &o);
+                    for (i = 0; i < 16; i++)
+                        hits[k] += o.core[i] != '.' || o.top[i] != '.';
+                    ok = ok && !o.rest;
+                }
+                bar--;
+                if (ok) {
+                    for (k = 0; k < 4; k++)
+                        sum[k] += (uint64_t)hits[k];
+                    n++;
+                }
+            }
+        }
+        printf("  %-8s %.2f %.2f %.2f %.2f\n", EN_STYLE_NAME[st], (double)sum[0] / n, (double)sum[1] / n, (double)sum[2] / n, (double)sum[3] / n);
+        CHECK((double)sum[3] / n >= (double)sum[0] / n + 0.8, "%s: a 4-bar break does not rise: %.2f to %.2f", EN_STYLE_NAME[st], (double)sum[0] / n, (double)sum[3] / n);
+    }
+}
+
+/* low Evolve: the break comes back as it was, with the groove */
+static void break_evolve(void)
+{
+    uint32_t bar;
+    int e;
+    uint32_t distinct[2];
+    for (e = 0; e < 2; e++) {
+        brk_gen_t g;
+        brk_bar_t o;
+        brk_gen_start(&g);
+        set_clear();
+        for (bar = 0u; bar < 8000u; bar++) {
+            const int want = bar % PHRASE == PHRASE - 1u ? 1 : 0;
+            brk_gen_bar(&g, en_style_rhythm(EN_ST_LIQUID), 3, DEF_ENERGY, e ? 50 : 0, 21u, bar, want, 0u, &o);
+            if (want)
+                set_add(fnv(14695981039346656037ull, o.core, 32u));
+        }
+        distinct[e] = set_n;
+    }
+    printf("  Liquid, 1000 one-bar breaks: %u different at Evolve 0, %u at the default\n", distinct[0], distinct[1]);
+    CHECK(distinct[0] <= 70u && distinct[1] > 3u * distinct[0], "Evolve and the breaks: %u, %u", distinct[0], distinct[1]);
+}
+
 /* --- what the numbers do, measured --- */
 typedef struct {
     double kicks, sng, ghosts, hats, synco, vkick, vsnare, vghost, vhat;
@@ -731,6 +795,30 @@ static void number_checks(void)
     measure(&a, 3, DEF_ENERGY, &ma);
     measure(&b, 3, DEF_ENERGY, &mb);
     CHECK(mb.synco > ma.synco + 5.0, "syncopation does nothing: %.1f, %.1f", ma.synco, mb.synco);
+    {   /* the weights themselves: under 40 nothing else of it touches the extra kicks; among those, the odd sixteenths */
+        uint32_t odd[2] = {0u, 0u}, all[2] = {0u, 0u}, sd, bar;
+        int q, i;
+        for (q = 0; q < 2; q++) {
+            b = a;
+            b.density = 80u;
+            b.synco = q ? 59u : 0u;
+            for (sd = 1u; sd <= 40u; sd++) {
+                brk_gen_t g;
+                brk_bar_t o;
+                brk_gen_start(&g);
+                for (bar = 0u; bar < 500u; bar++) {
+                    brk_gen_bar(&g, &b, 3, DEF_ENERGY, 50, sd, bar, 0, 0u, &o);
+                    for (i = 1; i < 16; i++)
+                        if (i != 10 && is_kick(o.core[i])) {
+                            all[q]++;
+                            odd[q] += (uint32_t)(i & 1);
+                        }
+                }
+            }
+        }
+        printf("  extra kicks on odd sixteenths: synco 0 %.1f%%, synco 59 %.1f%%\n", 100.0 * odd[0] / all[0], 100.0 * odd[1] / all[1]);
+        CHECK(100.0 * odd[1] / all[1] > 100.0 * odd[0] / all[0] + 10.0, "syncopation leaves the weights alone: %u/%u, %u/%u", odd[0], all[0], odd[1], all[1]);
+    }
     b = a;
     b.density = 90u;
     measure(&b, 3, DEF_ENERGY, &mb);
@@ -756,7 +844,7 @@ static void number_checks(void)
 
 /* --- the engine plays what the generator composes --- */
 static brk_gen_t shadow;
-static uint32_t shadow_seed, shadow_bars, shadow_breaks;
+static uint32_t shadow_seed, shadow_bars, shadow_breaks, shadow_held, shadow_was;
 static int shadow_style;
 static void shadow_trace(uint32_t step, int section, int level, int character, int want)
 {
@@ -766,9 +854,18 @@ static void shadow_trace(uint32_t step, int section, int level, int character, i
     (void)section;
     (void)character;
     w2 = en_arr_break(step / 16u, level, shadow_style, 50, shadow_seed, &in);
-    CHECK(w2 == want, "the engine's break %d, the arranger's %d", want, w2);
+    CHECK(w2 == want || !want, "the engine's break %d, the arranger's %d", want, w2);
+    shadow_held += w2 && !want;
     brk_gen_bar(&shadow, en_style_rhythm(shadow_style), level, DEF_ENERGY, DEF_EVOLVE, shadow_seed, step / 16u, want, in, &o);
     CHECK(!memcmp(&o, &brk_bar, sizeof o), "%s bar %u: the engine plays another bar", EN_STYLE_NAME[shadow_style], step / 16u);
+    /* in play too: a break ends with the phrase, on the plain kick */
+    if (shadow_was) {
+        if (!o.is_break) {
+            CHECK(step % 128u == 0u, "%s: a break ended at bar %u of the phrase", EN_STYLE_NAME[shadow_style], step / 16u % 8u);
+            CHECK(o.core[0] == 'K' && !o.late[0], "%s: after a break, level %d, the phrase starts on %c", EN_STYLE_NAME[shadow_style], level, o.core[0]);
+        }
+    }
+    shadow_was = o.is_break;
     shadow_bars++;
     shadow_breaks += o.is_break;
 }
@@ -787,7 +884,7 @@ static void engine_checks(void)
         en_seed(shadow_seed);
         en_set(P_STYLE, ST[k]);
         en_trace = shadow_trace;
-        shadow_bars = shadow_breaks = 0u;
+        shadow_bars = shadow_breaks = shadow_held = shadow_was = 0u;
         en_play(1);
         for (i = 0u; i < 44100u * 800u / 256u; i++)
             en_render(buf, 256, 1024);
@@ -795,6 +892,7 @@ static void engine_checks(void)
         en_play(0);
         CHECK(shadow_bars > 500u && shadow_breaks > 0u, "%s: %u bars, %u of breaks, as the engine plays them", EN_STYLE_NAME[ST[k]], shadow_bars, shadow_breaks);
         CHECK(en_hat_peak <= 2, "%d hat voices", en_hat_peak);
+        printf("  %-8s in the engine: %u bars, %u of breaks, %u bars of break held back (the next phrase has no kick)\n", EN_STYLE_NAME[ST[k]], shadow_bars, shadow_breaks, shadow_held);
     }
 }
 
@@ -836,6 +934,18 @@ static void chart_style(int st, uint32_t seed)
         en_arr_part(&a, in_sec, st, DEF_ENERGY, &p);
         in_sec++;
         want = en_arr_break(bar, p.level, st, DEF_BREAKS, seed, &in);
+        if (want) {                              /* as the engine: no break where the next phrase has no kick */
+            en_arr_t q = a;
+            uint32_t at = in_sec - 1u + PHRASE - bar % PHRASE;
+            en_part_t after;
+            while (at >= q.bars) {
+                at -= q.bars;
+                en_arr_next(&q, seed, st, DEF_ENERGY);
+            }
+            en_arr_part(&q, at, st, DEF_ENERGY, &after);
+            if (after.level < 2u)
+                want = 0;
+        }
         brk_gen_bar(&g, r, p.level, DEF_ENERGY, DEF_EVOLVE, seed, bar, want, in, &bars[bar]);
         lvl[bar] = p.level;
         wnt[bar] = want;
@@ -922,6 +1032,8 @@ int main(int argc, char **argv)
     groove_checks();
     seed_checks();
     break_variety();
+    break_rise();
+    break_evolve();
     number_checks();
     engine_checks();
     printf(fails ? "rhy: %d FAILED\n" : "rhy: ok\n", fails);

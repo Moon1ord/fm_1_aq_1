@@ -2104,6 +2104,12 @@ static void song_step(uint32_t s)
         part_now = p;
         part_at(s + 16u, &part_nxt);
         want = en_arr_break(bar, song_level, arr_style, par[P_BREAKS], song_seed, &in);
+        if (want) {                              /* a break leads to a downbeat: not when the next phrase has none */
+            en_part_t after;
+            part_at((bar + EN_ARR_PHRASE - bar % EN_ARR_PHRASE) * 16u, &after);
+            if (after.level < 2u)
+                want = 0;
+        }
         if (!s)
             brk_gen_start(&rhythm_gen);
         brk_gen_bar(&rhythm_gen, en_style_rhythm(arr_style), song_level, par[P_ENERGY], par[P_EVOLVE], song_seed, bar, want, in, &brk_bar);

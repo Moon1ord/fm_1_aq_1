@@ -85,6 +85,8 @@ int main(void)
                 CHECK(par[p] >= en_param_info(p)->lo && par[p] <= en_param_info(p)->hi, "piece %d par %d = %d", pc, p, par[p]);
         }
         en_piece(0, par, &pl);
+        for (p = 0; p < P_NPARAMS; p++)
+            CHECK(par[p] == en_param_info(p)->def, "the first piece is the defaults: par %d", p);
         CHECK(!strcmp(en_piece_name(0), "Aqua") && par[P_TEMPO] == 170 && par[P_ROOT] == 2 && par[P_MODE] == MODE_LYDIAN, "Aqua");
         en_piece(7, par, &pl);
         CHECK(!strcmp(en_piece_name(7), "Afterglow") && par[P_MODE] == MODE_DORIAN, "Afterglow");

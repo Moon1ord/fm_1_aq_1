@@ -1,0 +1,257 @@
+/* SPDX-License-Identifier: MPL-2.0 */
+/* The break (brk.h). */
+#include "brk.h"
+#include "brk_data.h"
+
+#define XF (1.0f / 88.0f)                /* a 2 ms fade */
+#define TOL_INT ((float)BRK_RATE * 0.002f)
+#define TOL_EXT ((float)BRK_RATE * 0.008f)
+
+static const int16_t STEP[89] = {
+    7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97, 107, 118, 130, 143,
+    157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658, 724, 796, 876, 963, 1060, 1166, 1282, 1411, 1552,
+    1707, 1878, 2066, 2272, 2499, 2749, 3024, 3327, 3660, 4026, 4428, 4871, 5358, 5894, 6484, 7132, 7845, 8630, 9493, 10442, 11487,
+    12635, 13899, 15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794, 32767};
+static const int8_t INDEX[16] = {-1, -1, -1, -1, 2, 4, 6, 8, -1, -1, -1, -1, 2, 4, 6, 8};
+
+typedef struct {
+    uint32_t pos;                        /* the next source sample to decode */
+    int32_t pred, idx, left;             /* left: source samples before this slice is over */
+    float frac, s0, s1, g, dg;
+    int8_t slice;
+    uint8_t on;
+} voice_t;
+
+typedef struct {
+    voice_t v[2];
+    uint8_t cur;
+    float lvl, tgt, ramp;
+} stem_t;
+
+static stem_t stem[BRK_NSTEM];
+static int kit;
+static float inc = BRK_RATE / 44100.0f, evolve, busy, tol = TOL_INT;
+static uint8_t fill;
+static uint32_t rs = 0x2545F491u;
+
+volatile uint32_t brk_hits, brk_jumps, brk_decoded;
+volatile int8_t brk_st_core, brk_st_top;
+
+static uint32_t rnd(void)
+{
+    rs ^= rs << 13;
+    rs ^= rs >> 17;
+    rs ^= rs << 5;
+    return rs;
+}
+static float frand(void) { return (float)(rnd() >> 8) * (1.0f / 16777216.0f); }
+
+static inline int32_t ima(const uint8_t *d, uint32_t p, int32_t *pred, int32_t *idx)
+{
+    uint32_t code = (uint32_t)d[p >> 1] >> ((p & 1u) * 4u) & 15u;
+    int32_t st = STEP[*idx], dq = st >> 3, x;
+    if (code & 4u) dq += st;
+    if (code & 2u) dq += st >> 1;
+    if (code & 1u) dq += st >> 2;
+    x = *pred + (code & 8u ? -dq : dq);
+    x = x > 32767 ? 32767 : x < -32768 ? -32768 : x;
+    *pred = x;
+    *idx += INDEX[code];
+    *idx = *idx < 0 ? 0 : *idx > 88 ? 88 : *idx;
+    return x;
+}
+
+static inline void next_sample(voice_t *v, int st)
+{
+    uint32_t p = v->pos;
+    if (p >= BRK_NSAMPLES) {             /* 31 -> 0: the table's state */
+        p = 0u;
+        v->pred = BRK_AT[kit][st][0].pred;
+        v->idx = BRK_AT[kit][st][0].idx;
+    }
+    v->s0 = v->s1;
+    v->s1 = (float)ima(BRK_DATA[kit][st], p, &v->pred, &v->idx) * (1.0f / 32768.0f);
+    v->pos = p + 1u;
+    v->left--;
+    brk_decoded++;
+}
+
+static void voice_start(voice_t *v, int st, int slice, float t)
+{
+    const brk_ima_t *a = &BRK_AT[kit][st][slice];
+    v->pos = (uint32_t)slice * BRK_SLICE;
+    v->pred = a->pred;
+    v->idx = a->idx;
+    v->slice = (int8_t)slice;
+    v->left = (int32_t)((float)BRK_SLICE + t) + 2;
+    v->s0 = v->s1 = 0.0f;
+    v->frac = 0.0f;
+    next_sample(v, st);
+    next_sample(v, st);
+    v->g = 0.0f;
+    v->dg = XF;
+    v->on = 1u;
+}
+
+static void stem_step(int st, int slice)
+{
+    stem_t *s = &stem[st];
+    voice_t *v = &s->v[s->cur];
+    if (s->lvl <= 0.0f && s->tgt <= 0.0f)
+        return;                          /* silent: nothing to decode */
+    if (slice < 0) {
+        if (v->on && v->dg >= 0.0f)
+            v->dg = -XF;
+        return;
+    }
+    if (v->on && v->dg >= 0.0f && slice == (v->slice + 1) % (int)BRK_NSTEP) {
+        float want = (float)((uint32_t)slice * BRK_SLICE), at = (float)v->pos - 2.0f + v->frac, d = want - at;
+        if (d > (float)BRK_NSAMPLES * 0.5f)
+            d -= (float)BRK_NSAMPLES;
+        else if (d < -(float)BRK_NSAMPLES * 0.5f)
+            d += (float)BRK_NSAMPLES;
+        if (d >= -tol && d <= tol) {     /* on its way there already: no join to hear */
+            v->slice = (int8_t)slice;
+            v->left = (int32_t)((float)BRK_SLICE + tol + d) + 2;
+            return;
+        }
+    }
+    if (v->on)
+        v->dg = -XF;
+    s->cur ^= 1u;
+    voice_start(&s->v[s->cur], st, slice, tol);
+    brk_jumps++;
+}
+
+void brk_init(void)
+{
+    int i;
+    for (i = 0; i < BRK_NSTEM; i++) {
+        stem[i].v[0].on = stem[i].v[1].on = 0u;
+        stem[i].cur = 0u;
+        stem[i].lvl = stem[i].tgt = 0.0f;
+        stem[i].ramp = 1.0f;
+    }
+    fill = 0u;
+    brk_hits = brk_jumps = brk_decoded = 0u;
+    brk_st_core = brk_st_top = -1;
+}
+
+void brk_set_kit(int k)
+{
+    int i;
+    if (k == kit || (unsigned)k > 1u)
+        return;
+    for (i = 0; i < BRK_NSTEM; i++)      /* the old kit's state means nothing in the new one */
+        stem[i].v[0].on = stem[i].v[1].on = 0u;
+    kit = k;
+}
+void brk_set_tempo(float bpm) { inc = BRK_RATE * (1.0f / 44100.0f) * bpm * (1.0f / 170.0f); }
+void brk_set_ext(int ext) { tol = ext ? TOL_EXT : TOL_INT; }
+void brk_set_evolve(float e) { evolve = e; }
+void brk_set_busy(float b) { busy = b; }
+
+void brk_levels(float core, float top, float ramp_samples)
+{
+    const float r = ramp_samples < 1.0f ? 1.0f : 1.0f / ramp_samples;
+    stem[BRK_CORE].tgt = core;
+    stem[BRK_TOP].tgt = top;
+    stem[BRK_CORE].ramp = stem[BRK_TOP].ramp = r;
+}
+
+void brk_step(uint32_t sixteenth)
+{
+    const uint32_t step = sixteenth % BRK_NSTEP, bs = sixteenth % 16u;
+    int core = (int)step, top = (int)step;
+    if (bs == 0u)
+        fill = 0u;
+    else if (bs == 12u)
+        fill = (uint8_t)(sixteenth / 16u % 8u == 7u && frand() < evolve);
+    if (fill && bs >= 13u)
+        core = (int)((step & ~15u) + 12u);   /* the snare again */
+    if (frand() >= 0.4f + 0.6f * busy)
+        top = -1;
+    else if (frand() < evolve * 0.5f)
+        top = (int)((rnd() >> 8) % 8u * 4u + step % 4u);
+    brk_st_core = (int8_t)core;
+    brk_st_top = (int8_t)top;
+    stem_step(BRK_CORE, core);
+    stem_step(BRK_TOP, top);
+    if (stem[BRK_CORE].tgt > 0.0f && (bs == 0u || bs == 4u || bs == 10u || bs == 12u || (fill && bs >= 13u)))
+        brk_hits++;
+}
+
+void brk_stop(void)
+{
+    int i, j;
+    for (i = 0; i < BRK_NSTEM; i++)
+        for (j = 0; j < 2; j++)
+            if (stem[i].v[j].on)
+                stem[i].v[j].dg = -XF;
+}
+
+static inline float fm_min_step(float d, float r) { return d < r ? d : r; }
+
+void brk_render(float *out, uint32_t n)
+{
+    int st, w;
+    for (st = 0; st < BRK_NSTEM; st++) {
+        stem_t *s = &stem[st];
+        const float l0 = s->lvl;
+        float lv = l0;
+        uint32_t j;
+        for (w = 0; w < 2; w++) {
+            voice_t *v = &s->v[w];
+            if (!v->on)
+                continue;
+            lv = l0;
+            for (j = 0; j < n; j++) {
+                float x;
+                v->frac += inc;
+                while (v->frac >= 1.0f) {
+                    v->frac -= 1.0f;
+                    next_sample(v, st);
+                }
+                if (v->left <= 0 && v->dg >= 0.0f)
+                    v->dg = -XF;
+                v->g += v->dg;
+                if (v->g >= 1.0f) {
+                    v->g = 1.0f;
+                    v->dg = 0.0f;
+                } else if (v->g <= 0.0f) {
+                    v->on = 0u;
+                    break;
+                }
+                x = v->s0 + (v->s1 - v->s0) * v->frac;
+                lv += lv < s->tgt ? fm_min_step(s->tgt - lv, s->ramp) : -fm_min_step(lv - s->tgt, s->ramp);
+                out[j] += x * v->g * lv;
+            }
+        }
+        /* the level moves with time, sounding or not */
+        if (s->tgt > l0)
+            s->lvl = l0 + (float)n * s->ramp > s->tgt ? s->tgt : l0 + (float)n * s->ramp;
+        else if (s->tgt < l0)
+            s->lvl = l0 - (float)n * s->ramp < s->tgt ? s->tgt : l0 - (float)n * s->ramp;
+        if (s->lvl <= 0.0f && s->tgt <= 0.0f)
+            s->v[0].on = s->v[1].on = 0u;
+    }
+}
+
+void brk_decode_range(int k, int st, uint32_t start, uint32_t n, int16_t *o)
+{
+    const brk_ima_t *a = &BRK_AT[k][st][start / BRK_SLICE];
+    int32_t pred = a->pred, idx = a->idx;
+    uint32_t i;
+    for (i = 0u; i < n; i++)
+        o[i] = (int16_t)ima(BRK_DATA[k][st], start + i, &pred, &idx);
+}
+
+uint32_t brk_stem_hash(int k, int st)
+{
+    int32_t pred = 0, idx = 0;
+    uint32_t i, h = 2166136261u;
+    for (i = 0u; i < BRK_NSAMPLES; i++)
+        h = (h ^ (uint32_t)(uint16_t)ima(BRK_DATA[k][st], i, &pred, &idx)) * 16777619u;
+    return h;
+}
+uint32_t brk_stem_expected(int k, int st) { return BRK_HASH[k][st]; }

@@ -40,15 +40,19 @@ static double coef(double hz) { return 1.0 - exp(-2.0 * PI * hz / SR); }
 
 static double buf[NS];
 
+/* every sound starts a little after its slice: when the player lets go of the sound before, at the slice's edge, its
+ * 2 ms fade must not read the next sound's first samples */
+#define HEAD 48
+
 /* a sound's sample i, in its slices: it starts at lag and must be over by the region's end (a fade makes it so) */
 static void add(int slice, int nslices, int lag, int i, double x)
 {
-    int len = nslices * SLICE - lag, fade = len / 5;
+    int len = nslices * SLICE - lag - HEAD, fade = len / 5;
     if (i >= len)
         return;
     if (i > len - fade)
         x *= (double)(len - i) / fade;
-    buf[(slice * SLICE + lag + i) % NS] += x;
+    buf[(slice * SLICE + lag + HEAD + i) % NS] += x;
 }
 
 static void kick(const kit_t *k, int slice, int nsl, double vel, double tone)
@@ -168,7 +172,7 @@ static void render_top(const kit_t *k)
     ghost(k, 13, 3, (int)(0.022 * SR), 0.42, 0.75);                          /* f: softer, later */
     rim(16, 2, (int)(0.008 * SR), 0.5);                                      /* r */
     hat(18, 2, 0, 0.34, k->hat_hp * 0.7, 0.009, 0.024);                      /* x: a shaker's push */
-    swell(20, 12, 0.85);                                                     /* ~ */
+    swell(20, 12, 1.25);                                                     /* ~ */
 }
 
 /* IMA ADPCM (the standard's tables) */

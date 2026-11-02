@@ -1,6 +1,10 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Charles Vestal */
-/* The instrument: a generative ambient garden. Four layers draw on one pool of notes (a scale:
+/* On the branch demo-loading the composition is replaced: a fixed four-minute song ("the demo's song" in amb.c), an
+ * electric piano over a dark pad, two motifs, a sub and drum patterns; Swell is the piano's level. What follows is
+ * AMB-1's design, of which the space (echo, plate) and the parameters remain.
+ *
+ * The instrument: a generative ambient garden. Four layers draw on one pool of notes (a scale:
  * the root plus up to eleven more pitch classes) and one chord that drifts slowly through it:
  *
  *   PAD     four breathing voices: each swells in, hangs and fades on its own cycle (unequal lengths,

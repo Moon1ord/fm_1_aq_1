@@ -3,5 +3,5 @@
 #   PYTHON=.venv/bin/python3 sh build.sh --host && app/build/host/aq1_host tests/listen/demo.amb app/build/listen
 master 2430
 wav demo.wav
-wait 252000
+wait 253000
 wavstop

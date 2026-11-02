@@ -391,8 +391,9 @@ static void publish_chord(int c)
 }
 
 /* ---------------------------------------------------------------- pad --- */
-/* Beneath the piano: two soft saws to a voice, a few cents apart, through a dark 12 dB low-pass. A voice whose note
- * the next chord keeps simply holds; the others let go just before the change and swell back on their new note. */
+/* Beneath the piano: two soft saws to a voice, a few cents apart, one weaker and each leaning to its own side so the
+ * pair moves in the field more than it pulses in level; then a dark 12 dB low-pass. A voice whose note the next chord
+ * keeps simply holds; the others let go just before the change and swell back on their new note. */
 typedef struct {
     float ph[2], inc[2], amp, tgt;
     uint8_t note, next;
@@ -492,28 +493,55 @@ typedef struct {
     uint8_t step, mask, vel, len;
 } comp_t;
 #define COMP_MAX 6
-/* how the hand plays each of the four chords, by how far the music has come. Sparse: a chord lives 5.6 s, and is
- * touched two to five times; off the kick and the snare, on the even sixteenths of the half-time feel */
-static const comp_t COMP[3][4][COMP_MAX] = {
+/* how the hand plays each of the four chords, by how far the music has come, in two ways that take turns cycle by
+ * cycle. Sparse: a chord lives 5.6 s, and is touched two to five times; off the kick and the snare, on the even
+ * sixteenths of the half-time feel */
+#define F 0x0Fu
+static const comp_t COMP[3][2][4][COMP_MAX] = {
     {   /* alone with the pad: slow, the root in the left hand */
-        {{0, 0x1F, 58, 50}, {36, 0x0C, 34, 14}},
-        {{0, 0x1F, 54, 34}, {38, 0x06, 34, 18}, {56, M_COL, 30, 6}},
-        {{0, 0x1F, 58, 22}, {22, 0x0E, 40, 26}},
-        {{0, 0x1F, 52, 46}, {46, 0x0C, 34, 12}},
+        {
+            {{0, 0x1F, 58, 34}, {36, 0x0C, 34, 22}},
+            {{0, 0x1F, 54, 34}, {38, 0x06, 34, 16}, {56, M_COL, 30, 6}},
+            {{0, 0x1F, 58, 20}, {22, 0x0E, 40, 26}},
+            {{0, 0x1F, 52, 44}, {46, 0x0C, 34, 12}},
+        },
+        {
+            {{0, 0x1F, 54, 30}, {32, 0x0E, 38, 22}},
+            {{0, 0x1F, 52, 44}, {46, 0x0C, 34, 12}},
+            {{0, 0x1F, 56, 18}, {20, 0x0C, 36, 6}, {40, 0x06, 38, 18}},
+            {{0, 0x1F, 50, 28}, {30, 0x0E, 36, 20}, {56, M_COL, 30, 6}},
+        },
     },
     {   /* with the half-time drums: the bass has the root */
-        {{0, 0x0F, 56, 20}, {22, 0x0E, 40, 6}, {38, 0x0F, 46, 16}},
-        {{0, 0x0F, 54, 14}, {14, 0x0C, 38, 4}, {32, 0x0F, 46, 18}, {54, 0x06, 34, 6}},
-        {{0, 0x0F, 56, 20}, {22, 0x0E, 40, 6}, {38, 0x0F, 46, 14}, {56, M_COL, 32, 6}},
-        {{0, 0x0F, 54, 18}, {30, 0x0C, 38, 6}, {44, 0x0E, 42, 14}},
+        {
+            {{0, F, 56, 20}, {22, 0x0E, 40, 6}, {38, F, 46, 16}},
+            {{0, F, 54, 14}, {14, 0x0C, 38, 4}, {32, F, 46, 18}, {54, 0x06, 34, 6}},
+            {{0, F, 56, 20}, {22, 0x0E, 40, 6}, {38, F, 46, 14}, {56, M_COL, 32, 6}},
+            {{0, F, 54, 18}, {30, 0x0C, 38, 6}, {44, 0x0E, 42, 14}},
+        },
+        {
+            {{0, F, 54, 12}, {14, 0x0C, 36, 4}, {32, F, 46, 22}},
+            {{0, F, 52, 20}, {22, 0x06, 38, 8}, {38, 0x0E, 44, 6}, {46, 0x0C, 34, 4}},
+            {{0, F, 56, 14}, {30, 0x0E, 40, 8}, {44, F, 44, 14}},
+            {{0, F, 52, 10}, {14, 0x06, 36, 4}, {22, 0x0E, 42, 8}, {38, F, 44, 18}},
+        },
     },
     {   /* the two-step: a little more syncopated, ahead of the changes, and still not busy */
-        {{0, 0x0F, 56, 12}, {14, 0x0E, 40, 4}, {32, 0x0F, 48, 10}, {46, 0x0C, 38, 4}, {62, M_NEXT | 0x0F, 52, 12}},
-        {{14, 0x0C, 38, 4}, {22, 0x0F, 46, 8}, {38, 0x06, 38, 8}, {54, 0x0E, 42, 4}},
-        {{0, 0x0F, 56, 12}, {14, 0x0E, 40, 4}, {32, 0x0F, 48, 12}, {46, 0x06, 36, 4}, {62, M_NEXT | 0x0F, 52, 14}},
-        {{14, 0x0C, 40, 4}, {22, 0x0F, 46, 8}, {46, 0x06, 36, 6}, {54, M_COL, 34, 6}},
+        {
+            {{0, F, 56, 12}, {14, 0x0E, 40, 4}, {32, F, 48, 10}, {46, 0x0C, 38, 4}, {62, M_NEXT | F, 52, 12}},
+            {{14, 0x0C, 38, 4}, {22, F, 46, 8}, {38, 0x06, 38, 8}, {54, 0x0E, 42, 4}},
+            {{0, F, 56, 12}, {14, 0x0E, 40, 4}, {32, F, 48, 12}, {46, 0x06, 36, 4}, {62, M_NEXT | F, 52, 14}},
+            {{14, 0x0C, 40, 4}, {22, F, 46, 8}, {46, 0x06, 36, 6}, {54, M_COL, 34, 6}},
+        },
+        {
+            {{0, F, 54, 8}, {22, 0x0E, 42, 6}, {32, F, 48, 8}, {54, 0x0C, 38, 4}, {62, M_NEXT | F, 50, 12}},
+            {{22, F, 46, 10}, {38, 0x0E, 40, 4}, {46, 0x06, 36, 6}},
+            {{0, F, 54, 10}, {22, 0x0C, 40, 4}, {32, F, 46, 14}, {54, 0x0E, 38, 4}, {62, M_NEXT | F, 50, 14}},
+            {{14, 0x0E, 40, 4}, {30, F, 44, 10}, {54, M_COL, 34, 6}},
+        },
     },
 };
+#undef F
 static uint8_t comp_set;                         /* moves only at the cycle's seam */
 
 static void comp_play(const comp_t *g, int c)
@@ -665,7 +693,7 @@ static const part_t PART[] = {
     {SONG_STEPS, 0, 0, 0},
 };
 /* per level: the stems' levels, the low-pass on the break (Hz), its pull on the melodic bus */
-static const float CORE_LVL[4] = {0.0f, 0.0f, 0.85f, 1.0f}, TOP_LVL[4] = {0.0f, 0.60f, 0.42f, 0.50f};
+static const float CORE_LVL[4] = {0.0f, 0.0f, 0.85f, 1.0f}, TOP_LVL[4] = {0.0f, 0.50f, 0.19f, 0.23f};
 static const float BRK_FC[4] = {3000.0f, 3000.0f, 4300.0f, 7000.0f};
 static const float PAD_FC[4] = {640.0f, 680.0f, 760.0f, 900.0f};
 
@@ -733,7 +761,7 @@ static void song_step(uint32_t s)
     if (!cy)
         comp_set = (uint8_t)(song_level <= 1 ? 0 : song_level - 1);
     if (s <= LAST_CHORD) {
-        const comp_t *g = COMP[comp_set][c];
+        const comp_t *g = COMP[comp_set][cycle & 1u][c];
         for (i = 0; i < COMP_MAX && (g[i].mask); i++)
             if (g[i].step == cs && (s < LAST_CHORD - 64u + 62u || s == LAST_CHORD))
                 comp_play(&g[i], c);
@@ -1256,7 +1284,7 @@ static void render_pad(uint32_t n)
         gl = fm_cosf((pn + 1.0f) * (FM_PI / 4.0f)) * g;
         gr = fm_sinf((pn + 1.0f) * (FM_PI / 4.0f)) * g;
         for (j = 0; j < n; j++) {
-            const float x = (blep_saw(p0, inc0) + blep_saw(p1, inc1)) * amp;
+            const float a = blep_saw(p0, inc0) * amp, b = blep_saw(p1, inc1) * amp;
             p0 += inc0;
             if (p0 >= 1.0f)
                 p0 -= 1.0f;
@@ -1264,15 +1292,15 @@ static void render_pad(uint32_t n)
             if (p1 >= 1.0f)
                 p1 -= 1.0f;
             amp += (tgt - amp) * rate;
-            padl[j] += x * gl;
-            padr[j] += x * gr;
+            padl[j] += (a + 0.28f * b) * gl;
+            padr[j] += (0.60f * b + 0.42f * a) * gr;
         }
         v->ph[0] = p0;
         v->ph[1] = p1;
         v->amp = fm_flush(amp);
         f = mtof((float)v->note + 0.05f * motion * mod[i].v);
-        v->inc[0] = f * 0.99798f * (1.0f / EN_SR);           /* -3.5 and +3.5 cents: slow, and warm */
-        v->inc[1] = f * 1.00202f * (1.0f / EN_SR);
+        v->inc[0] = f * 0.99856f * (1.0f / EN_SR);           /* -2.5 and +2.5 cents: slow, and warm */
+        v->inc[1] = f * 1.00144f * (1.0f / EN_SR);
         en_pad_note[i] = v->note;
         en_pad_amp[i] = amp;
         lvl = fm_maxf(lvl, amp);
@@ -1343,7 +1371,7 @@ static void render_keys(uint32_t n)
         }
         if (it > 0.0006f) {                      /* the tine's ping, then a lookup saved */
             for (; k < n; k++) {
-                const float m = sine(cph) * (ib + 0.012f) + sine(tph) * it;
+                const float m = sine(cph) * (ib + 0.024f) + sine(tph) * it;
                 x = sine(cph + m + 2.0f) * amp * att * (1.0f + ib * 1.8f);
                 padl[k] += x * gl;
                 padr[k] += x * gr;
@@ -1360,7 +1388,7 @@ static void render_keys(uint32_t n)
             }
         } else {
             for (; k < n; k++) {
-                const float m = sine(cph) * (ib + 0.012f);
+                const float m = sine(cph) * (ib + 0.024f);
                 x = sine(cph + m + 2.0f) * amp * att * (1.0f + ib * 1.8f);
                 padl[k] += x * gl;
                 padr[k] += x * gr;
@@ -1435,7 +1463,7 @@ static void render_bass(uint32_t n)
         inc += (bass.inc_t - inc) * 0.004f;
         amp += (tgt - amp) * rate;
         spk *= 0.99965f;                         /* speaks, then settles: ~65 ms */
-        idx += (0.022f + spk - idx) * 0.012f;
+        idx += (0.034f + spk - idx) * 0.012f;
         mixl[j] += x;
         mixr[j] += x;
         rsend[j] += x * 0.05f;
@@ -1537,8 +1565,8 @@ static void render_break(uint32_t n)
         x -= 0.40f * s;                          /* the highs of it further back than the thump */
         mixl[j] += x + t * 0.50f;
         mixr[j] += x + t * 0.66f;
-        rsend[j] += s * 1.30f + t * 1.00f;
-        esend[j] += s * 0.05f + t * 0.14f;
+        rsend[j] += s * 1.30f + t * 2.20f;
+        esend[j] += s * 0.05f + t * 0.30f;
         a = x < 0.0f ? -x : x;
         pk = a > pk ? a : pk;
     }

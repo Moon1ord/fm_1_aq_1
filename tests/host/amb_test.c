@@ -143,9 +143,8 @@ int main(void)
     /* (demo-loading) the chord no longer drifts and the bell loops no longer evolve: a four-chord cycle repeats exactly,
      * and two fixed motifs replace the loops. The drift, chord-change and loop-evolve checks do not apply. Instead: */
     {
-        uint8_t seen[4], c0 = en_chord[0];
+        uint8_t seen[4];
         int k, changes = 0, again = 0;
-        uint8_t last = en_chord_root;
         en_init();
         en_play(1);
         run(0.1f);
@@ -159,8 +158,6 @@ int main(void)
         }
         for (k = 0; k < 4; k++)
             changes += seen[k] != seen[(k + 1) & 3];
-        (void)c0;
-        (void)last;
         CHECK(changes == 4 && again == 4, "the cycle: %d changes, %d of 4 came again", changes, again);
     }
 

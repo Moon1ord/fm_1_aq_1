@@ -103,7 +103,7 @@ static void stem_step(int st, int slice)
         return;                          /* silent: nothing to decode */
     if (slice < 0) {
         if (v->on && v->dg >= 0.0f)
-            v->dg = -xf_out;
+            v->dg = -XF;                 /* quickly: the next slice is the next sound's head (the bank's sounds have died by now) */
         return;
     }
     if (v->on && v->dg >= 0.0f && v->kit == kit && slice == (v->slice + 1) % (int)BRK_NSTEP) {
@@ -136,6 +136,7 @@ static struct {
     int8_t cur;                          /* the slice playing, -1 none */
     uint8_t left;                        /* slices of this sound still to come */
 } pat[BRK_NSTEM];
+static uint8_t swelling;                 /* steps until the rising air has arrived */
 
 void brk_init(void)
 {
@@ -153,6 +154,7 @@ void brk_init(void)
     xf_out = XF;
     pat[0].left = pat[1].left = 0u;
     pat[0].cur = pat[1].cur = -1;
+    swelling = 0u;
     fill = 0u;
     brk_hits = brk_jumps = brk_decoded = 0u;
     brk_st_core = brk_st_top = -1;
@@ -263,8 +265,15 @@ float brk_pattern_step(uint32_t step, int level, int flags)
 {
     const uint32_t s = step % PAT_N;
     const char *core = PAT_CORE[(unsigned)level < 4u ? level : 0], *top = PAT_TOP[(unsigned)level < 4u ? level : 0];
-    const char cc = flags & BRK_DROP ? '.' : core[s], tc = flags & BRK_SWELL ? '~' : flags & BRK_DROP ? '.' : top[s];
+    const char cc = flags & BRK_DROP ? '.' : core[s];
+    char tc = flags & BRK_SWELL ? '~' : flags & BRK_DROP ? '.' : top[s];
     const bank_t *hc = bank_find(BANK_CORE, cc);
+    if (flags & BRK_SWELL)
+        swelling = 12u;
+    else if (swelling) {                 /* the rising air has the top to itself until it has arrived */
+        swelling--;
+        tc = '.';
+    }
     xf_out = PAT_XF;
     brk_st_core = (int8_t)(hc ? hc->slice : -1);
     pat_play(BRK_CORE, hc);

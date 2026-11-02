@@ -3,10 +3,8 @@
  * nothing, so no recording is in them. IMA ADPCM, mono, BRK_SLICE samples a sixteenth at 170 BPM.
  *
  * A stem is no longer a two-bar loop but a bank: each sound sits at a fixed slice with silence after it, and brk.c's
- * patterns choose the slices (the map is there, BANK_CORE and BANK_TOP, and must match the tables below). Soft and far
- * back on purpose: round kicks, warm rimmy snares with a long soft tail, quiet airy hats. The lateness of the snares,
- * the ghosts and the soft hat is written into the sound (it costs nothing at run time): they begin LAG after their
- * slice, so everything played from these banks sits a little behind the kick.
+ * patterns choose the slices (the map is there, BANK_CORE and BANK_TOP, and must match the tables below). Light drum and
+ * bass: a short kick with a click, a clear tight snare, soft ghosts. The hats are not here: the engine makes them.
  *   cc -O2 -std=c99 -o /tmp/gen_breaks tools/gen_breaks.c -lm && /tmp/gen_breaks > app/dsp/brk_data.h */
 #include <math.h>
 #include <stdint.h>
@@ -24,8 +22,8 @@ typedef struct {
     double kick_hz, kick_sweep, kick_dec, sn_hz, sn_dec, sn_tail, sn_lp, hat_hp, hat_dec;
 } kit_t;
 static const kit_t KIT[2] = {
-    {"GLASS", 55.0, 58.0, 0.135, 188.0, 0.050, 0.095, 4300.0, 4600.0, 0.022},
-    {"MOSS", 49.0, 48.0, 0.160, 172.0, 0.060, 0.110, 3200.0, 4200.0, 0.028},
+    {"GLASS", 55.0, 120.0, 0.052, 205.0, 0.024, 0.075, 9000.0, 4600.0, 0.022},
+    {"MOSS", 49.0, 100.0, 0.075, 188.0, 0.030, 0.085, 7000.0, 4200.0, 0.028},
 };
 
 static uint32_t rs = 0x1234567u;
@@ -55,38 +53,42 @@ static void add(int slice, int nslices, int lag, int i, double x)
     buf[(slice * SLICE + lag + HEAD + i) % NS] += x;
 }
 
+/* short and punchy: a quick drop in pitch, a defined click, gone before the sub needs the room */
 static void kick(const kit_t *k, int slice, int nsl, double vel, double tone)
 {
     double ph = 0.0, lp = 0.0;
-    const double thump = coef(900.0);
+    const double click = coef(5200.0);
     int i, n = nsl * SLICE;
     for (i = 0; i < n; i++) {
-        double t = i / SR, f = k->kick_hz + tone * k->kick_sweep * exp(-t / 0.024), x;
-        double env = (1.0 - exp(-t / 0.0028)) * exp(-t / k->kick_dec);
+        double t = i / SR, f = k->kick_hz + tone * k->kick_sweep * exp(-t / 0.014), x;
+        double env = (1.0 - exp(-t / 0.0006)) * exp(-t / k->kick_dec);
         ph += f / SR;
-        lp += thump * (noise() - lp);
+        lp += click * (noise() - lp);
         x = sin(2.0 * PI * ph) * env;
-        x = tanh(1.5 * x) / tanh(1.5);                  /* round, a little third harmonic for small speakers */
-        x += lp * 0.10 * tone * exp(-t / 0.006);        /* the beater: felt, not clicked */
+        x = tanh(1.3 * x) / tanh(1.3);
+        x += (lp * 0.55 + sin(2.0 * PI * 1650.0 * t) * 0.32) * tone * exp(-t / 0.0028);   /* the beater */
         add(slice, nsl, 0, i, x * vel);
     }
 }
 
+/* a clear crack: a burst of noise, a short tone, a little bright room after it; firm, and over */
 static void snare(const kit_t *k, int slice, int nsl, int lag, double vel, double dark)
 {
-    double ph = 0.0, lp1 = 0.0, lp2 = 0.0, hp = 0.0;
-    const double cl = coef(k->sn_lp * dark), ch = coef(480.0);
+    double ph = 0.0, l1 = 0.0, l2 = 0.0, hp1 = 0.0, hp2 = 0.0;
+    const double cl = coef(k->sn_lp * dark), ch = coef(1300.0);
     int i, n = nsl * SLICE - lag;
     for (i = 0; i < n; i++) {
-        double t = i / SR, nz = noise(), x, a = 1.0 - exp(-t / 0.0012);
-        hp += ch * (nz - hp);
-        lp1 += cl * ((nz - hp) - lp1);
-        lp2 += cl * (lp1 - lp2);
-        ph += (k->sn_hz * (1.0 + 0.10 * exp(-t / 0.012))) / SR;
-        x = sin(2.0 * PI * ph) * 0.40 * exp(-t / 0.036);                     /* the head: warm, and gone */
-        x += sin(2.0 * PI * ph * 1.59) * 0.18 * exp(-t / 0.024);
-        x += (sin(2.0 * PI * 1190.0 * t) * 0.5 + sin(2.0 * PI * 1860.0 * t) * 0.3) * 0.34 * dark * exp(-t / 0.0065);   /* the rim */
-        x += lp2 * (0.95 * exp(-t / k->sn_dec) + 0.16 * exp(-t / k->sn_tail));   /* the wires, tight */
+        double t = i / SR, nz = noise(), x, a = 1.0 - exp(-t / 0.00035);
+        hp1 += ch * (nz - hp1);
+        nz -= hp1;
+        hp2 += ch * (nz - hp2);
+        nz -= hp2;
+        l1 += cl * (nz - l1);
+        l2 += cl * (l1 - l2);
+        ph += (k->sn_hz * (1.0 + 0.14 * exp(-t / 0.008))) / SR;
+        x = sin(2.0 * PI * ph) * 0.46 * exp(-t / 0.026);                     /* the tone: short */
+        x += sin(2.0 * PI * ph * 1.59) * 0.20 * exp(-t / 0.018);
+        x += l2 * (1.5 * exp(-t / k->sn_dec) + 0.30 * exp(-t / k->sn_tail));  /* the crack, then a little room */
         add(slice, nsl, lag, i, x * a * vel);
     }
 }
@@ -103,24 +105,6 @@ static void ghost(const kit_t *k, int slice, int nsl, int lag, double vel, doubl
         lp2 += cl * (lp1 - lp2);
         ph += k->sn_hz * 1.05 / SR;
         add(slice, nsl, lag, i, (sin(2.0 * PI * ph) * 0.62 * exp(-t / 0.032) + lp2 * 0.75 * exp(-t / 0.050)) * a * vel);
-    }
-}
-
-/* noise above hp, gently shut at the top: an airy hat, no metal in it */
-static void hat(int slice, int nsl, int lag, double vel, double hpf, double att, double dec)
-{
-    double l1 = 0.0, l2 = 0.0, top = 0.0;
-    const double c = coef(hpf), ct = coef(9300.0);
-    int i, n = nsl * SLICE - lag;
-    for (i = 0; i < n; i++) {
-        double t = i / SR, nz = noise(), x;
-        l1 += c * (nz - l1);
-        nz -= l1;
-        l2 += c * (nz - l2);
-        nz -= l2;
-        top += ct * (nz - top);
-        x = top * (1.0 - exp(-t / att)) * exp(-t / dec);
-        add(slice, nsl, lag, i, x * vel);
     }
 }
 
@@ -168,28 +152,23 @@ static void tom(const kit_t *k, int slice, int nsl, int lag, double vel)
 static void render_core(const kit_t *k)
 {
     memset(buf, 0, sizeof buf);
-    kick(k, 0, 6, 1.0, 1.0);                                 /* K */
-    kick(k, 6, 6, 0.70, 0.65);                               /* k: softer, rounder */
-    snare(k, 12, 6, (int)(0.019 * SR), 0.80, 1.0);           /* S: well behind */
-    snare(k, 18, 6, (int)(0.009 * SR), 0.60, 0.72);          /* s: softer, darker, less late */
-    tom(k, 24, 4, (int)(0.010 * SR), 0.30);                  /* t: a soft pickup */
+    kick(k, 0, 4, 1.0, 1.0);                                 /* K */
+    kick(k, 4, 4, 0.72, 0.8);                                /* k: lighter */
+    snare(k, 8, 5, (int)(0.004 * SR), 0.80, 1.0);            /* S */
+    snare(k, 13, 5, (int)(0.002 * SR), 0.56, 0.8);           /* s: lighter, a touch darker */
+    snare(k, 18, 2, 0, 0.42, 0.9);                           /* c: a chopped one, for the breaks */
+    tom(k, 20, 4, (int)(0.004 * SR), 0.30);                  /* t */
 }
 
 static void render_top(const kit_t *k)
 {
     memset(buf, 0, sizeof buf);
-    /* three closed hats, not one sample: each a little different, the off ones later (the swing is in the sound) */
-    hat(0, 1, 0, 1.0, k->hat_hp, 0.0010, k->hat_dec);                       /* h: on the beat */
-    hat(1, 1, (int)(0.006 * SR), 1.15, k->hat_hp * 1.12, 0.0013, k->hat_dec * 0.80);   /* j: a little later, thinner */
-    hat(2, 1, (int)(0.012 * SR), 0.80, k->hat_hp * 0.86, 0.0016, k->hat_dec * 1.15);   /* l: later, rounder */
-    hat(3, 1, (int)(0.010 * SR), 0.62, k->hat_hp * 1.1, 0.0014, k->hat_dec * 0.8);     /* i: the quiet one, level 1's */
-    hat(4, 6, 0, 0.60, k->hat_hp * 0.9, 0.006, 0.115);                       /* o: open, a long soft breath */
-    ghost(k, 10, 2, (int)(0.014 * SR), 0.085, 1.0);                           /* g */
-    ghost(k, 12, 2, (int)(0.022 * SR), 0.07, 0.75);                          /* f: softer, later */
-    ghost(k, 14, 2, (int)(0.008 * SR), 0.05, 0.60);                          /* e: barely touched */
-    rim(16, 2, (int)(0.008 * SR), 0.07);                                     /* r */
-    hat(18, 2, 0, 0.30, k->hat_hp * 0.7, 0.009, 0.024);                      /* x: a shaker's push */
-    swell(20, 12, 0.22);                                                     /* ~ */
+    /* the hats live in the engine now (44.1 kHz, in real time); the top has the ghosts, the rim and the air */
+    ghost(k, 0, 2, (int)(0.008 * SR), 0.40, 1.0);            /* g */
+    ghost(k, 2, 2, (int)(0.010 * SR), 0.30, 0.8);            /* f */
+    ghost(k, 4, 2, (int)(0.004 * SR), 0.20, 0.65);           /* e */
+    rim(6, 2, (int)(0.004 * SR), 0.34);                      /* r */
+    swell(20, 12, 0.34);                                     /* ~ */
 }
 
 /* IMA ADPCM (the standard's tables) */

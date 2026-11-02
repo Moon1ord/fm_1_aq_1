@@ -32,6 +32,9 @@ void brk_step(uint32_t sixteenth);       /* one call a sixteenth, counted from t
 enum { BRK_DROP = 1, BRK_SWELL = 2 };
 float brk_pattern_step(uint32_t step, int level, int flags, uint32_t seed);
 extern volatile char brk_hit_core, brk_hit_top;   /* the sound this step chose on each stem: its pattern letter, else '.' */
+extern volatile char brk_hat_hit;                 /* the hat this step asks of the engine: h j l i closed, o open, '.' none */
+extern volatile float brk_hat_vel;                /* and how hard */
+int brk_break_at(uint32_t step, int level, uint32_t seed, uint32_t *pos);   /* the break a step lies in, -1 plain; pure */
 extern volatile uint32_t brk_kicks, brk_snares;
 void brk_stop(void);                     /* what sounds fades out; the next step starts cleanly */
 void brk_render(float *out, uint32_t n); /* ADDS mono */

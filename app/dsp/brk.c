@@ -37,7 +37,8 @@ static uint8_t fill;
 static uint32_t rs = 0x2545F491u;
 
 volatile uint32_t brk_hits, brk_jumps, brk_decoded, brk_kicks, brk_snares;
-volatile char brk_hit_core, brk_hit_top;
+volatile char brk_hit_core, brk_hit_top, brk_hat_hit;
+volatile float brk_hat_vel;
 volatile int8_t brk_st_core, brk_st_top;
 
 static uint32_t rnd(void)
@@ -215,48 +216,66 @@ void brk_step(uint32_t sixteenth)
 /* ---- the demo's patterns ----
  * A stem is a bank of sounds (tools/gen_breaks.c lays them out; these maps must match it). A pattern names a sound on
  * a step; the following steps ask for its following slices, so the sound rings out over stem_step's seamless path and
- * no join is heard; and when the sound is over the stem goes quiet. One grid, 170 BPM sixteenths; the levels differ
- * only in what they choose. The tables are the skeleton; on it, what a player would do differently each time, all of
- * it a pure function of (step, level, seed):
- *   a gain for each hit: a stable accent across the bar, a small human error around it
- *   which closed hat: three sounds, the off ones later (swing), so no machine gun
- *   a few soft ghosts, from a small set of shapes, changing from bar to bar
- *   now and then the softer snare on the backbeat, the open hat at a phrase's end
- *   every four bars a small change in the last bar: a dropped kick, a ghost run, a rim or tom pickup. The backbeat stays. */
-#define PAT_XF (1.0f / 2048.0f)          /* a new hit takes over from the tail it cuts over about 45 ms, not 2 ms */
-#define PAT_CHOKE (1.0f / 500.0f)        /* the top: a hat chokes what rang before it, about 11 ms */
-#define PAT_N 64u
+ * no join is heard; and when the sound is over the stem goes quiet. One grid, 170 BPM sixteenths. The hats are named
+ * here too, but played by the engine: brk_hat_hit tells it which, and how hard.
+ *
+ * Light drum and bass: a plain two-step, kept plain. Now and then, at the end of an eight-bar block, one or two bars
+ * (sometimes four) of a chopped, rolling break, from a few hand-written ones, chosen by the seed; the plain two-step
+ * resumes exactly on the grid, at the next block. All of it is a pure function of (step, level, seed). */
+#define PAT_XF (1.0f / 1400.0f)          /* a new hit takes over from the tail it cuts over about 30 ms */
+#define PAT_CHOKE (1.0f / 500.0f)        /* the top: about 11 ms */
+#define PAT_N 16u
+#define BLOCK_STEPS 128u                 /* eight bars of 170 */
 typedef struct {
     char c;
     uint8_t slice, len;
 } bank_t;
-static const bank_t BANK_CORE[] = {{'K', 0, 6}, {'k', 6, 6}, {'S', 12, 6}, {'s', 18, 6}, {'t', 24, 4}, {0, 0, 0}};
-static const bank_t BANK_TOP[] = {{'h', 0, 1},  {'j', 1, 1},  {'l', 2, 1},  {'i', 3, 1},  {'o', 4, 6},  {'g', 10, 2},
-                                  {'f', 12, 2}, {'e', 14, 2}, {'r', 16, 2}, {'x', 18, 2}, {'~', 20, 12}, {0, 0, 0}};
+static const bank_t BANK_CORE[] = {{'K', 0, 4}, {'k', 4, 4}, {'S', 8, 5}, {'s', 13, 5}, {'c', 18, 2}, {'t', 20, 4}, {0, 0, 0}};
+static const bank_t BANK_TOP[] = {{'g', 0, 2}, {'f', 2, 2}, {'e', 4, 2}, {'r', 6, 2}, {'~', 20, 12}, {0, 0, 0}};
 
-/* four bars of 170: at level 2 sixteen steps are a half-time bar (85 BPM: kick, then the one backbeat snare) */
-static const char PAT_CORE[4][PAT_N + 1] = {
-    "................................................................",
-    "................................................................",
-    "K.......S.......K.......S.......K.......S.......K.....k.S.......",
-    "K...S.....k.s...K...S.....k.s...K...S.....k.s...K...S.....k.s...",
+/* one bar. Level 0 nothing, 1 hats alone, 2 the light two-step, 3 the fuller one, 4 half time, a colour for the breakdown */
+static const char PAT_CORE[5][PAT_N + 1] = {
+    "................",
+    "................",
+    "K...S.....k.S...",
+    "K...S.....k.S...",
+    "K.......s.......",
 };
-static const char PAT_TOP[4][PAT_N + 1] = {
-    "................................................................",
-    "....i.......f...............i.......i.........f.............o...",
-    "....h.......h.h.....h.......h.......h.......h.h.....h.......o...",
-    "..h...h...h...h...h...h...h...h...h...h...h...h...h...h...h...o.",
+static const char PAT_HAT[5][PAT_N + 1] = {
+    "................",
+    "..i...i...i...i.",
+    "..h...h...h...h.",
+    "..h...hi..h...hi",
+    "..i...h...i...h.",
 };
 /* the bar's accent, on the hats */
-static const uint8_t HAT_ACC[16] = {90, 60, 84, 60, 100, 60, 90, 60, 94, 60, 80, 60, 100, 60, 88, 60};
-/* ghosts, by level (2, 3): which of a bar's sixteen steps. Off the kick, the snare and the hats' places */
-#define NGHOST 6
+static const uint8_t HAT_ACC[16] = {90, 60, 88, 62, 100, 60, 94, 66, 90, 60, 84, 62, 100, 60, 96, 70};
+/* a few ghosts at the fuller level, by bar */
+#define NGHOST 8
 #define B1(a) (1u << (a))
-static const uint16_t GHOSTS[2][NGHOST] = {
-    {0u, B1(11), 0u, B1(6), B1(11) | B1(13), B1(3)},
-    {0u, B1(7), B1(15), 0u, B1(7) | B1(9), B1(3)},
-};
+static const uint16_t GHOSTS[NGHOST] = {0u, 0u, B1(7), 0u, B1(15), 0u, B1(7), B1(3)};
 #undef B1
+
+/* the breaks: two bars each, core and ghosts, ours and hand-written. Chopped, displaced, rolling, quiet. A one-bar break
+ * is the second bar of one of these, four bars are two of them */
+#define NBREAK 6
+#define BREAK_LEN 32u
+static const char BREAK_CORE[NBREAK][BREAK_LEN + 1] = {
+    "K...S.....K.S...K.K.S.....k.S.c.",
+    "K.....S...K.S..kK...S..k..K.S...",
+    "K...S..c..k.S.c.K.c.S.....k.S.c.",
+    "K..k..S...K...S.K..k..S...k.S.s.",
+    "K...S.k...K.S.k.K...S.k..kK.S...",
+    "K.....S...k.S...K.....S.k...S.c.",
+};
+static const char BREAK_TOP[NBREAK][BREAK_LEN + 1] = {
+    ".......g.....f.......f.g.....e..",
+    "...f.....g.....e...g....e.......",
+    ".....f.g.......g.....f..........",
+    "..g......f.....e...g......f.....",
+    ".g.....f.....e...g.....f.....e..",
+    "...g.f.....g.f.....e.f.....g...f",
+};
 
 static uint32_t hmix(uint32_t seed, uint32_t what, uint32_t a)
 {
@@ -268,6 +287,27 @@ static uint32_t hmix(uint32_t seed, uint32_t what, uint32_t a)
     return x ^ x >> 16;
 }
 static float hfrac(uint32_t h) { return (float)(h >> 8) * (1.0f / 16777216.0f); }   /* 0..1 */
+
+/* the break this step lies in: its pattern, its position in the pattern; -1 plain. Pure */
+int brk_break_at(uint32_t step, int level, uint32_t seed, uint32_t *pos)
+{
+    const uint32_t block = step / BLOCK_STEPS, in = step % BLOCK_STEPS;
+    const uint32_t h = hmix(seed, 5u, block), bars = (h >> 8) % 8u < 4u ? 1u : (h >> 8) % 8u < 7u ? 2u : 4u;
+    const uint32_t chance = level == 3 ? 5u : 3u;
+    uint32_t from;
+    int b;
+    if ((level != 2 && level != 3) || (h >> 16) % 8u >= chance)
+        return -1;
+    from = BLOCK_STEPS - bars * 16u;
+    if (in < from)
+        return -1;
+    b = (int)((h >> 24) % NBREAK);
+    if (bars == 4u)
+        b = in - from < 32u ? b : (b + 1) % NBREAK;
+    if (pos)
+        *pos = bars == 1u ? 16u + (in - from) : (in - from) % 32u;
+    return b;
+}
 
 static const bank_t *bank_find(const bank_t *b, char c)
 {
@@ -295,43 +335,34 @@ static void pat_play(int st, const bank_t *hit, float vel)
     }
 }
 
-enum { PV_NONE, PV_DROP, PV_RUN, PV_RIM, PV_TOM };
-static const uint8_t PHRASE_END[8] = {PV_NONE, PV_DROP, PV_RUN, PV_NONE, PV_RIM, PV_RUN, PV_TOM, PV_DROP};
-
 float brk_pattern_step(uint32_t step, int level, int flags, uint32_t seed)
 {
-    const uint32_t s = step % PAT_N, bs = step % 16u, bar = step / 16u, phrase = step / PAT_N;
-    const int lv = (unsigned)level < 4u ? level : 0;
-    const uint32_t pv = lv >= 2 && s >= 48u ? PHRASE_END[hmix(seed, 1u, phrase) & 7u] : PV_NONE;
+    const uint32_t bs = step % PAT_N, bar = step / PAT_N, blk = step % BLOCK_STEPS;
+    const int lv = (unsigned)level < 5u ? level : 0;
     const uint32_t h = hmix(seed, 2u, step);
-    char cc = flags & BRK_DROP ? '.' : PAT_CORE[lv][s];
-    char tc = flags & BRK_SWELL ? '~' : flags & BRK_DROP ? '.' : PAT_TOP[lv][s];
-    const bank_t *hc;
-    float vc, vt;
-    /* what the core does with this hit */
-    if (pv == PV_DROP && cc == 'k')
-        cc = '.';
-    if (pv == PV_TOM && s == 62u && cc == '.')
-        cc = 't';
-    if (cc == 'S' && h % 6u == 0u)
-        cc = 's';                        /* now and then, the softer one */
-    else if (cc == 's' && h % 5u == 0u)
-        cc = 'S';                        /* and the other way round */
-    vc = cc == 'K' || cc == 'k' ? 0.95f + 0.10f * hfrac(h) : 0.92f + 0.14f * hfrac(h);
-    /* what the top does with this step */
-    if (lv >= 2 && !(flags & (BRK_DROP | BRK_SWELL))) {
-        if (tc == 'o' && (phrase & 1u) == 0u && (h & 1u))
-            tc = 'h';                    /* the open hat: at an eight bars' end, and sometimes at a four's */
-        if (tc == 'h' && (bs & 3u) == 2u)
-            tc = "hjjl"[h >> 3 & 3u];    /* the off sixteenths: mostly later, and not the same twice */
-        else if (tc == 'h' && (bs & 3u) == 0u && (h >> 3 & 3u) == 0u)
-            tc = 'l';
-        if (pv == PV_RUN && s >= 61u)
-            tc = s == 61u ? 'e' : s == 62u ? 'f' : 'g';   /* two or three rising ghosts */
-        else if (pv == PV_RIM && s == 62u)
-            tc = 'r';
-        else if (tc == '.' && !(pv == PV_RUN) && GHOSTS[lv - 2][hmix(seed, 3u, bar) % NGHOST] >> bs & 1u)
-            tc = (h >> 5) & 1u ? 'f' : 'e';
+    uint32_t pos = 0u;
+    const int brk = flags & (BRK_DROP | BRK_SWELL) ? -1 : brk_break_at(step, lv, seed, &pos);
+    char cc = flags & BRK_DROP ? '.' : brk >= 0 ? BREAK_CORE[brk][pos] : PAT_CORE[lv][bs];
+    char tc = flags & BRK_SWELL ? '~' : '.', hc = flags & BRK_DROP ? '.' : PAT_HAT[lv][bs];
+    const bank_t *bc;
+    float vc, vt = 0.72f + 0.42f * hfrac(hmix(seed, 4u, step));
+    /* the firm and the lighter snare, and a stable accent: the second backbeat a little under the first */
+    if (cc == 'S' && h % 9u == 0u)
+        cc = 's';
+    vc = cc == 'K' || cc == 'k' ? 0.95f + 0.10f * hfrac(h) : (bs == 12u ? 0.88f : 0.96f) + 0.10f * hfrac(h);
+    if (brk >= 0) {
+        tc = BREAK_TOP[brk][pos];
+        vc *= 0.92f;                     /* a break is not louder */
+    } else if (lv == 3 && !(flags & (BRK_DROP | BRK_SWELL)) && GHOSTS[hmix(seed, 3u, bar) % NGHOST] >> bs & 1u) {
+        tc = (h >> 5) & 1u ? 'f' : 'e';
+    }
+    /* the hats: three shades by position; at a block's end, sometimes the open one */
+    if (hc == 'h') {
+        hc = "hjjl"[h >> 3 & 3u];        /* the off sixteenths: mostly a little later, and not the same twice */
+        if (lv >= 2 && blk == BLOCK_STEPS - 2u && (h & 1u))
+            hc = 'o';
+    } else if (lv == 3 && hc == '.' && bs == 14u && bar % 4u == 3u && !(h & 3u)) {
+        hc = 'o';
     }
     if (flags & BRK_SWELL)
         swelling = 12u;
@@ -339,25 +370,21 @@ float brk_pattern_step(uint32_t step, int level, int flags, uint32_t seed)
         swelling--;
         tc = '.';
     }
-    if (tc == 'h' || tc == 'j' || tc == 'l' || tc == 'i')
-        vt = (float)HAT_ACC[bs] * 0.01f * (0.88f + 0.24f * hfrac(hmix(seed, 4u, step)));
-    else if (tc == 'g' || tc == 'f' || tc == 'e')
-        vt = 0.72f + 0.42f * hfrac(hmix(seed, 4u, step));
-    else
-        vt = 1.0f;
-    hc = bank_find(BANK_CORE, cc);
-    brk_st_core = (int8_t)(hc ? hc->slice : -1);
+    brk_hat_hit = hc;
+    brk_hat_vel = (float)HAT_ACC[bs] * 0.01f * (0.86f + 0.28f * hfrac(hmix(seed, 6u, step)));
+    bc = bank_find(BANK_CORE, cc);
+    brk_st_core = (int8_t)(bc ? bc->slice : -1);
     brk_hit_core = cc;
     brk_hit_top = tc;
     xf_out = PAT_XF;
-    pat_play(BRK_CORE, hc, vc);
+    pat_play(BRK_CORE, bc, vc);
     xf_out = PAT_CHOKE;
     pat_play(BRK_TOP, bank_find(BANK_TOP, tc), vt);
     if (cc == 'K' || cc == 'k')
         brk_kicks++;
-    if (cc == 'S' || cc == 's')
+    if (cc == 'S' || cc == 's' || cc == 'c')
         brk_snares++;
-    if (hc && stem[BRK_CORE].tgt > 0.0f)
+    if (bc && stem[BRK_CORE].tgt > 0.0f)
         brk_hits++;
     return cc == 'K' ? vc : cc == 'k' ? 0.7f * vc : 0.0f;
 }

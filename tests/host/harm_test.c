@@ -2,6 +2,7 @@
 /* The demo's growing harmony and its living drums: both pure functions of a seed, so both can be read and checked. */
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include "amb.h"
 #include "brk.h"
 
@@ -174,9 +175,55 @@ static void engine_checks(void)
     CHECK(en_ep_peak <= 12, "peak %d voices", en_ep_peak);
 }
 
+/* the bass: long notes, on the chord, never landing on the tonic, moving a little */
+static void bass_checks(void)
+{
+    uint32_t sd, c, cs;
+    int level, s;
+    for (level = 2; level <= 3; level++) {
+        uint32_t notes = 0u, chords_n = 0u, steps = 0u, held = 0u, leads = 0u, seen = 0u;
+        for (sd = 0u; sd < NSEEDS; sd++)
+            for (c = 0u; c < NCYCLES - 1u; c++) {
+                uint8_t q[4], nx[4];
+                en_cycle_chords(c, sd, en_song_level(c), q);
+                en_cycle_chords(c + 1u, sd, en_song_level(c + 1u), nx);
+                for (s = 0; s < 4; s++) {
+                    const int next = s < 3 ? q[s + 1] : nx[0];
+                    chords_n++;
+                    for (cs = 0u; cs < 64u; cs++) {
+                        int len = 0;
+                        const int off = en_bass_at(q[s], next, c, cs, level, sd, &len);
+                        if (off < 0)
+                            continue;
+                        notes++;
+                        steps += (uint32_t)len;
+                        held += (uint32_t)(len > 0 ? len : 0);
+                        CHECK((off + 120) % 12 != 0, "seed %u: the tonic in the bass", sd);
+                        CHECK(off >= 3 && off <= 22, "seed %u: bass note %d out of its range", sd, off);
+                        CHECK(len >= 2 && (uint32_t)len + cs <= 64u, "seed %u: a note of %d at %u", sd, len, cs);
+                        if (cs == 0u)
+                            CHECK(off == (en_harm_bass(q[s]) < 4 ? en_harm_bass(q[s]) + 12 : en_harm_bass(q[s])), "the chord's first note is its root");
+                        if (cs >= 62u) {
+                            leads++;
+                        } else {
+                            CHECK(en_harm_tones(q[s]) >> ((off + 120) % 12) & 1u, "seed %u: %d not on %s", sd, off, en_harm_name(q[s]));
+                        }
+                        seen |= 1u << ((off + 120) % 12);
+                    }
+                }
+            }
+        printf("  bass level %d: %.2f notes a bar, %u leading tones in %u chords\n", level,
+               (double)notes * 16.0 / ((double)chords_n * 64.0), leads, chords_n);
+        CHECK((double)notes * 16.0 / ((double)chords_n * 64.0) <= (level == 3 ? 3.0 : 2.25), "level %d: too many notes", level);
+        CHECK(steps == chords_n * 64u, "level %d: the notes do not fill the time: %u of %u steps", level, steps, chords_n * 64u);
+        CHECK(leads > 0u && held > 0u && seen, "level %d: nothing moves", level);
+    }
+}
+
+/* the drums: a plain two-step, breaks now and then, back on the grid; deterministic for a seed */
 #define DSTEPS 6400u
-static char core_a[DSTEPS], top_a[DSTEPS];
-static void drums(uint32_t seed, int level, char *c, char *t)
+static char core_a[DSTEPS], top_a[DSTEPS], hat_a[DSTEPS];
+static void drums(uint32_t seed, int level, char *c, char *t, char *h)
 {
     uint32_t i;
     brk_init();
@@ -185,80 +232,132 @@ static void drums(uint32_t seed, int level, char *c, char *t)
         brk_pattern_step(i, level, 0, seed);
         c[i] = brk_hit_core;
         t[i] = brk_hit_top;
+        h[i] = brk_hat_hit;
     }
 }
 static int is_ghost(char c) { return c == 'g' || c == 'f' || c == 'e'; }
 
 static void drum_checks(void)
 {
-    static char c2[DSTEPS], t2[DSTEPS];
+    static char c2[DSTEPS], t2[DSTEPS], h2[DSTEPS];
     int level;
     uint32_t i;
     for (level = 2; level <= 3; level++) {
-        int soft = 0, hat[3] = {0, 0, 0}, opens = 0, core_diff = 0;
-        uint32_t ghosts = 0u, maxbar = 0u, inbar = 0u, kicks = 0u, snares = 0u, want_k = 0u, want_s = 0u;
-        drums(1234u, level, core_a, top_a);
-        drums(1234u, level, c2, t2);
-        CHECK(!memcmp(core_a, c2, DSTEPS) && !memcmp(top_a, t2, DSTEPS), "level %d: same seed, other drums", level);
+        uint32_t breaks = 0u, bbars = 0u, plain_k = 0u, plain_s = 0u, b;
+        int diff = 0, prev = -1;
+        drums(1234u, level, core_a, top_a, hat_a);
+        drums(1234u, level, c2, t2, h2);
+        CHECK(!memcmp(core_a, c2, DSTEPS) && !memcmp(top_a, t2, DSTEPS) && !memcmp(hat_a, h2, DSTEPS),
+              "level %d: same seed, other drums", level);
         for (i = 0u; i < DSTEPS; i++) {
             const uint32_t bs = i % 16u;
-            const char c = core_a[i], t = top_a[i];
-            if (level == 3) {                    /* the skeleton: kick 0 and 10, snare 4 and 12, nowhere else */
-                want_k += bs == 0u || bs == 10u;
-                want_s += bs == 4u || bs == 12u;
-                if (c == 'K' || c == 'k')
-                    CHECK(bs == 0u || bs == 10u, "a kick off the skeleton at %u", i);
-                if (c == 'S' || c == 's')
-                    CHECK(bs == 4u || bs == 12u, "a snare off the skeleton at %u", i);
-                if (bs == 4u || bs == 12u)
-                    CHECK(c == 'S' || c == 's', "the backbeat missing at %u", i);
+            const int in = brk_break_at(i, level, 1234u, 0);
+            const char c = core_a[i];
+            CHECK(c != 0 && top_a[i] != 0 && hat_a[i] != 0, "a pattern too short at %u", i);
+            if (in < 0) {                        /* plain: exactly the skeleton */
                 if (bs == 0u)
-                    CHECK(c == 'K', "the downbeat's kick missing at %u", i);
+                    CHECK(c == 'K', "plain bar: no kick at %u", i);
+                else if (bs == 10u)
+                    CHECK(c == 'k', "plain bar: no kick at %u", i);
+                else if (bs == 4u || bs == 12u)
+                    CHECK(c == 'S' || c == 's', "plain bar: no snare at %u", i);
+                else
+                    CHECK(c == '.', "plain bar: %c off the skeleton at %u", c, i);
+                plain_k += c == 'K' || c == 'k';
+                plain_s += c == 'S' || c == 's';
+                if (prev >= 0)
+                    CHECK(i % 128u == 0u, "a break ended off the block's edge at %u", i);
             } else {
-                want_k += bs == 0u || i % 64u == 54u;
-                want_s += bs == 8u;
-                if (bs == 8u)
-                    CHECK(c == 'S' || c == 's', "the backbeat missing at %u", i);
+                if (prev < 0) {
+                    CHECK(bs == 0u, "a break began off the bar at %u", i);
+                    breaks++;
+                }
+                if (bs == 0u)
+                    bbars++;
             }
-            kicks += c == 'K' || c == 'k';
-            snares += c == 'S' || c == 's';
-            soft += c == 's';
-            hat[0] += t == 'h';
-            hat[1] += t == 'j';
-            hat[2] += t == 'l';
-            opens += t == 'o';
-            if (bs == 0u) {
-                maxbar = inbar > maxbar ? inbar : maxbar;
-                inbar = 0u;
-            }
-            if (is_ghost(t)) {
-                ghosts++;
-                inbar++;
-            }
+            prev = in;
         }
-        printf("  drums level %d: %u kicks, %u snares (%d soft), %u ghosts, max %u a bar; hats %d %d %d, %d open\n", level,
-               kicks, snares, soft, ghosts, maxbar, hat[0], hat[1], hat[2], opens);
-        CHECK(snares == want_s, "level %d: %u snares, the skeleton has %u", level, snares, want_s);
-        CHECK(kicks >= want_k * 9u / 10u && kicks <= want_k * 11u / 10u, "level %d: %u kicks against %u", level, kicks, want_k);
-        CHECK(maxbar <= 3u, "level %d: %u ghosts in a bar", level, maxbar);
-        CHECK(ghosts * 16u <= DSTEPS * 2u, "level %d: %u ghosts in %u steps", level, ghosts, DSTEPS);
-        CHECK(ghosts > 0u && soft > 0 && opens > 0, "level %d: nothing varies", level);
-        CHECK(hat[0] > 0 && hat[1] > 0 && hat[2] > 0, "level %d: not all the hats", level);
-        drums(99u, level, c2, t2);
+        /* a break's bar is busier but bounded, and they are occasional */
+        for (b = 0u; b + 16u <= DSTEPS; b += 16u) {
+            uint32_t hits = 0u, ghosts = 0u, j;
+            for (j = 0u; j < 16u; j++) {
+                hits += core_a[b + j] != '.';
+                ghosts += is_ghost(top_a[b + j]);
+            }
+            CHECK(hits <= 8u, "level %d: %u hits in a bar", level, hits);
+            CHECK(ghosts <= 5u, "level %d: %u ghosts in a bar", level, ghosts);
+        }
+        printf("  drums level %d: %u breaks, %u bars of break in %u bars; plain %u kicks, %u snares (seed 1234)\n", level, breaks, bbars,
+               DSTEPS / 16u, plain_k, plain_s);
+        CHECK(breaks > 0u, "level %d: no breaks", level);
+        CHECK(bbars * 3u <= DSTEPS / 16u, "level %d: %u of %u bars are breaks", level, bbars, DSTEPS / 16u);
+        drums(99u, level, c2, t2, h2);
         for (i = 0u; i < DSTEPS; i++)
-            core_diff += core_a[i] != c2[i] || top_a[i] != t2[i];
-        CHECK(core_diff > 0, "level %d: two seeds, the same drums", level);
+            diff += core_a[i] != c2[i] || top_a[i] != t2[i];
+        CHECK(diff > 0, "level %d: two seeds, the same drums", level);
     }
-    drums(1234u, 1, core_a, top_a);
-    for (i = 0u; i < DSTEPS; i++)
+    drums(1234u, 1, core_a, top_a, hat_a);
+    for (i = 0u; i < DSTEPS; i++) {
         CHECK(core_a[i] == '.', "level 1 has a kick or a snare at %u", i);
+        CHECK(!is_ghost(top_a[i]), "level 1 has a ghost at %u", i);
+    }
+}
+
+/* the hats alone, as they play at 0:23 (the reverb and the echo open): dry and short */
+static void hat_checks(void)
+{
+    static int32_t buf[512];
+    static float mono[44100 * 40];
+    const double st = 44100.0 * 60.0 / 170.0 / 4.0;
+    uint32_t i = 0u, s;
+    double peak_sum = 0.0, tail_sum = 0.0;
+    int n = 0;
+    en_play(0);                                  /* from a standstill: the clock's pulse starts at its top */
+    en_render(buf, 256, 1024);
+    en_init();
+    en_set(P_PAD, 0);
+    en_set(P_BELLS, 0);
+    en_set(P_BASS, 0);
+    en_set(P_SWELL, 0);
+    en_play(1);
+    while (i + 256u < 44100u * 33u) {
+        int j;
+        en_render(buf, 256, 1024);
+        for (j = 0; j < 256; j++)
+            mono[i + (uint32_t)j] = (float)(buf[2 * j] + buf[2 * j + 1]) * (1.0f / 16777216.0f);
+        i += 256u;
+    }
+    /* level 1's hats: steps 2, 6, 10, 14 of a bar, between 0:24 and 0:33: 6 steps... the next hit is 4 steps off */
+    for (s = 272u; s < 370u; s++) {
+        if (s % 4u == 2u) {
+            const uint32_t i0 = (uint32_t)((double)s * st);
+            double p = 0.0, t = 0.0;
+            uint32_t k;
+            for (k = i0; k < i0 + 1100u; k++)    /* the hit: up to 25 ms, with its swing */
+                p = fabs((double)mono[k]) > p ? fabs((double)mono[k]) : p;
+            for (k = i0 + 2646u; k < i0 + 3528u; k++)   /* its tail: 60 to 80 ms later */
+                t += (double)mono[k] * (double)mono[k];
+            peak_sum += p;
+            tail_sum += sqrt(t / 882.0);
+            n++;
+        }
+    }
+    printf("  hats: %d hits, tail at 60-80 ms %.1f dB under the peak, reverb and echo open\n", n,
+           20.0 * log10(peak_sum / (tail_sum + 1e-12)));
+    CHECK(n > 10, "too few hats");
+    CHECK(peak_sum > 0.001 * n, "the hats are silent: %f", peak_sum / n);
+    CHECK(peak_sum > 56.0 * tail_sum, "the hats ring: %f against %f", peak_sum, tail_sum);   /* 35 dB */
+    CHECK(en_hat_peak <= 2, "%d hat voices", en_hat_peak);
+    CHECK(en_hat_peak >= 1, "no hat voices");
 }
 
 int main(void)
 {
     harmony_checks();
     engine_checks();
+    bass_checks();
     drum_checks();
+    hat_checks();
     printf(fails ? "harm: %d FAILED\n" : "harm: ok\n", fails);
     return fails != 0;
 }

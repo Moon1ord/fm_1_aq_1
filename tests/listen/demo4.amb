@@ -1,0 +1,6 @@
+# the listening demo, fourth render: light drum and bass, with a break now and then.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && app/build/host/aq1_host tests/listen/demo4.amb app/build/listen
+master 2430
+wav demo4.wav
+wait 253000
+wavstop

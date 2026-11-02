@@ -113,7 +113,7 @@ int en_chord_tones(uint32_t pool, int root, int deg, int *pcs);
 void en_voice_lead(const int *from, const int *pcs, int ntones, int *to, int lo, int hi);
 const char *en_chord_name(const int *pcs, int n, char *buf);   /* "Em7", "Dsus4", "C" ... */
 
-#define EN_HARM_SEED 3u                         /* the fixed seed of this render: harmony and drums */
+#define EN_HARM_SEED 7u                         /* the fixed seed of this render: harmony and drums */
 /* the demo's harmony: a small vocabulary of chords (ids), a walk over it, pure and testable. Tones in semitones above
  * the tonic. See "the demo's song" in amb.c. */
 typedef struct {
@@ -138,6 +138,9 @@ int en_motif_note(int m, int n, const uint8_t *chords);   /* its note over a cyc
 #define EN_ECHO_STEPS 6                        /* the echo's default place, in sixteenths */
 extern volatile uint32_t en_ep_notes, en_ep_chords, en_ep_singles, en_ep_steals;
 extern volatile uint8_t en_ep_peak;
+int en_bass_at(int id, int next_id, uint32_t cycle, uint32_t cs, int level, uint32_t seed, int *len);   /* levels 2, 3: pure */
+extern volatile uint32_t en_bass_notes;
+extern volatile uint8_t en_hat_peak;           /* the hat voices sounding at once: at most two */
 extern volatile uint8_t en_cycle_now[4];       /* the chords playing now */
 
 /* the pieces: recipes for every parameter (Tune and MIDI out included, but they are the player's) */

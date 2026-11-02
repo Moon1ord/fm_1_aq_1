@@ -98,7 +98,7 @@ said REC button. FREEZE: THE CHORD HOLDS AND THE REVERB RINGS ON. AGAIN: THAW
 release REC
 wait 100
 # the chord moving by itself: queued (said after what is being said)
-wait 60000
+wait 90000
 said Chord
 # a MIDI clock arriving, and start / stop from it
 midi FA 00 00

@@ -16,7 +16,21 @@ void app_init(void)
     project_load();                      /* defaults when nothing (or another format) is saved */
     project_apply();
 }
-void app_render(int32_t *lr, uint32_t n, uint32_t gain_q12) { en_render(lr, n, gain_q12); }
+volatile uint32_t app_render_max_us, app_sheds;
+
+void app_render(int32_t *lr, uint32_t n, uint32_t gain_q12)
+{
+    uint32_t t0 = plat_ticks24(), us;
+    en_render(lr, n, gain_q12);
+    us = (plat_ticks24() - t0) / PLAT_TICKS_PER_US;
+    if (us > app_render_max_us)
+        app_render_max_us = us;
+}
+void app_overload(void)
+{
+    app_sheds++;
+    en_shed();
+}
 void app_panic(void)
 {
     en_play(0);

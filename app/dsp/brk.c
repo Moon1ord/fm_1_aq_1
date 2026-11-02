@@ -176,12 +176,13 @@ void brk_levels(float core, float top, float ramp_samples)
 void brk_step(uint32_t sixteenth)
 {
     const uint32_t step = sixteenth % BRK_NSTEP, bs = sixteenth % 16u;
+    const int filling = fill && bs >= 13u && sixteenth / 16u % 8u == 7u;
     int core = (int)step, top = (int)step;
     if (bs == 0u)
         fill = 0u;
     else if (bs == 12u)
         fill = (uint8_t)(sixteenth / 16u % 8u == 7u && frand() < evolve);
-    if (fill && bs >= 13u && sixteenth / 16u % 8u == 7u)
+    if (filling)
         core = (int)((step & ~15u) + 12u);   /* the snare again */
     if (frand() >= 0.4f + 0.6f * busy)
         top = -1;
@@ -192,7 +193,7 @@ void brk_step(uint32_t sixteenth)
     stem_step(BRK_CORE, core);
     stem_step(BRK_TOP, top);
     if ((stem[BRK_CORE].lvl > 0.0f || stem[BRK_CORE].tgt > 0.0f) &&
-        (bs == 0u || bs == 4u || bs == 10u || bs == 12u || (fill && bs >= 13u && sixteenth / 16u % 8u == 7u)))
+        (bs == 0u || bs == 4u || bs == 10u || bs == 12u || filling))
         brk_hits++;
 }
 

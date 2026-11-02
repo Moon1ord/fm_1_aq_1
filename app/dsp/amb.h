@@ -13,12 +13,12 @@
  *           quarter notes), each holding a short phrase that shifts against the others, each its own
  *           shade of bell. EVOLVE changes a note now and then; DENSITY sets how many notes a loop holds.
  *   BASS    a sine and its sub-octave on the chord's root (now and then its fifth), gliding.
- *   PULSE   a soft thump, a closed hat and an open hat, each on its own Euclidean pattern (16, 12 and 7
- *           sixteenths): polyrhythms. HITS sets how many; the patterns turn and change around it.
+ *   BREAK   a drum break played a slice a sixteenth, in two stems (core and top) of a kit: see brk.h.
+ *           BUSY sets how much of the top sounds; EVOLVE how often it moves.
  *
  * Over it all, the ARC: a slow tide, minutes long, between sparse (fewer bells, a darker vowel, a quieter
- * pulse, more reverb) and full; MOTION sets how far it goes. And rests: with EVOLVE, the pulse
- * sits out a few bars, the bass a chord, a bell loop a pass.
+ * pulse, more reverb) and full; MOTION sets how far it goes. And rests: with EVOLVE, the
+ * bass a chord, a bell loop a pass.
  * Then, after Discreet Music's chain, an Echoplex (160 ms, fed back) and a tape loop (to ~5.6 s, two
  * heads, each repeat darker), and Dattorro's plate (from FoMni), fed generously: the space is most of
  * what is heard.
@@ -33,7 +33,6 @@
 #define EN_SR 44100.0f
 #define EN_NLOOP 4                     /* bell tape loops */
 #define EN_LOOP_MAX 29
-#define EN_NDRUM 3                     /* pulse: thump, closed hat, open hat */
 #define EN_NPAD 4                      /* pad voices */
 
 /* modes: pools relative to the root (bit i: root + i semitones) */
@@ -43,7 +42,6 @@ extern const char *const EN_MODE_NAME[EN_NMODES];
 extern const uint16_t EN_MODE_POOL[EN_NMODES];
 extern const char *const EN_NOTE_NAME[12];
 extern const uint8_t EN_LOOP_LEN[EN_NLOOP];
-extern const uint8_t EN_DRUM_N[EN_NDRUM];
 
 /* parameters: value ranges in en_param_info() */
 enum {
@@ -81,6 +79,7 @@ void en_clock(int msg);
 
 /* the render (audio ISR): n stereo frames, 24-bit in int32; gain Q12 (the MASTER pot) */
 void en_render(int32_t *out_lr, uint32_t n, uint32_t gain_q12);
+void en_shed(void);   /* the audio interrupt's own: four bell voices until the next piece */
 
 /* MIDI out, from the render: the app sends it (USB); status, data 1, data 2 */
 void en_midi_out(uint32_t st, uint32_t d1, uint32_t d2);
@@ -95,17 +94,14 @@ extern volatile float en_pad_level, en_bass_level;
 extern volatile uint8_t en_loop_pos[EN_NLOOP];
 extern volatile int8_t en_loop_note[EN_NLOOP][EN_LOOP_MAX];   /* -1 rest, else the slot's offset */
 extern volatile float en_loop_glow[EN_NLOOP];  /* 0..1: a bell just rang from this loop */
-extern volatile uint8_t en_drum_pos[EN_NDRUM];
-extern volatile uint32_t en_drum_pat[EN_NDRUM];/* bit i: a hit on step i */
-extern volatile float en_drum_glow[EN_NDRUM];
 extern volatile uint32_t en_bars;              /* sixteenths played since start (for tests) */
 extern volatile float en_arc;                  /* the arc, -1 sparse .. +1 full (times Motion) */
-extern volatile uint8_t en_pulse_rest;         /* the pulse is sitting a few bars out */
+extern volatile uint32_t en_hits;              /* the break's kicks and snares played: the screen counts them */
+extern volatile float en_break_level;          /* the break's level, for the meter */
 extern volatile uint8_t en_pad_note[EN_NPAD];  /* the note each voice sings now (MIDI) */
 extern volatile float en_pad_amp[EN_NPAD];     /* and how loud */
 
 /* the pure parts, for the tests and the screen */
-uint32_t en_euclid(int k, int n, int rot);     /* Bjorklund's pattern, as a bitmask (bit 0 = step 0) */
 int en_scale(uint32_t pool, int *steps);       /* the pool's pitch classes (relative), ascending; count */
 /* the chord on scale degree deg: its tones (MIDI pitch classes, absolute), 3 or 4 of them; count */
 int en_chord_tones(uint32_t pool, int root, int deg, int *pcs);

@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Charles Vestal */
-/* The instrument on the host: the pure parts (Euclid, scales, chords, voice leading, names) and the
+/* The instrument on the host: the pure parts (scales, chords, voice leading, names) and the
  * render (sound, no NaN, bounded, the loops evolve, the chord drifts, freeze holds). */
 #include <stdio.h>
 #include <string.h>
@@ -26,26 +26,6 @@ void en_midi_out(uint32_t st, uint32_t d1, uint32_t d2)
     (void)d1;
     (void)d2;
     midi_count++;
-}
-
-static uint32_t pat(const char *s)
-{
-    uint32_t m = 0;
-    int i;
-    for (i = 0; s[i]; i++)
-        if (s[i] == 'x')
-            m |= 1u << i;
-    return m;
-}
-
-static int popcount(uint32_t m)
-{
-    int c = 0;
-    while (m) {
-        c += (int)(m & 1u);
-        m >>= 1;
-    }
-    return c;
 }
 
 static int32_t buf[2 * 256];
@@ -91,16 +71,6 @@ int main(void)
         en_piece(7, par, &pl);
         CHECK(!strcmp(en_piece_name(7), "Afterglow") && par[P_MODE] == MODE_DORIAN, "Afterglow");
     }
-
-    /* Euclid: the classic patterns */
-    CHECK(en_euclid(3, 8, 0) == pat("x..x..x."), "E(3,8) %x", en_euclid(3, 8, 0));
-    CHECK(en_euclid(5, 8, 0) == pat("x.xx.xx."), "E(5,8) %x", en_euclid(5, 8, 0));
-    CHECK(en_euclid(4, 16, 0) == pat("x...x...x...x..."), "E(4,16)");
-    CHECK(en_euclid(0, 16, 0) == 0, "E(0,16)");
-    CHECK(en_euclid(7, 7, 0) == 0x7Fu, "E(7,7)");
-    for (i = 0; i <= 12; i++)
-        CHECK(popcount(en_euclid(i, 12, 5)) == i, "E(%d,12) has %d hits", i, popcount(en_euclid(i, 12, 5)));
-    CHECK(en_euclid(1, 7, 3) == 1u << 3, "rotation");
 
     /* scales and chords */
     {
@@ -167,6 +137,13 @@ int main(void)
            (double)sqrtf(sum2 / (20.0f * 44100.0f * 2.0f)), en_bars / 16u);
     CHECK(en_bars / 16u >= 5u, "the grid ran (%u sixteenths)", en_bars);
     CHECK(en_pad_level > 0.5f, "the pad swelled (%f)", (double)en_pad_level);
+
+    /* the break plays on the grid: hits come at the kit's pace */
+    {
+        uint32_t h0 = en_hits;
+        run(10.0f);
+        CHECK(en_hits - h0 > 20u, "the break's hits: %u in 10 s", en_hits - h0);   /* 4 a bar, 1.41 s a bar */
+    }
 
     /* the chord drifts: with Drift at its shortest, a few changes in two minutes */
     {

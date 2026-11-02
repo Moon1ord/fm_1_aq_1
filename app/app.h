@@ -58,6 +58,10 @@ void ui_say(const char *a, const char *b);
 /* the contract: the platform calls these */
 void app_init(void);                     /* boot: the engine, then the saved project (or the defaults) */
 void app_render(int32_t *lr, uint32_t n, uint32_t gain_q12);   /* audio interrupt: n stereo frames, 24-bit */
+#define APP_OVERLOAD                     /* the render took over 90 % of its time: fewer bells */
+void app_overload(void);
+extern volatile uint32_t app_render_max_us;   /* the worst block so far, in microseconds (Setup shows it as a %) */
+extern volatile uint32_t app_sheds;           /* how many times the guard shed voices */
 void app_panic(void);                    /* silence now (before an update rewrites the flash) */
 void app_ui_init(void);
 void app_frame(void);

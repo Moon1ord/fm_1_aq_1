@@ -301,6 +301,8 @@ static void set_view(int v)
 static void button(int b)
 {
     int v;
+    if (b == B_GLO)
+        app_render_max_us = 0;                   /* Setup's worst block counts afresh */
     for (v = 0; v < NVIEWS; v++)                 /* a page's button: its page */
         if (VIEW_BTN[v] == b) {
             set_view(v);
@@ -668,6 +670,8 @@ static void draw_header(void)
                            en_playing | ui.dirty << 4 | (uint32_t)msg << 5 | (uint32_t)en_ext << 6 | (uint32_t)proj.par[P_MODE] << 8),
                       (uint32_t)proj.par[P_TEMPO] | (ui.view == V_SETUP ? plat_cpu_pct() << 8 : 0u) |
                       (uint32_t)(batt() + 1) << 24);
+    if (ui.view == V_SETUP)
+        h = hash(h, app_render_max_us | plat_xruns() << 16);
     if (msg)
         h = hash(hash(h, (uint32_t)ui.msg[0][0] << 8 | ui.msg[0][1]), ui.msg_until);
     if (en_playing)
@@ -698,9 +702,22 @@ static void draw_header(void)
         } else {
             itoa_u((uint32_t)proj.par[P_TEMPO], t);
         }
-        if (ui.view == V_SETUP) {                 /* Setup: the audio load too */
-            char c[12] = "CPU ";
-            itoa_u(plat_cpu_pct(), c + 4);
+        if (ui.view == V_SETUP) {                 /* Setup: the audio load: smoothed, worst block %, missed, shed */
+            char c[28] = "CPU ";
+            uint32_t k = 4;
+            itoa_u(plat_cpu_pct(), c + k);
+            while (c[k]) k++;
+            c[k++] = ' ';
+            c[k++] = 'M';
+            itoa_u(app_render_max_us * 100u / 5805u, c + k);
+            while (c[k]) k++;
+            c[k++] = ' ';
+            c[k++] = 'X';
+            itoa_u(plat_xruns(), c + k);
+            while (c[k]) k++;
+            c[k++] = ' ';
+            c[k++] = 'S';
+            itoa_u(app_sheds, c + k);
             x -= text_w(&FONT_XS, c);
             cv_text(x, 8, &FONT_XS, c, K_DIM);
             x -= 10;
@@ -801,46 +818,19 @@ static void draw_ring(void)
 static void draw_meters(void)                    /* left: the four layers */
 {
     static const uint16_t C[4] = {K_PAD, K_BELL, K_BASS, K_PULSE}, T[4] = {K_PAD_T, K_BELL_T, K_BASS_T, K_PULSE_T};
-    float lv[4], bm = 0.0f, dm = 0.0f;
+    float lv[4], bm = 0.0f;
     int i;
     for (i = 0; i < EN_NLOOP; i++)
         bm = fm_maxf(bm, en_loop_glow[i]);
-    for (i = 0; i < EN_NDRUM; i++)
-        dm = fm_maxf(dm, en_drum_glow[i]);
     lv[0] = en_pad_level * (float)proj.par[P_PAD] * 0.01f;
     lv[1] = bm * (float)proj.par[P_BELLS] * 0.01f;
     lv[2] = en_bass_level * (float)proj.par[P_BASS] * 0.01f;
-    lv[3] = dm * (float)proj.par[P_BREAK] * 0.01f;
+    lv[3] = en_break_level * 4.0f;
     for (i = 0; i < 4; i++) {
         int32_t x = 10 + i * 11, h = (int32_t)(fm_clampf(lv[i], 0.0f, 1.0f) * 80.0f + 0.5f);
         cv_round(x, 46, 7, 86, 3, T[i]);
         if (h > 0)
             cv_round(x, 46 + 86 - h - 2, 7, h + 2, 3, C[i]);
-    }
-}
-
-static void draw_pulse(void)                     /* right: the three Euclidean rings */
-{
-    int d;
-    for (d = 0; d < EN_NDRUM; d++) {
-        int32_t cx = 212, cy = 52 + d * 34, s, n = EN_DRUM_N[d];
-        int g = q16(en_drum_glow[d]);
-        uint32_t p = en_drum_pat[d];
-        for (s = 0; s < n; s++) {
-            int32_t x, y;
-            int cur = en_playing && s == en_drum_pos[d];
-            polar(cx, cy, 13.0f, s, n, &x, &y);
-            if ((p >> s & 1u) && en_pulse_rest)   /* sitting a few bars out: faded */
-                cv_disc(x, y, 2, K_LINE);
-            else if (p >> s & 1u)
-                cv_disc(x, y, cur ? 3 : 2, cur ? K_PULSE : mix(K_PULSE_T, K_PULSE, 10));
-            else if (cur)
-                cv_disc(x, y, 1, K_DIM);
-            else
-                cv_rect(x, y, 2, 2, K_LINE);
-        }
-        if (g)
-            cv_disc(cx, cy, 1 + g / 4, mix(K_BG, K_PULSE, g));
     }
 }
 
@@ -908,8 +898,7 @@ static void draw_main(void)
         for (s = 0; s < EN_LOOP_LEN[i]; s++)
             h = hash(h, (uint32_t)(en_loop_note[i][s] >= 0));
     }
-    for (i = 0; i < EN_NDRUM; i++)
-        h = hash(h, en_drum_pos[i] | (uint32_t)q16(en_drum_glow[i]) << 8 | en_drum_pat[i] << 13 | (uint32_t)en_pulse_rest << 31);
+    h = hash(h, en_hits);
     h = hash(h, (uint32_t)(en_drift * 40.0f) | (uint32_t)q16(en_pad_level) << 8 | (uint32_t)q16(en_bass_level) << 13);
     for (i = 0; i < 4; i++)
         h = hash(h, (uint32_t)proj.par[i]);
@@ -927,7 +916,6 @@ static void draw_main(void)
     }
     draw_ring();
     draw_meters();
-    draw_pulse();
     cv_blit(0, MAIN_Y);
 }
 
@@ -1180,8 +1168,6 @@ static void sp_garden(void)
             last = pc;
         }
     }
-    if (en_pulse_rest && proj.par[P_BREAK])
-        sp_cat(". Pulse resting");
 }
 
 /* a help card: its button, then its lines ("ENV button. THE PAD. LEVEL, SWELL, BRIGHT, COLOUR") */
@@ -1343,7 +1329,7 @@ static void speak_dump(void)
                                           {"NOT SAVED", "FLASH ERROR"}};
     project_t keep = proj;
     uint8_t keep_view = ui.view, keep_help = ui.help, keep_dirty = ui.dirty, keep_play = sp_tp.playing;
-    uint8_t keep_ext = en_ext, keep_frozen = en_frozen, keep_rest = en_pulse_rest;
+    uint8_t keep_ext = en_ext, keep_frozen = en_frozen;
     int v, i, x, lo, hi;
     char t[48];
     for (v = 0; v < NVIEWS; v++) {
@@ -1371,7 +1357,6 @@ static void speak_dump(void)
         ui.dirty = (uint8_t)(x >> 1 & 1);
         en_ext = (uint8_t)(x == 3);
         en_frozen = (uint8_t)(x == 5);
-        en_pulse_rest = (uint8_t)(x == 2);
         proj.pool = x == 6 ? 0xFFFu : x == 7 ? 0x91u : keep.pool;
         proj.par[P_ROOT] = (int16_t)(x * 5 % 12);
         sp_page(1);
@@ -1384,7 +1369,6 @@ static void speak_dump(void)
     sp_tp.playing = keep_play;
     en_ext = keep_ext;
     en_frozen = keep_frozen;
-    en_pulse_rest = keep_rest;
     ui.view = keep_view;
     for (i = 0; i < NB; i++) {
         const char *l[HELP_LINES];

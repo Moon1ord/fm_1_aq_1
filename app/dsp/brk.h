@@ -22,7 +22,8 @@ void brk_set_tempo(float bpm);
 void brk_set_ext(int ext);               /* an external clock: a wider tolerance (steps land on block edges) */
 void brk_set_evolve(float e);            /* 0..1 */
 void brk_set_busy(float b);              /* 0..1: TOP sounds on 40 .. 100 % of its steps */
-void brk_levels(float core, float top, float ramp_samples);
+void brk_levels(float core, float top, float ramp_samples);   /* call on a change, not continuously: each call
+                                         restarts the ramp from the remaining distance */
 void brk_step(uint32_t sixteenth);       /* one call a sixteenth, counted from the start */
 void brk_stop(void);                     /* what sounds fades out; the next step starts cleanly */
 void brk_render(float *out, uint32_t n); /* ADDS mono */

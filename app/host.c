@@ -25,6 +25,8 @@ int app_expect(const char *what, int *got)
         g = batt();
     else if (!strcmp(what, "dirty"))
         g = ui.dirty;
+    else if (!strcmp(what, "hits"))
+        g = (int)en_hits;
     else if (!strcmp(what, "sixteenths"))
         g = (int)en_bars;
     else if (!strcmp(what, "ext"))

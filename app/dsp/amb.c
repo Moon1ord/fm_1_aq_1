@@ -2,6 +2,7 @@
  * Copyright (C) 2026 Charles Vestal */
 /* The instrument (amb.h). One compilation unit, -O2. */
 #include "amb.h"
+#include "brk.h"
 #include "fastmath.h"
 
 #if defined EN_HOST || defined PLAT_HOST
@@ -20,7 +21,6 @@ const uint16_t EN_MODE_POOL[EN_NMODES] = {
     B(0, 2, 4, 5, 7, 9, 10), B(0, 2, 3, 5, 7, 8, 10), B(0, 2, 4, 7, 9, 9, 9),  B(0, 3, 5, 7, 10, 10, 10)};
 #undef B
 const uint8_t EN_LOOP_LEN[EN_NLOOP] = {13, 17, 23, 29};
-const uint8_t EN_DRUM_N[EN_NDRUM] = {16, 12, 7};
 
 static const en_param_t PARAMS[P_NPARAMS] = {
     {"Pad", 0, 100, 60},      {"Bells", 0, 100, 60},    {"Bass", 0, 100, 50},     {"Break", 0, 100, 45},
@@ -131,49 +131,6 @@ void en_param_text(int i, int v, char *b)
 }
 
 /* ------------------------------------------------------- the pure parts --- */
-uint32_t en_euclid(int k, int n, int rot)
-{
-    /* Bjorklund's algorithm (as Toussaint's "The Euclidean Algorithm Generates Traditional Musical
-     * Rhythms"): k groups "x" and n - k groups ".", the remainders folded onto the heads until at most
-     * one remains. Groups are bit strings, LSB first: (bits, length). */
-    uint32_t gb[32], m = 0;
-    uint8_t gl[32];
-    int ng, heads, tails, i, pos = 0;
-    if (n <= 0 || n > 32 || k <= 0)
-        return 0;
-    if (k > n)
-        k = n;
-    for (i = 0; i < n; i++) {
-        gb[i] = i < k ? 1u : 0u;
-        gl[i] = 1;
-    }
-    ng = n;
-    heads = k;
-    tails = n - k;
-    while (tails > 1 && heads > 0) {
-        int pairs = heads < tails ? heads : tails;
-        for (i = 0; i < pairs; i++) {           /* a tail onto each head */
-            gb[i] |= gb[ng - pairs + i] << gl[i];
-            gl[i] = (uint8_t)(gl[i] + gl[ng - pairs + i]);
-        }
-        if (heads > tails) {                    /* the unpaired heads become the new tails */
-            tails = heads - pairs;
-            heads = pairs;
-        } else {
-            tails -= pairs;
-            heads = pairs;
-        }
-        ng = heads + tails;
-    }
-    for (i = 0; i < ng; i++) {
-        uint32_t j;
-        for (j = 0; j < gl[i]; j++)
-            if (gb[i] >> j & 1u)
-                m |= 1u << (((pos + (int)j + rot) % n + n) % n);
-        pos += gl[i];
-    }
-    return m;
-}
 
 int en_scale(uint32_t pool, int *steps)
 {
@@ -300,12 +257,10 @@ volatile float en_drift, en_pad_level, en_bass_level;
 volatile uint8_t en_loop_pos[EN_NLOOP];
 volatile int8_t en_loop_note[EN_NLOOP][EN_LOOP_MAX];
 volatile float en_loop_glow[EN_NLOOP];
-volatile uint8_t en_drum_pos[EN_NDRUM];
-volatile uint32_t en_drum_pat[EN_NDRUM];
-volatile float en_drum_glow[EN_NDRUM];
 volatile uint32_t en_bars;
 volatile float en_arc;
-volatile uint8_t en_pulse_rest;
+volatile uint32_t en_hits;
+volatile float en_break_level;
 volatile uint8_t en_pad_note[EN_NPAD];
 volatile float en_pad_amp[EN_NPAD];
 
@@ -532,6 +487,8 @@ typedef struct {
     uint8_t on, note, loop;
 } bell_t;
 static bell_t bell[NBELL];
+static int bell_lim = NBELL;                     /* voices the next bell may take (shed: fewer) */
+void en_shed(void) { bell_lim = 4; }
 static float bell_vol, btone;
 static int8_t loop_note[EN_NLOOP][EN_LOOP_MAX];
 static uint8_t loop_vel[EN_NLOOP][EN_LOOP_MAX], loop_pos[EN_NLOOP];
@@ -539,22 +496,9 @@ static const uint8_t LOOP_BASE[EN_NLOOP] = {72, 67, 79, 62};     /* each loop's 
 static const float LOOP_PAN[EN_NLOOP] = {-0.6f, 0.35f, 0.7f, -0.25f};
 static const float RATIO[5] = {1.0f, 2.0f, 3.0f, 3.5f, 4.77f};
 
-/* ----------------------------------------------------------------- pulse --- */
-typedef struct {
-    float ph, inc, inc_end, amp, adec, idx, x1, x2, att, mph[4], pend;
-    int32_t wait;                               /* swing: samples until a hit that waits (pend: its velocity) */
-    uint8_t on, note;
-} drum_t;
-static drum_t drum[EN_NDRUM];
-static uint8_t drum_pos[EN_NDRUM];
-static uint32_t drum_pat[EN_NDRUM];
-static float pulse_vol, swing, hat_f = 0.9f, hat_open = 0.42f;
+/* ----------------------------------------------------------------- break --- */
+static float break_vol;
 static float step_len, pulse_left;               /* a sixteenth, in samples; to the next MIDI clock pulse */
-static uint32_t noise = 22222u;
-static const uint8_t DRUM_KMAX[EN_NDRUM] = {5, 7, 3};
-static const uint8_t DRUM_GM[EN_NDRUM] = {36, 42, 46};          /* kick, closed hat, open hat */
-/* the hats' metal: four square waves at the 808's inharmonic ratios (Hz / EN_SR) */
-static const float HAT_INC[4] = {304.4f / EN_SR, 369.6f / EN_SR, 522.7f / EN_SR, 800.0f / EN_SR};
 
 /* ------------------------------------------------------------------ space --- */
 static float echo_send, rev_send, echo_len, echo_len_t, echo_fb = 0.55f;
@@ -736,7 +680,7 @@ static void bell_voice(int l, int n, float vel, int32_t wait)
     int i, best = 0, ri;
     float lo = 9.0f, t60, p;
     bell_t *v;
-    for (i = 0; i < NBELL; i++) {               /* a free voice, or the quietest */
+    for (i = 0; i < bell_lim; i++) {            /* a free voice, or the quietest */
         float a = bell[i].on ? bell[i].amp : -1.0f;
         if (a < lo) {
             lo = a;
@@ -779,124 +723,13 @@ static void bell_ring(int l, int slot)
         bell_voice(l, n + 12, vel * 0.4f, wait + 300 + irand(2000));   /* now and then, its octave */
 }
 
-/* ---------------------------------------------------------------- pulse --- */
-static const uint8_t DRUM_ROT[EN_NDRUM] = {0, 2, 3};
-static int drum_k[EN_NDRUM], drum_kb[EN_NDRUM], drum_rot[EN_NDRUM], pulse_rest;   /* rest: bars left */
-
-static void drum_publish(int d)
-{
-    drum_pat[d] = en_euclid(drum_k[d], EN_DRUM_N[d], drum_rot[d]);
-    en_drum_pat[d] = drum_pat[d];
-}
-
-static void drums_pattern(void)                 /* Busy: the patterns' home */
-{
-    int d;
-    for (d = 0; d < EN_NDRUM; d++) {
-        drum_kb[d] = drum_k[d] = (par[P_BUSY] * DRUM_KMAX[d] + 50) / 100;
-        drum_rot[d] = DRUM_ROT[d];
-        drum_publish(d);
-    }
-}
-
-static void drums_evolve(void)                  /* a bar: a pattern turns, or gains or loses a hit */
-{
-    int d = irand(EN_NDRUM), n = EN_DRUM_N[d];
-    if (!drum_kb[d])
-        return;
-    if (frand() < 0.5f) {
-        drum_rot[d] = (drum_rot[d] + (frand() < 0.5f ? 1 : n - 1)) % n;
-    } else {
-        int k = drum_k[d] + (frand() < 0.5f ? 1 : -1);
-        if (k >= drum_kb[d] - 1 && k <= drum_kb[d] + 1 && k >= 1 && k <= n)
-            drum_k[d] = k;
-    }
-    drum_publish(d);
-}
-
-static void drum_fire(int d, float vel)
-{
-    drum_t *v = &drum[d];
-    v->on = 1;
-    v->amp = vel;
-    v->att = 0.0f;
-    switch (d) {
-    case 0: {                                   /* thump: the chord's root, low, falling into place */
-        float f = mtof((float)(36 + chord_pcs[0]));
-        v->note = DRUM_GM[0];
-        v->inc = f * 2.2f * (1.0f / EN_SR);
-        v->inc_end = f * (1.0f / EN_SR);
-        v->adec = fm_expf(-6.9f / (0.45f * EN_SR));
-        break;
-    }
-    case 1:                                     /* closed hat: short; it chokes the open one */
-        v->note = DRUM_GM[1];
-        v->adec = fm_expf(-6.9f / (0.06f * EN_SR));
-        drum[2].adec = fm_expf(-6.9f / (0.02f * EN_SR));
-        break;
-    default:                                    /* open hat: a long, soft "tss" */
-        v->note = DRUM_GM[2];
-        v->adec = fm_expf(-6.9f / (hat_open * EN_SR));
-        break;
-    }
-    en_drum_glow[d] = 1.0f;
-    midi(0x99, v->note, (uint32_t)(vel * 100.0f));
-    midi(0x89, v->note, 0);
-}
-
-static void drum_hit(int d, float vel, int off)  /* off: an off sixteenth, which Swing delays */
-{
-    int32_t w = off ? (int32_t)(swing * step_len) : 0;
-    if (w > 0) {
-        drum[d].wait = w;
-        drum[d].pend = vel;
-    } else {
-        drum_fire(d, vel);
-    }
-}
-
-static int32_t drums_wait(void)                 /* samples to the next hit that waits; 0: none */
-{
-    int32_t m = 0;
-    int d;
-    for (d = 0; d < EN_NDRUM; d++)
-        if (drum[d].wait > 0 && (!m || drum[d].wait < m))
-            m = drum[d].wait;
-    return m;
-}
-
-static void drums_wait_step(int32_t k)          /* k samples went by: hits whose wait is over */
-{
-    int d;
-    for (d = 0; d < EN_NDRUM; d++)
-        if (drum[d].wait > 0 && (drum[d].wait -= k) <= 0) {
-            drum[d].wait = 0;
-            drum_fire(d, drum[d].pend);
-        }
-}
-
 /* the grid: one call a sixteenth (MIDI clock: 6 ticks) */
 static uint32_t sixteenth;
 static void tick(void)
 {
-    int d, l;
-    const float pa = fm_clampf(1.0f + 1.3f * arcm, 0.3f, 1.15f);   /* the arc: the pulse fades (never out) */
-    if ((sixteenth & 15u) == 0u) {              /* a bar: Evolve's rests and turns */
-        if (pulse_rest > 0)
-            pulse_rest--;
-        else if (frand() < evolve * 0.015f)
-            pulse_rest = 2 + irand(3);           /* a short breath: 2 to 4 bars */
-        en_pulse_rest = (uint8_t)(pulse_rest > 0);
-        if (frand() < evolve * 0.25f)
-            drums_evolve();
-    }
-    for (d = 0; d < EN_NDRUM; d++) {
-        if (drum_pat[d] >> drum_pos[d] & 1u && !pulse_rest)
-            drum_hit(d, ((drum_pos[d] == 0 ? 0.95f : 0.6f) + 0.25f * frand()) * pa, (int)(sixteenth & 1u));
-        en_drum_pos[d] = drum_pos[d];
-        if (++drum_pos[d] >= EN_DRUM_N[d])
-            drum_pos[d] = 0;
-    }
+    int l;
+    if (!en_frozen)
+        brk_step(sixteenth);
     if ((sixteenth & 3u) == 0u) {               /* the loops step in quarter notes */
         for (l = 0; l < EN_NLOOP; l++) {
             int s = loop_pos[l];
@@ -1163,8 +996,9 @@ static void apply(int p, int v)
     case P_PAD: pad_vol = (float)(v * v) * 0.0001f; break;
     case P_BELLS: bell_vol = (float)(v * v) * 0.0001f; break;
     case P_BASS: bass_vol = (float)(v * v) * 0.0001f; break;
-    case P_BREAK: pulse_vol = (float)(v * v) * 0.0001f; break;
-    case P_BUSY: drums_pattern(); break;
+    case P_BREAK: break_vol = (float)(v * v) * 0.0001f; break;
+    case P_BUSY: brk_set_busy((float)v * 0.01f); break;
+    case P_KIT: brk_set_kit(v); break;
     case P_BASSOCT:
         if (nsteps)
             bass_to(bass.midi_note % 12);
@@ -1186,7 +1020,10 @@ static void apply(int p, int v)
         break;
     case P_BRIGHT: bright = (float)v; break;
     case P_SWELL: swell = (float)v; break;
-    case P_EVOLVE: evolve = (float)v * 0.01f; break;
+    case P_EVOLVE:
+        evolve = (float)v * 0.01f;
+        brk_set_evolve(evolve);
+        break;
     case P_BTONE: btone = (float)v * 0.01f; break;
     case P_PADTONE: pad_handoff(); break;        /* the voices cross over as they did for a new key */
     case P_MOTION: motion = (float)v * 0.01f; break;
@@ -1204,6 +1041,7 @@ static void apply(int p, int v)
     case P_TUNE: tunefac = fm_exp2f((float)v * (1.0f / 1200.0f)); break;
     case P_TEMPO:
         tempo_set();
+        brk_set_tempo((float)par[P_TEMPO]);
         echo_time();
         break;
     case P_ROOT:
@@ -1244,9 +1082,7 @@ static void regrow(void)                        /* a new piece: fresh loops, hom
     pad_handoff();
     bass_to(chord_pcs[0]);
     bass.rest = 0;
-    pulse_rest = 0;
-    en_pulse_rest = 0;
-    drums_pattern();
+    bell_lim = NBELL;
     drift_reset();
     change_pending = 0;
 }
@@ -1264,8 +1100,7 @@ static void quiet(void)
     int i;
     for (i = 0; i < NBELL; i++)
         bell[i].on = 0;
-    for (i = 0; i < EN_NDRUM; i++)
-        drum[i].on = 0, drum[i].wait = 0;
+    brk_stop();
     for (i = 0; i < EN_NPAD; i++)
         pad[i].amp = 0.0f;
     bass.amp = 0.0f;
@@ -1304,6 +1139,9 @@ void en_init(void)
     }
     arcm = 0.0f;
     pad_gain = 0.0f;
+    bell_lim = NBELL;
+    brk_init();                                  /* before apply: it resets what apply sets */
+    brk_levels(1.0f, 1.0f, 1.0f);
     for (i = 0; i < P_NPARAMS; i++)
         apply(i, PARAMS[i].def);
     pool_set(EN_MODE_POOL[par[P_MODE]]);
@@ -1314,7 +1152,6 @@ void en_init(void)
         loop_pos[i] = 0;
         loop_regrow(i);
     }
-    drums_pattern();
     drift_reset();
     pl_decay = pl_decay_t;
 }
@@ -1336,8 +1173,6 @@ static void play_start(int from_top)
     if (from_top) {
         pulse = 0;
         sixteenth = 0;
-        for (i = 0; i < EN_NDRUM; i++)
-            drum_pos[i] = 0;
         for (i = 0; i < EN_NLOOP; i++)
             loop_pos[i] = 0;
     }
@@ -1359,9 +1194,7 @@ static void play_start(int from_top)
 
 static void play_stop(void)
 {
-    int d;
-    for (d = 0; d < EN_NDRUM; d++)
-        drum[d].wait = 0;                        /* a swung hit still waiting stays unplayed */
+    brk_stop();
     en_playing = 0;
     pad_gate = 0.0f;
     if (!en_ext)
@@ -1402,6 +1235,7 @@ static void drain(void)
             break;
         case C_CLOCK:
             en_ext = 1;
+            brk_set_ext(1);
             ext_age = 0;
             if (a == EN_CLK_TICK) {
                 if (en_playing)
@@ -1612,71 +1446,24 @@ static void render_bells(uint32_t n)
     }
 }
 
-/* a hat: the metal and noise, high-passed (Chamberlin SVF, ~4 to 10 kHz by Hats); no pitch, little echo */
-static void render_hat(drum_t *v, uint32_t n, float g, float pl, float pr)
+static float brk_mix[BLK];
+static void render_break(uint32_t n)
 {
     uint32_t j;
-    int k;
-    float x1, x2, amp, att;
-    if (!v->on)
-        return;
-    x1 = v->x1, x2 = v->x2, amp = v->amp, att = v->att;
+    float pk = 0.0f;
+    for (j = 0; j < n; j++)
+        brk_mix[j] = 0.0f;
+    brk_render(brk_mix, n);
     for (j = 0; j < n; j++) {
-        float in = 0.0f, hp, x;
-        for (k = 0; k < 4; k++) {
-            v->mph[k] += HAT_INC[k];
-            if (v->mph[k] >= 1.0f)
-                v->mph[k] -= 1.0f;
-            in += v->mph[k] < 0.5f ? 0.25f : -0.25f;
-        }
-        noise = noise * 1664525u + 1013904223u;
-        in = 0.5f * in + 0.6f * (float)(int32_t)noise * (1.0f / 2147483648.0f);
-        hp = in - x2 - 0.8f * x1;
-        x1 += hat_f * hp;
-        x2 += hat_f * x1;
-        x = hp * amp * att * g;
-        mixl[j] += x * pl;
-        mixr[j] += x * pr;
-        rsend[j] += x * 0.2f;
-        esend[j] += x * 0.08f;
-        amp *= v->adec;
-        att += (1.0f - att) * 0.3f;
+        const float x = brk_mix[j] * break_vol * 0.9f, a = x < 0.0f ? -x : x;
+        mixl[j] += x;
+        mixr[j] += x;
+        rsend[j] += x * 0.12f;
+        esend[j] += x * 0.04f;
+        pk = a > pk ? a : pk;
     }
-    v->x1 = fm_flush(x1);
-    v->x2 = fm_flush(x2);
-    v->amp = amp;
-    v->att = att;
-    v->on = amp > 0.0005f;
-}
-
-static void render_drums(uint32_t n)
-{
-    uint32_t j;
-    const float g = pulse_vol * 1.1f;
-    drum_t *v;
-    v = &drum[0];                                /* thump: a sine falling to its note */
-    if (v->on) {
-        float ph = v->ph, inc = v->inc, amp = v->amp, att = v->att;
-        for (j = 0; j < n; j++) {
-            float x = sine(ph) * amp * att * g;
-            mixl[j] += x;
-            mixr[j] += x;
-            rsend[j] += x * 0.1f;
-            ph += inc;
-            if (ph >= 1.0f)
-                ph -= 1.0f;
-            inc += (v->inc_end - inc) * 0.0012f;
-            amp *= v->adec;
-            att += (1.0f - att) * 0.02f;
-        }
-        v->ph = ph;
-        v->inc = inc;
-        v->amp = amp;
-        v->att = att;
-        v->on = amp > 0.0005f;
-    }
-    render_hat(&drum[1], n, g * 0.2f, 0.6f, 1.0f);    /* closed: a little right */
-    render_hat(&drum[2], n, g * 0.14f, 1.0f, 0.7f);   /* open: a little left */
+    en_break_level += (pk - en_break_level) * 0.2f;
+    en_hits = brk_hits;
 }
 
 static void render_chunk(int32_t *out, uint32_t n, float gain)
@@ -1688,7 +1475,7 @@ static void render_chunk(int32_t *out, uint32_t n, float gain)
     render_pad(n);
     render_bass(n);
     render_bells(n);
-    render_drums(n);
+    render_break(n);
     for (j = 0; j < n; j++) {
         float wl, wr, l, r, el, er, xl, xr;
         echoes(esend[j] * eg, &el, &er, &xl, &xr);
@@ -1736,16 +1523,16 @@ static void control(uint32_t n)                 /* once a chunk: the slow things
     en_drift = drift_total > 0.0f ? 1.0f - fm_clampf(drift_left / drift_total, 0.0f, 1.0f) : 0.0f;
     for (i = 0; i < EN_NLOOP; i++)
         en_loop_glow[i] *= 0.985f;
-    for (i = 0; i < EN_NDRUM; i++)
-        en_drum_glow[i] *= 0.95f;
 }
 
 void en_render(int32_t *out, uint32_t n, uint32_t gain_q12)
 {
     const float gain = (float)gain_q12 * (1.0f / 4096.0f) * 2.0f;
     drain();
-    if (en_ext && ++ext_age > 100u)
+    if (en_ext && ++ext_age > 100u) {
         en_ext = 0;
+        brk_set_ext(0);
+    }
     while (n) {
         uint32_t k = n > BLK ? BLK : n;
         int timed = en_playing && !en_ext;
@@ -1759,16 +1546,10 @@ void en_render(int32_t *out, uint32_t n, uint32_t gain_q12)
         }
         if (k > n)
             k = n;
-        {
-            int32_t w = drums_wait();            /* a swung hit lands on its sample */
-            if (w > 0 && (uint32_t)w < k)
-                k = (uint32_t)w;
-        }
         if (timed)
             pulse_left -= (float)k;
         control(k);
         render_chunk(out, k, gain);
-        drums_wait_step((int32_t)k);
         out += 2 * k;
         n -= k;
     }

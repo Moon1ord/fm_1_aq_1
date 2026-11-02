@@ -210,6 +210,25 @@ int main(void)
         clicks(256u, 11u, 0.005f);
         printf("  quick jumps: click %f\n", (double)jmax);
         CHECK(jmax < CLICK, "quick jumps click: %f", (double)jmax);
+
+        /* a voice still sounding louder is not overwritten: two jumps in a row with no sound between them */
+        brk_init();
+        brk_set_tempo(170.0f);
+        brk_set_evolve(0.0f);
+        brk_levels(1.0f, 0.0f, 1.0f);
+        brk_step(0u);
+        memset(out, 0, sizeof out);
+        brk_render(out, 700u);           /* the kick, loud */
+        brk_step(20u);                   /* a jump: the old voice fades, the new one fades in */
+        memset(out, 0, sizeof out);
+        brk_render(out, 8u);
+        prev = out[7];
+        brk_step(9u);
+        brk_step(26u);                   /* two more jumps before any sample is rendered */
+        memset(out, 0, sizeof out);
+        brk_render(out, 16u);
+        printf("  louder voice kept: step %f (prev %f)\n", (double)fabsf(out[0] - prev), (double)prev);
+        CHECK(fabsf(out[0] - prev) < 0.1f, "a louder voice was overwritten: %f", (double)fabsf(out[0] - prev));
     }
 
     /* seam: the loop's end comes back to slice 0 with the state of a loop that has played: slice 0's head is slice

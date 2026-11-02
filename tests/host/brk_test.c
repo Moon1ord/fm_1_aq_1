@@ -339,6 +339,122 @@ int main(void)
         CHECK(brk_hits == 0u, "no hits while silent");
     }
 
+    /* the generated bars through the player: every style's kind of numbers, tempos of the range, whole breaks: the jumps are no click */
+    {
+        static const brk_rhythm_t R[4] = {{50, 20, 80, 50, 30}, {80, 30, 110, 50, 80}, {60, 75, 176, 70, 50}, {20, 20, 72, 20, 30}};
+        static const float T[3] = {150.0f, 170.0f, 180.0f};
+        int r, t;
+        float worst = 0.0f;
+        uint32_t jumps = 0u;
+        for (r = 0; r < 4; r++)
+            for (t = 0; t < 3; t++) {
+                const float len = 44100.0f * 60.0f / (T[t] * 4.0f);
+                float left = 0.0f, pv = 0.0f;
+                brk_gen_t g;
+                uint32_t step;
+                brk_gen_start(&g);
+                brk_init();
+                brk_set_tempo(T[t]);
+                brk_levels(1.0f, 0.6f, 1.0f);
+                for (step = 0u; step < 16u * 8u * 60u; step++) {
+                    const uint32_t bar = step / 16u, at = bar % 8u;
+                    const uint32_t j0 = brk_jumps;
+                    uint32_t n, j, first;
+                    if (!(step & 15u)) {
+                        const int want = bar / 8u % 2u ? 2 + 2 * (int)(bar / 16u % 2u) : 0;
+                        if (want && at + (uint32_t)want >= 8u)
+                            brk_gen_bar(&g, &R[r], 3, 70, 50, 3u + (uint32_t)r, bar, want, at + (uint32_t)want - 8u, &brk_bar);
+                        else
+                            brk_gen_bar(&g, &R[r], 3, 70, 50, 3u + (uint32_t)r, bar, 0, 0u, &brk_bar);
+                    }
+                    brk_pattern_step(step, 0, 3u);
+                    first = brk_jumps != j0 ? 16u : 0u;
+                    jumps += brk_jumps - j0;
+                    left += len;
+                    n = (uint32_t)left;
+                    left -= (float)n;
+                    for (j = 0u; j < n;) {
+                        uint32_t k = n - j > 256u ? 256u : n - j, i;
+                        if (first && k > first)
+                            k = first;
+                        memset(out, 0, sizeof(float) * k);
+                        brk_render(out, k);
+                        for (i = 0u; i < k; i++) {
+                            const float d = fabsf(out[i] - pv);
+                            if (first && d > worst)
+                                worst = d;
+                            pv = out[i];
+                        }
+                        j += k;
+                        first = first > k ? first - k : 0u;
+                    }
+                }
+            }
+        printf("  generated bars: %u jumps, the largest step after one %f\n", jumps, (double)worst);
+        CHECK(jumps > 10000u, "only %u jumps", jumps);
+        CHECK(worst < CLICK, "a generated bar's jump clicks: %f", (double)worst);
+    }
+
+    /* a ghost's lateness: the same sound, that much later, and one sound: no second jump when its next slice comes round */
+    {
+        static const int8_t LATE[3] = {0, 2, 6};
+        int32_t base = 0;
+        for (k = 0; k < 3; k++) {
+            int32_t first_on = -1, i = 0;
+            uint32_t j0;
+            brk_init();
+            brk_set_tempo(170.0f);
+            brk_levels(0.0f, 1.0f, 1.0f);
+            memset(&brk_bar, 0, sizeof brk_bar);
+            for (i = 0; i < 16; i++)
+                brk_bar.core[i] = brk_bar.top[i] = brk_bar.hat[i] = '.';
+            brk_bar.top[1] = 'f';
+            brk_bar.vtop[1] = 100u;
+            brk_bar.late[1] = (uint8_t)LATE[k];
+            brk_pattern_step(0u, 0, 0u);
+            j0 = brk_jumps;
+            brk_pattern_step(1u, 0, 0u);
+            CHECK(brk_jumps == j0 + 1u, "a ghost's start: %u jumps", brk_jumps - j0);
+            j0 = brk_jumps;
+            for (i = 0; i < 3891;) {
+                const int32_t n = 3891 - i > 8 ? 8 : 3891 - i;
+                int32_t m;
+                memset(out, 0, sizeof(float) * (uint32_t)n);
+                brk_render(out, (uint32_t)n);
+                for (m = 0; m < n && first_on < 0; m++)
+                    if (out[m] != 0.0f)
+                        first_on = i + m;
+                i += n;
+            }
+            if (!k)
+                base = first_on;
+            CHECK(first_on >= 0 && abs(first_on - base - LATE[k] * 44) <= 2, "%d ms late: it starts at %d samples, at no lateness %d", LATE[k], first_on, base);
+            brk_pattern_step(2u, 0, 0u);
+            CHECK(brk_jumps == j0, "%d ms late: its second slice jumped", LATE[k]);
+        }
+    }
+
+    /* the ghosts are quiet: the loudest of them, as hard as a ghost goes, under half the softer backbeat, levels counted (top 0.6, core 1) */
+    {
+        static int16_t d[BRK_SLICE * 5u];
+        for (k = 0; k < 2; k++) {
+            int i, g;
+            float sn = 0.0f;
+            static const uint8_t GH[2] = {2, 4};     /* f, e: what a plain bar uses */
+            brk_decode_range(k, BRK_CORE, 8u * BRK_SLICE, BRK_SLICE * 5u, d);
+            for (i = 0; i < (int)(BRK_SLICE * 5u); i++)
+                sn = (float)abs(d[i]) > sn ? (float)abs(d[i]) : sn;
+            for (g = 0; g < 2; g++) {
+                float gp = 0.0f;
+                brk_decode_range(k, BRK_TOP, GH[g] * BRK_SLICE, BRK_SLICE * 2u, d);
+                for (i = 0; i < (int)(BRK_SLICE * 2u); i++)
+                    gp = (float)abs(d[i]) > gp ? (float)abs(d[i]) : gp;
+                printf("  kit %d: ghost %c at its hardest against the 12th's snare: %.2f\n", k, "fe"[g], (double)(gp * 1.14f * 0.6f / (sn * 0.88f)));
+                CHECK(gp * 1.14f * 0.6f < 0.8f * sn * 0.88f, "kit %d: a ghost at %f of the snare", k, (double)(gp * 1.14f * 0.6f / (sn * 0.88f)));
+            }
+        }
+    }
+
     printf(fails ? "brk: %d FAILED\n" : "brk: ok\n", fails);
     return fails != 0;
 }

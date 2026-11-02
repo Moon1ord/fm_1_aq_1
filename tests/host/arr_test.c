@@ -323,50 +323,25 @@ static void harmony_checks(void)
             }
 }
 
-/* ---- the drums the styles ask for ---- */
+/* ---- the drums the styles ask for: as bars, tests/host/rhy_test.c. Here: that a wish for a break is one ---- */
 static void rhythm_checks(void)
 {
-    uint32_t ghost[EN_NSTYLES];
     int st;
     for (st = 0; st < EN_NSTYLES; st++) {
         const brk_rhythm_t *r = en_style_rhythm(st);
-        uint32_t sd, bar, i;
-        int lv;
-        ghost[st] = 0u;
-        for (sd = 0u; sd < 40u; sd++)
-            for (bar = 0u; bar < 64u; bar++)
-                for (lv = 0; lv < 5; lv++) {
-                    brk_drums_for(r, lv, DEF_ENERGY, sd, bar, 0, 0u);
-                    CHECK(!brk_bar.is_break, "a plain bar a break");
-                    for (i = 0u; i < 16u; i++) {
-                        const char c = brk_bar.core[i], t = brk_bar.top[i];
-                        CHECK(c == '.' || c == 'K' || c == 'k' || c == 'S' || c == 's' || c == 'c', "core %c", c);
-                        CHECK(t == '.' || t == 'G', "top %c", t);
-                        if (lv < 2)
-                            CHECK(c == '.' && t == '.', "%s level %d: %c %c", EN_STYLE_NAME[st], lv, c, t);
-                        else if (i == 0u)
-                            CHECK(c == 'K', "%s level %d: the bar does not start on a kick", EN_STYLE_NAME[st], lv);
-                        if (lv == 3)
-                            ghost[st] += t == 'G';
-                    }
-                    if (lv == 2 || lv == 3) {
-                        if (st == EN_ST_HALF)
-                            CHECK(brk_bar.core[8] == 'S' && brk_bar.core[4] == '.' && brk_bar.core[12] == '.', "Half: the snare's place");
-                        if (st == EN_ST_LIQUID || st == EN_ST_ROLLER)
-                            CHECK(!memcmp(brk_bar.core, "K...S.....k.S...", 16), "%s: its pulse", EN_STYLE_NAME[st]);
-                    }
-                    /* with a break wanted: back on the grid at the bar after */
-                    if (lv == 2 || lv == 3) {
-                        brk_drums_for(r, lv, DEF_ENERGY, sd, bar, 2, bar & 1u);
-                        CHECK(brk_bar.is_break, "%s: a break wanted, not played", EN_STYLE_NAME[st]);
-                        for (i = 0u; i < 16u; i++)
-                            CHECK(brk_bar.core[i] != 0 && brk_bar.top[i] != 0, "a break too short");
-                    }
-                }
+        uint32_t sd, bar;
+        for (sd = 0u; sd < 40u; sd++) {
+            brk_gen_t g;
+            brk_bar_t o;
+            brk_gen_start(&g);
+            for (bar = 0u; bar < 64u; bar++) {
+                int lv = (int)(bar / 8u % 5u);
+                const int want = (lv == 2 || lv == 3) && bar % EN_ARR_PHRASE >= EN_ARR_PHRASE - 2u ? 2 : 0;
+                brk_gen_bar(&g, r, lv, DEF_ENERGY, 50, sd, bar, want, bar & 1u, &o);
+                CHECK(o.is_break == (want != 0), "%s: a break wanted %d, played %u", EN_STYLE_NAME[st], want, o.is_break);
+            }
+        }
     }
-    printf("  ghosts on the full level, of 2560 bars: Liquid %u, Roller %u, Jungle %u, Half %u, Drift %u, Loading %u\n", ghost[0], ghost[1], ghost[2], ghost[3], ghost[4], ghost[5]);
-    CHECK(ghost[EN_ST_ROLLER] > 2u * ghost[EN_ST_LIQUID], "Roller's ghosts %u, Liquid's %u", ghost[EN_ST_ROLLER], ghost[EN_ST_LIQUID]);
-    CHECK(ghost[EN_ST_DRIFT] == 0u, "Drift's ghosts %u", ghost[EN_ST_DRIFT]);
 }
 
 /* ---- the engine does as it says ---- */

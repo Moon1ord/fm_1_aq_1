@@ -693,23 +693,25 @@ static void hour_checks(void)
     en_set(P_TEMPO, 170);
 }
 
-/* the drums: a plain two-step, breaks now and then, back on the grid; deterministic for a seed */
+/* the drums, as the player sees them: a plain two-step, breaks now and then, back on the grid; deterministic for a seed */
 #define DSTEPS 6400u
 static char core_a[DSTEPS], top_a[DSTEPS], hat_a[DSTEPS];
 static uint8_t brk_in_bar[DSTEPS / 16u];
 static void drums(uint32_t seed, int level, char *c, char *t, char *h)
 {
     uint32_t i;
+    brk_gen_t g;
+    brk_gen_start(&g);
     brk_init();
     brk_levels(1.0f, 1.0f, 1.0f);
     for (i = 0u; i < DSTEPS; i++) {
         if (!(i & 15u)) {
             uint32_t in = 0u;
             const int want = en_arr_break(i / 16u, level, EN_ST_LIQUID, en_param_info(P_BREAKS)->def, seed, &in);
-            brk_drums_for(en_style_rhythm(EN_ST_LIQUID), level, en_param_info(P_ENERGY)->def, seed, i / 16u, want, in);
+            brk_gen_bar(&g, en_style_rhythm(EN_ST_LIQUID), level, en_param_info(P_ENERGY)->def, en_param_info(P_EVOLVE)->def, seed, i / 16u, want, in, &brk_bar);
             brk_in_bar[i / 16u] = (uint8_t)want;
         }
-        brk_pattern_step(i, level, 0, seed);
+        brk_pattern_step(i, 0, seed);
         c[i] = brk_hit_core;
         t[i] = brk_hit_top;
         h[i] = brk_hat_hit;
@@ -734,15 +736,11 @@ static void drum_checks(void)
             const int in = brk_in_bar[i / 16u] ? 0 : -1;
             const char c = core_a[i];
             CHECK(c != 0 && top_a[i] != 0 && hat_a[i] != 0, "a pattern too short at %u", i);
-            if (in < 0) {                        /* plain: exactly the skeleton */
-                if (bs == 0u)
-                    CHECK(c == 'K', "plain bar: no kick at %u", i);
-                else if (bs == 10u)
-                    CHECK(c == 'k', "plain bar: no kick at %u", i);
-                else if (bs == 4u || bs == 12u)
+            if (in < 0) {                        /* plain: the two-step's backbone (tests/host/rhy_test.c has the rest) */
+                if (bs == 4u || bs == 12u)
                     CHECK(c == 'S' || c == 's', "plain bar: no snare at %u", i);
                 else
-                    CHECK(c == '.', "plain bar: %c off the skeleton at %u", c, i);
+                    CHECK(c != 'S' && c != 's' && c != 'c', "plain bar: a snare off the backbone at %u", i);
                 plain_k += c == 'K' || c == 'k';
                 plain_s += c == 'S' || c == 's';
                 if (prev >= 0)

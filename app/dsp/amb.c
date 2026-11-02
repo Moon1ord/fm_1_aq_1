@@ -356,7 +356,7 @@ static float rev_in_gain = 1.0f;                /* falls to 0 while frozen */
  * A section has two phases, as the demo's song did: the light starts without the bass, the breakdown is hats and then half
  * time, the full's last two phrases ask the harmony to calm, the way out ends with no drums. A style is a row of
  * numbers: how long each section may be, what drum level each phase has, how often a pass reaches the full section (the
- * others go from the breakdown straight out), which bass figures, and its rhythm for brk_drums_for. Half's two-step levels
+ * others go from the breakdown straight out), which bass figures, and its rhythm for brk_gen_bar. Half's two-step levels
  * are half time, by its density. Drift's peak is half time, so the harmony still rises with no full rhythm. */
 const char *const EN_SECTION_NAME[EN_NSECTIONS] = {"Intro", "Hats", "Light", "Breakdown", "Full", "Out"};
 const char *const EN_STYLE_NAME[EN_NSTYLES] = {"Liquid", "Roller", "Jungle", "Half", "Drift", "Loading"};
@@ -370,12 +370,12 @@ typedef struct {
 #define LV_ALL {0, 0}, {1, 1}, {2, 2}, {1, 4}, {3, 3}, {1, 0}
 static const style_t STYLE[EN_NSTYLES] = {
     /* the phrases of:  intro hats light down full out       levels          full%  bass                        dens syn rate len ghost */
-    /* Liquid */  {{2, 1, 6, 2, 5, 2},  {3, 2, 11, 4, 8, 3},  {LV_ALL},                                    100, {EN_BASS_LIGHT, EN_BASS_FULL}, {50, 20, 160, 50, 30}},
-    /* Roller */  {{1, 1, 5, 2, 7, 2},  {2, 2, 9, 3, 12, 3},  {LV_ALL},                                    100, {EN_BASS_FULL, EN_BASS_ROLL},  {80, 30, 128, 50, 80}},
-    /* Jungle */  {{1, 1, 5, 2, 7, 2},  {2, 2, 9, 4, 11, 3},  {LV_ALL},                                    100, {EN_BASS_LIGHT, EN_BASS_FULL}, {60, 75, 224, 70, 50}},
-    /* Half */    {{2, 1, 6, 2, 5, 2},  {3, 2, 11, 4, 8, 3},  {LV_ALL},                                    100, {EN_BASS_LONG, EN_BASS_LIGHT}, {20, 20, 96, 20, 30}},
+    /* Liquid */  {{2, 1, 6, 2, 5, 2},  {3, 2, 11, 4, 8, 3},  {LV_ALL},                                    100, {EN_BASS_LIGHT, EN_BASS_FULL}, {50, 20, 80, 50, 30}},
+    /* Roller */  {{1, 1, 5, 2, 7, 2},  {2, 2, 9, 3, 12, 3},  {LV_ALL},                                    100, {EN_BASS_FULL, EN_BASS_ROLL},  {80, 30, 110, 50, 80}},
+    /* Jungle */  {{1, 1, 5, 2, 7, 2},  {2, 2, 9, 4, 11, 3},  {LV_ALL},                                    100, {EN_BASS_LIGHT, EN_BASS_FULL}, {60, 75, 176, 70, 50}},
+    /* Half */    {{2, 1, 6, 2, 5, 2},  {3, 2, 11, 4, 8, 3},  {LV_ALL},                                    100, {EN_BASS_LONG, EN_BASS_LIGHT}, {20, 20, 72, 20, 30}},
     /* Drift */   {{3, 3, 4, 6, 3, 2},  {4, 4, 6, 9, 4, 3},   {{0, 0}, {1, 1}, {1, 1}, {0, 1}, {4, 4}, {1, 0}}, 100, {EN_BASS_LONG, EN_BASS_LONG}, {10, 10, 32, 10, 0}},
-    /* Loading */ {{2, 3, 8, 3, 5, 2},  {3, 4, 11, 4, 6, 3},  {{0, 0}, {1, 1}, {1, 2}, {1, 1}, {3, 3}, {1, 0}}, 15, {EN_BASS_LONG, EN_BASS_LIGHT}, {50, 20, 64, 20, 10}},
+    /* Loading */ {{2, 3, 8, 3, 5, 2},  {3, 4, 11, 4, 6, 3},  {{0, 0}, {1, 1}, {1, 2}, {1, 1}, {3, 3}, {1, 0}}, 15, {EN_BASS_LONG, EN_BASS_LIGHT}, {38, 20, 40, 20, 10}},
 };
 /* the two phases of each section, in every style: what the demo's song did at each */
 static const struct {
@@ -1933,6 +1933,7 @@ static en_arr_t arr_cur, arr_nxt;
 static uint32_t arr_start;                       /* the step this section began */
 static en_part_t part_now, part_nxt;             /* this bar's and the next bar's */
 static int arr_style;                            /* the style the bar is played in: taken on the bar */
+static brk_gen_t rhythm_gen;
 #if defined EN_HOST || defined PLAT_HOST
 void (*en_trace)(uint32_t step, int section, int level, int character, int break_bars);
 void (*en_trace_chord)(uint32_t step, const en_gchord_t *chord, int character);
@@ -2103,7 +2104,9 @@ static void song_step(uint32_t s)
         part_now = p;
         part_at(s + 16u, &part_nxt);
         want = en_arr_break(bar, song_level, arr_style, par[P_BREAKS], song_seed, &in);
-        brk_drums_for(en_style_rhythm(arr_style), song_level, par[P_ENERGY], song_seed, bar, want, in);
+        if (!s)
+            brk_gen_start(&rhythm_gen);
+        brk_gen_bar(&rhythm_gen, en_style_rhythm(arr_style), song_level, par[P_ENERGY], par[P_EVOLVE], song_seed, bar, want, in, &brk_bar);
         en_section = p.section;
         en_drum_level = p.level;
         en_break_bars = (uint8_t)want;
@@ -2120,7 +2123,7 @@ static void song_step(uint32_t s)
         if (to == 12u)
             flags |= BRK_SWELL;
     }
-    k = brk_pattern_step(s, song_level, flags, song_seed);
+    k = brk_pattern_step(s, flags, song_seed);
     if (k > 0.0f)
         duck = fm_maxf(duck, k);
     if (brk_hat_hit != '.')

@@ -1,6 +1,0 @@
-# the listening demo, third render: the chords flow, the motifs plain. Same timeline as demo.amb, a new file.
-#   PYTHON=.venv/bin/python3 sh build.sh --host && app/build/host/aq1_host tests/listen/demo3.amb app/build/listen
-master 2430
-wav demo3.wav
-wait 253000
-wavstop

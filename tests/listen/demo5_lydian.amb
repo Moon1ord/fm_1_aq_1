@@ -1,9 +1,0 @@
-# demo5: the harmony from the pool. D Lydian, the first preset's default: as demo4 otherwise.
-#   PYTHON=.venv/bin/python3 sh build.sh --host && app/build/host/aq1_host tests/listen/demo5_lydian.amb app/build/listen
-master 2430
-expect par19 2
-expect par20 3
-expect pool 0xAD5
-wav demo5_lydian.wav
-wait 253000
-wavstop

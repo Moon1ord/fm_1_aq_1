@@ -31,25 +31,26 @@ static const en_param_t PARAMS[P_NPARAMS] = {
     {"Mode", 0, EN_NMODES - 1, 3}, {"Bell oct", -2, 2, 0}, {"Pad tone", 0, 1, 0},
     {"Bass oct", -1, 1, 0},   {"Glide", 0, 100, 10},    {"Fifth", 0, 100, 35},
     {"Water", 0, 100, 30},    {"Kit", 0, 1, 0},         {"Tide", 0, 100, 50},
+    {"Energy", 0, 100, 70},   {"Style", 0, EN_NSTYLES - 1, EN_ST_LIQUID}, {"Breaks", 0, 100, 50},
 };
 const en_param_t *en_param_info(int i) { return (i >= 0 && i < P_NPARAMS) ? &PARAMS[i] : &PARAMS[0]; }
 
 /* the pieces: eight recipes for the whole garden (the FM-1's PRESETS, the web app's cards). Tune and
  * MIDI out are taken from here by neither: they belong to the player, not the piece */
-/*                     Pad Bel Bas Brk  Den Evo Dri Bsy  Ech ET Rev Siz  Bri Swe Ton Mot  Tun MI Tem  Rt Md Oc  PT  BO Gli Fif  Wat Kit Tid
+/*                     Pad Bel Bas Brk  Den Evo Dri Bsy  Ech ET Rev Siz  Bri Swe Ton Mot  Tun MI Tem  Rt Md Oc  PT  BO Gli Fif  Wat Kit Tid  En St Br
  * (PT: the pad's colour, 0 Rhodes, 1 Voices; BO: the bass's octave) */
 static const struct {
     const char *name;
     int16_t v[P_NPARAMS];
 } PIECES[EN_NPIECES] = {
-    {"Aqua",      {60, 60, 50, 45, 40, 35, 25, 35, 40, 3, 65, 80, 55, 60, 60, 60, 0, 1, 170, 2, 3, 0, 0, 0, 10, 35, 30, 0, 50}},
-    {"Skyline",   {55, 65, 50, 50, 50, 40, 20, 45, 40, 3, 60, 75, 70, 50, 70, 65, 0, 1, 172, 7, 0, 0, 0, 0, 10, 40, 15, 0, 30}},
-    {"Bubble",    {45, 80, 45, 45, 65, 45, 25, 40, 45, 3, 60, 75, 60, 50, 80, 60, 0, 1, 174, 9, 6, 1, 0, 0, 10, 30, 25, 0, 40}},
-    {"Rainfall",  {65, 45, 45, 35, 30, 30, 35, 25, 45, 4, 70, 85, 45, 70, 40, 55, 0, 1, 165, 5, 0, 0, 1, 0, 15, 25, 60, 0, 80}},
-    {"Aurora",    {70, 50, 45, 40, 35, 35, 40, 30, 50, 4, 80, 95, 50, 80, 50, 70, 0, 1, 168, 4, 3, 0, 1, 0, 15, 30, 25, 1, 60}},
-    {"Lagoon",    {55, 55, 60, 45, 40, 40, 25, 35, 40, 3, 65, 80, 45, 60, 45, 60, 0, 1, 170, 0, 4, 0, 0, 0, 20, 45, 35, 1, 50}},
-    {"Dawn",      {70, 40, 35, 25, 25, 25, 50, 20, 45, 4, 80, 90, 40, 80, 35, 50, 0, 1, 160, 10, 0, 0, 1, 0, 20, 20, 45, 0, 100}},
-    {"Afterglow", {60, 55, 50, 40, 35, 40, 30, 35, 45, 4, 70, 85, 40, 65, 45, 60, 0, 1, 165, 5, 1, 0, 0, 0, 15, 40, 20, 1, 50}},
+    {"Aqua",      {60, 60, 50, 45, 40, 35, 25, 35, 40, 3, 65, 80, 55, 60, 60, 60, 0, 1, 170, 2, 3, 0, 0, 0, 10, 35, 30, 0, 50, 70, 0, 50}},
+    {"Skyline",   {55, 65, 50, 50, 50, 40, 20, 45, 40, 3, 60, 75, 70, 50, 70, 65, 0, 1, 172, 7, 0, 0, 0, 0, 10, 40, 15, 0, 30, 70, 0, 50}},
+    {"Bubble",    {45, 80, 45, 45, 65, 45, 25, 40, 45, 3, 60, 75, 60, 50, 80, 60, 0, 1, 174, 9, 6, 1, 0, 0, 10, 30, 25, 0, 40, 70, 0, 50}},
+    {"Rainfall",  {65, 45, 45, 35, 30, 30, 35, 25, 45, 4, 70, 85, 45, 70, 40, 55, 0, 1, 165, 5, 0, 0, 1, 0, 15, 25, 60, 0, 80, 70, 0, 50}},
+    {"Aurora",    {70, 50, 45, 40, 35, 35, 40, 30, 50, 4, 80, 95, 50, 80, 50, 70, 0, 1, 168, 4, 3, 0, 1, 0, 15, 30, 25, 1, 60, 70, 0, 50}},
+    {"Lagoon",    {55, 55, 60, 45, 40, 40, 25, 35, 40, 3, 65, 80, 45, 60, 45, 60, 0, 1, 170, 0, 4, 0, 0, 0, 20, 45, 35, 1, 50, 70, 0, 50}},
+    {"Dawn",      {70, 40, 35, 25, 25, 25, 50, 20, 45, 4, 80, 90, 40, 80, 35, 50, 0, 1, 160, 10, 0, 0, 1, 0, 20, 20, 45, 0, 100, 70, 0, 50}},
+    {"Afterglow", {60, 55, 50, 40, 35, 40, 30, 35, 45, 4, 70, 85, 40, 65, 45, 60, 0, 1, 165, 5, 1, 0, 0, 0, 15, 40, 20, 1, 50, 70, 0, 50}},
 };
 
 const char *en_piece_name(int i) { return PIECES[(unsigned)i < EN_NPIECES ? i : 0].name; }
@@ -98,6 +99,8 @@ void en_param_text(int i, int v, char *b)
         s = v ? "Voices" : "Rhodes";
     else if (i == P_KIT)
         s = v ? "Moss" : "Glass";
+    else if (i == P_STYLE)
+        s = EN_STYLE_NAME[(unsigned)v < EN_NSTYLES ? v : 0];
     else if (i == P_MODE)
         s = EN_MODE_NAME[(unsigned)v < EN_NMODES ? v : 0];
     else if (i == P_ROOT)
@@ -251,7 +254,11 @@ void en_pool(uint32_t pool) { post(C_POOL, 0, (int)(pool & 0xFFFu)); }
 void en_play(int on) { post(C_PLAY, on, 0); }
 void en_next(void) { post(C_NEXT, 0, 0); }
 void en_freeze(int on) { post(C_FREEZE, on, 0); }
-void en_seed(uint32_t s) { post(C_SEED, 0, (int)(s & 0xFFFFu)); }
+void en_seed(uint32_t s)
+{
+    s ^= s >> 24;                                /* what the command has no room for */
+    post(C_SEED, (int)(s >> 16 & 0xFFu), (int)(s & 0xFFFFu));
+}
 void en_panic(void) { post(C_PANIC, 0, 0); }
 void en_clock(int msg) { post(C_CLOCK, msg, 0); }
 void en_regrow(void) { post(C_REGROW, 0, 0); }
@@ -273,7 +280,9 @@ volatile float en_pad_amp[EN_NPAD];
 static int16_t par[P_NPARAMS];
 static uint32_t pool = 0xAB5u;                  /* Ionian until told: what the harmony is made of, from the next seam */
 static float tunefac = 1.0f;
-static uint32_t rng = 0x9E3779B9u;
+#define RNG_START 0x9E3779B9u
+static uint32_t rng = RNG_START;
+static uint32_t song_seed = EN_HARM_SEED;       /* every musical choice: the arranger, the harmony, the bass, the drums */
 
 static uint32_t rnd(void)                       /* Marsaglia's xorshift (Xorshift RNGs, 2003): shifts 13, 17, 5 */
 {
@@ -339,47 +348,164 @@ static float brk_lp[2], brk_hp, plp[4], eplp[2];
 static float echo_send, rev_send, echo_len, echo_len_t, echo_fb = 0.55f;
 static float rev_in_gain = 1.0f;                /* falls to 0 while frozen */
 
-/* ---------------------------------------------------------- the demo's song --- */
+/* ------------------------------------------------------------- the arranger --- */
+/* Endless passes: intro, hats, light, breakdown, full, way out, then the intro again with the walk where it has got to. A
+ * section is so many phrases of eight bars, 11.3 s at 170; a pass 18 to 31 of them, 3:23 to 5:50 (at 150 BPM 3:50 to 6:37,
+ * at 180 3:12 to 5:30: all of it counts in bars, the tempo only stretches it). Sections change on bars and know nothing of
+ * how the harmony is made: it is told a character (en_part_t) and takes it up in its own time.
+ * A section has two phases, as the demo's song did: the light starts without the bass, the breakdown is hats and then half
+ * time, the full's last two phrases ask the harmony to start home, the way out ends with no drums. A style is a row of
+ * numbers: how long each section may be, what drum level each phase has, how often a pass reaches the full section (the
+ * others go from the breakdown straight out), which bass figures, and its rhythm for brk_drums_for. Half's two-step levels
+ * are half time, by its density. Drift's peak is half time, so the harmony still rises with no full rhythm. */
+const char *const EN_SECTION_NAME[EN_NSECTIONS] = {"Intro", "Hats", "Light", "Breakdown", "Full", "Out"};
+const char *const EN_STYLE_NAME[EN_NSTYLES] = {"Liquid", "Roller", "Jungle", "Half", "Drift", "Loading"};
+typedef struct {
+    uint8_t lo[EN_NSECTIONS], hi[EN_NSECTIONS];  /* phrases */
+    uint8_t lv[EN_NSECTIONS][2];                 /* the drums' level, by phase */
+    uint8_t full_pct;                            /* a pass's chance of the full section */
+    uint8_t bass[2];                             /* the bass's figures at levels 2, 3 */
+    brk_rhythm_t rhythm;
+} style_t;
+#define LV_ALL {0, 0}, {1, 1}, {2, 2}, {1, 4}, {3, 3}, {1, 0}
+static const style_t STYLE[EN_NSTYLES] = {
+    /* the phrases of:  intro hats light down full out       levels          full%  bass                        dens syn rate len ghost */
+    /* Liquid */  {{2, 1, 6, 2, 5, 2},  {3, 2, 11, 4, 8, 3},  {LV_ALL},                                    100, {EN_BASS_LIGHT, EN_BASS_FULL}, {50, 20, 160, 50, 30}},
+    /* Roller */  {{1, 1, 5, 2, 7, 2},  {2, 2, 9, 3, 12, 3},  {LV_ALL},                                    100, {EN_BASS_FULL, EN_BASS_ROLL},  {80, 30, 128, 50, 80}},
+    /* Jungle */  {{1, 1, 5, 2, 7, 2},  {2, 2, 9, 4, 11, 3},  {LV_ALL},                                    100, {EN_BASS_LIGHT, EN_BASS_FULL}, {60, 75, 224, 70, 50}},
+    /* Half */    {{2, 1, 6, 2, 5, 2},  {3, 2, 11, 4, 8, 3},  {LV_ALL},                                    100, {EN_BASS_LONG, EN_BASS_LIGHT}, {20, 20, 96, 20, 30}},
+    /* Drift */   {{3, 3, 4, 6, 3, 2},  {4, 4, 6, 9, 4, 3},   {{0, 0}, {1, 1}, {1, 1}, {0, 1}, {4, 4}, {1, 0}}, 100, {EN_BASS_LONG, EN_BASS_LONG}, {10, 10, 32, 10, 0}},
+    /* Loading */ {{2, 3, 8, 3, 5, 2},  {3, 4, 11, 4, 6, 3},  {{0, 0}, {1, 1}, {1, 2}, {1, 1}, {3, 3}, {1, 0}}, 15, {EN_BASS_LONG, EN_BASS_LIGHT}, {50, 20, 64, 20, 10}},
+};
+/* the two phases of each section, in every style: what the demo's song did at each */
+static const struct {
+    uint8_t character, ramp, bass, touch;
+} PHASE[EN_NSECTIONS][2] = {
+    {{0, 1, 0, 92}, {0, 1, 0, 92}},
+    {{1, 4, 0, 95}, {1, 4, 0, 95}},
+    {{1, 2, 0, 97}, {2, 2, 100, 100}},
+    {{1, 2, 75, 96}, {1, 2, 75, 96}},
+    {{3, 1, 112, 114}, {2, 1, 112, 108}},
+    {{1, 8, 55, 95}, {0, 4, 0, 90}},
+};
+/* Energy: under 10 hats at most, under 35 half time at most, under 60 the light, then all. Above 70 the breakdown shortens,
+ * by half at 100 */
+#define ENERGY_FULL 60
+#define ENERGY_LONG 70
+
+const brk_rhythm_t *en_style_rhythm(int style) { return &STYLE[(unsigned)style < EN_NSTYLES ? style : 0].rhythm; }
+
+static int arr_cap(int level, int energy)        /* a drum level under the energy's ceiling */
+{
+    static const uint8_t RANK[5] = {0, 1, 3, 4, 2}, LEVEL[5] = {0, 1, 4, 2, 3};
+    const int top = energy < 10 ? 1 : energy < 35 ? 2 : energy < ENERGY_FULL ? 3 : 4;
+    return RANK[level] > top ? LEVEL[top] : level;
+}
+
+void en_arr_range(int style, int section, int energy, int *lo_bars, int *hi_bars)
+{
+    const style_t *st = &STYLE[(unsigned)style < EN_NSTYLES ? style : 0];
+    int lo = st->lo[section], hi = st->hi[section];
+    if (section == EN_SEC_DOWN && energy > ENERGY_LONG) {
+        const int f = 130 - energy;              /* 60 at 70, 30 at 100 */
+        lo = (lo * f + 59) / 60;
+        hi = (hi * f + 59) / 60;
+    }
+    *lo_bars = lo * (int)EN_ARR_PHRASE;
+    *hi_bars = hi * (int)EN_ARR_PHRASE;
+}
+
+static void arr_enter(en_arr_t *a, int section, uint32_t seed, int style, int energy)
+{
+    int lo, hi;
+    const uint32_t h = brk_hash(seed, 21u + (uint32_t)section, a->pass);
+    en_arr_range(style, section, energy, &lo, &hi);
+    a->section = (uint8_t)section;
+    a->bars = (uint16_t)(lo + (int)((h >> 8) % ((uint32_t)(hi - lo) / EN_ARR_PHRASE + 1u) * EN_ARR_PHRASE));
+}
+
+void en_arr_first(en_arr_t *a, uint32_t seed, int style, int energy)
+{
+    a->pass = 0u;
+    arr_enter(a, EN_SEC_INTRO, seed, style, energy);
+}
+
+void en_arr_next(en_arr_t *a, uint32_t seed, int style, int energy)
+{
+    int next = a->section + 1;
+    style = (unsigned)style < EN_NSTYLES ? style : 0;
+    if (a->section == EN_SEC_DOWN && (brk_hash(seed, 20u, a->pass) >> 8) % 100u >= STYLE[style].full_pct)
+        next = EN_SEC_OUT;
+    if (next >= EN_NSECTIONS) {
+        next = EN_SEC_INTRO;
+        a->pass++;
+    }
+    arr_enter(a, next, seed, style, energy);
+}
+
+void en_arr_part(const en_arr_t *a, uint32_t bar_in, int style, int energy, en_part_t *o)
+{
+    const style_t *st = &STYLE[(unsigned)style < EN_NSTYLES ? style : 0];
+    const uint32_t phrases = a->bars / EN_ARR_PHRASE;
+    uint32_t first = phrases;                    /* the first phase's phrases */
+    int ph, lv;
+    switch (a->section) {
+    case EN_SEC_LIGHT: first = 1u; break;
+    case EN_SEC_DOWN: first = (phrases + 1u) / 2u; break;
+    case EN_SEC_FULL: first = phrases > 3u ? phrases - 2u : phrases == 3u ? 2u : phrases; break;
+    case EN_SEC_OUT: first = phrases > 1u ? phrases - 1u : 1u; break;
+    default: break;
+    }
+    ph = bar_in >= first * EN_ARR_PHRASE;
+    lv = st->lv[a->section][ph];
+    o->section = a->section;
+    o->level = (uint8_t)arr_cap(lv, energy);
+    o->character = PHASE[a->section][ph].character;
+    o->ramp = PHASE[a->section][ph].ramp;
+    o->bass = PHASE[a->section][ph].bass;
+    o->touch = PHASE[a->section][ph].touch;
+    if (o->level != lv) {                        /* held under its level: no firmer than that level is */
+        const uint8_t bass = o->level == 2u ? 100u : 75u, touch = o->level == 2u ? 100u : 96u;
+        o->bass = o->bass < bass ? o->bass : bass;
+        o->touch = o->touch < touch ? o->touch : touch;
+    }
+    if (energy < ENERGY_FULL && o->character == 3u)
+        o->character = 2u;
+}
+
+int en_arr_break(uint32_t bar, int level, int style, int breaks, uint32_t seed, uint32_t *in)
+{
+    const brk_rhythm_t *r = en_style_rhythm(style);
+    const uint32_t h = brk_hash(seed, 5u, bar / EN_ARR_PHRASE), at = bar % EN_ARR_PHRASE;
+    const uint32_t first = (100u - r->break_len) * 8u / 100u, then = first + 3u;   /* of eight: one bar, two, four */
+    const uint32_t n = (h >> 8) % 8u, len = n < first ? 1u : n < then ? 2u : 4u;
+    uint32_t chance;
+    if ((level != 2 && level != 3) || breaks <= 0)
+        return 0;
+    chance = (uint32_t)r->break_rate * (level == 3 ? 5u : 3u) * (uint32_t)breaks / 250u;
+    if (((h >> 16 & 7u) << 5 | (h >> 19 & 31u)) >= chance || at < EN_ARR_PHRASE - len)
+        return 0;
+    *in = at - (EN_ARR_PHRASE - len);
+    return (int)len;
+}
+
+volatile uint8_t en_section, en_style, en_drum_level, en_break_bars;
+
+/* ---------------------------------------------------------------- the song --- */
 /* Waiting for something to load: warm, calm, hopeful, a thing about to begin that never quite arrives. Four chords of
- * the pool on Root, in D Ionian IV iii vi V: Gmaj7 F#m7 Bm9 Aadd9, each 64 sixteenths (5.6 s), repeating
- * exactly. The tonic is never the root of anything and the V goes back to the IV: the cycle leans forward and does not
- * land. Root, mode and keys change the chords at the next cycle's seam, single notes and motifs at once. Everything below is fixed but for small human errors of time and touch (rnd(): the same for a fixed seed). */
+ * the pool on Root, in D Ionian IV iii vi V: Gmaj7 F#m7 Bm9 Aadd9, each 64 sixteenths (5.6 s). The tonic is never the root of
+ * anything and the V goes back to the IV: the cycle leans forward and does not land. Root, mode and keys change the
+ * chords at the next cycle's seam, single notes and motifs at once. */
 #define CHORD_STEPS 64u
 #define CYCLE_STEPS (4u * CHORD_STEPS)
-#define SONG_STEPS 2880u                         /* 4:14, then again from the top */
-#define LAST_CHORD 2752u                         /* cycle 10's V: the last thing played; its answer never comes */
-#define PAD_OFF 2788u
 
-/* the timeline */
-typedef struct {
-    uint16_t step;
-    uint8_t level;                               /* the drums: 0 none, 1 hats, 2 light two-step, 3 fuller, 4 half time */
-    uint8_t harm;                                /* the harmony's: 3 is the second cycle */
-    uint8_t bars;                                /* how many bars of 170 the drums take to arrive */
-    uint8_t bass;                                /* its level, % */
-    uint8_t touch;                               /* how firmly the piano plays, %: it brightens with the music */
-} part_t;
-static const part_t PART[] = {
-    {0, 0, 0, 1, 0, 92},                         /* 0:00 pad and piano */
-    {256, 1, 1, 4, 0, 95},                       /* 0:23 hats alone */
-    {384, 2, 1, 2, 0, 97},                       /* 0:34 a light kick and snare */
-    {512, 2, 2, 2, 100, 100},                    /* 0:45 the two-step, the bass */
-    {1536, 1, 1, 2, 75, 96},                     /* 2:15 the breakdown: hats, chords, long roots */
-    {1664, 4, 1, 2, 75, 96},                     /* 2:27 half time, for a moment */
-    {1792, 3, 3, 1, 112, 114},                   /* 2:38 back, fuller, the second cycle: the arrival */
-    {2304, 3, 2, 1, 112, 108},                   /* 3:23 the harmony starts home; the drums stay */
-    {2624, 1, 1, 8, 55, 95},                     /* 3:51 out: the drums thin away */
-    {2752, 0, 0, 4, 0, 90},                      /* 4:03 the last chord, alone; ends open */
-    {SONG_STEPS, 0, 0, 1, 0, 0},
-};
 /* The harmony grows, a little, and only at the cycle's seam. Three layers, from a small hand-written vocabulary:
  *   colour:       the same chord with other extensions, most cycles, one or two chords at a time
  *   substitution: every 2 to 4 cycles one chord becomes a relative along the graph below; these accumulate, and the
  *                 more there are the likelier the next move is one back home
  *   section:      at level 3 a second cycle, ii V iii vi, falling fifths and a higher hand; out of it, chord by chord
  * The tonic stays in the upper voices and is never in the bass as a root, including at the end.
- * en_harm_step is pure: state, cycle, seed, level in, state out (a later generator can drive it live); en_cycle_chords
- * replays it.
+ * en_harm_step is pure: state, cycle, seed, level in, state out.
  *
  * The walk moves over functions, not notes: an id below is a place in the graph, named for what it is in D Ionian. What
  * it sounds like comes from the pool, by en_harm_resolve: the family (the pool's character) gives the id a root, the
@@ -787,14 +913,14 @@ static int colour_move(en_harm_t *st, uint32_t h, int skip)      /* a colour on,
     return -1;
 }
 
-void en_harm_step(en_harm_t *st, uint32_t cycle, uint32_t seed, int level)
+static void harm_move(en_harm_t *st, uint32_t cycle, uint32_t seed, int level)
 {
     int k;
     const uint32_t h0 = hhash(seed, cycle, 0u), h1 = hhash(seed, cycle, 1u), h2 = hhash(seed, cycle, 2u);
     if (cycle == 0u) {
         for (k = 0; k < 4; k++)
             st->chord[k] = HOME[k];
-        st->section = st->age = st->exiting = st->since = st->borrowed = 0u;
+        st->section = st->age = st->exiting = st->since = st->borrowed = st->away = st->nudge = 0u;
         st->next_sub = (uint8_t)(2u + (h0 >> 8) % 3u);
         if (level < 3)
             return;
@@ -808,7 +934,8 @@ void en_harm_step(en_harm_t *st, uint32_t cycle, uint32_t seed, int level)
             st->exiting = 0u;
             return;
         }
-        st->age++;
+        if (st->age < 255u)
+            st->age++;
         if (st->chord[3] == H_CM9)               /* it was only passing */
             st->chord[3] = H_SEC3;
         else if (st->age == 1u && !st->borrowed) {   /* the borrowed chord, once in a walk: it leads back round to the ii */
@@ -835,11 +962,18 @@ void en_harm_step(en_harm_t *st, uint32_t cycle, uint32_t seed, int level)
         st->since = 0u;
         return;
     }
+    if (st->away >= EN_HOME_CYCLES) {            /* long enough away, whatever is asked: home, as out of the section */
+        st->exiting = 1u;
+        st->chord[0] = HOME[0];
+        st->chord[3] = HOME[3];
+        return;
+    }
     /* the drift */
     {
         int changed = -1;
-        if (level >= 1 && ++st->since >= st->next_sub) {
+        if ((level >= 1 && ++st->since >= st->next_sub) || st->nudge) {
             int nsub = 0, s;
+            st->nudge = 0u;
             for (k = 0; k < 4; k++)
                 nsub += HNODE[st->chord[k]].plain != HOME[k];
             st->since = 0u;
@@ -873,25 +1007,19 @@ void en_harm_step(en_harm_t *st, uint32_t cycle, uint32_t seed, int level)
     }
 }
 
-int en_song_level(uint32_t cycle)                /* the fixed timeline's harmonic level at a cycle's seam */
+void en_harm_step(en_harm_t *st, uint32_t cycle, uint32_t seed, int level)
 {
-    const uint32_t s = cycle * CYCLE_STEPS;
-    int i;
-    for (i = 0; PART[i + 1].step <= s && PART[i + 1].step < SONG_STEPS; i++)
-        ;
-    return PART[i].harm;
+    int k, home = 1;
+    harm_move(st, cycle, seed, level);
+    for (k = 0; k < 4; k++)
+        home &= st->chord[k] == HOME[k];
+    st->away = home ? 0u : st->away < 255u ? (uint8_t)(st->away + 1u) : st->away;
 }
 
-/* the pure function: the cycle's four chords. level is this cycle's; the ones before it come from the timeline */
-void en_cycle_chords(uint32_t cycle, uint32_t seed, int level, uint8_t *out)
+void en_harm_new_pass(en_harm_t *st)
 {
-    en_harm_t st;
-    uint32_t c;
-    int k;
-    for (c = 0u; c <= cycle; c++)
-        en_harm_step(&st, c, seed, c == cycle ? level : en_song_level(c));
-    for (k = 0; k < 4; k++)
-        out[k] = st.chord[k];
+    st->borrowed = 0u;
+    st->nudge = 1u;
 }
 
 /* the walk's next step and what it is in this pool and key: state, pool, root, cycle, seed, level in; state and chords out */
@@ -1059,32 +1187,6 @@ void en_voice_cycle(const en_harm_t *was, const en_harm_t *now, const en_hchord_
     }
 }
 
-/* the same, replayed: for the tests */
-void en_cycle_voicing_pool(uint32_t cycle, uint32_t seed, int level, uint32_t p, int root, uint8_t keys[4][4], uint8_t pad_[4][4])
-{
-    uint8_t hk[4][4], hp[4][4];
-    en_harm_t st, was;
-    en_hchord_t ch[4];
-    uint32_t c;
-    int s, v;
-    en_home_voicing(p, root, hk, hp);
-    for (s = 0; s < 4; s++)
-        for (v = 0; v < 4; v++) {
-            keys[s][v] = hk[s][v];
-            pad_[s][v] = hp[s][v];
-        }
-    en_harm_step(&st, 0u, seed, cycle == 0u ? level : en_song_level(0u));
-    for (c = 1u; c <= cycle; c++) {
-        was = st;
-        en_harm_walk(&st, p, root, c, seed, c == cycle ? level : en_song_level(c), ch);
-        en_voice_cycle(&was, &st, ch, 0, root, (const uint8_t (*)[4])hk, (const uint8_t (*)[4])hp, keys, pad_);
-    }
-}
-void en_cycle_voicing(uint32_t cycle, uint32_t seed, int level, int root, uint8_t keys[4][4], uint8_t pad_[4][4])
-{
-    en_cycle_voicing_pool(cycle, seed, level, POOL_IONIAN, root, keys, pad_);
-}
-
 /* the engine's: this cycle's chords and voicings, the next one's (made a little ahead, the bass leads into it). Chords, bass
  * and held voices sound h_pool and h_root until the seam; single notes and motifs follow pool and par[P_ROOT] at once */
 static en_harm_t h_cur, h_next;
@@ -1094,7 +1196,6 @@ static int h_root;
 static uint8_t keys_v[4][4], pad_v[4][4], keys_n[4][4], pad_n[4][4], home_k[4][4], home_p[4][4], home_kn[4][4], home_pn[4][4];
 static int8_t bass_root[4];                      /* semitones above the tonic, in the bass's octave */
 volatile uint8_t en_cycle_now[4];
-#define HARM_SEED EN_HARM_SEED
 
 static int nearest_tone(uint32_t m, int t)       /* t (semitones) if it's in the chord, else the chord's nearest to it */
 {
@@ -1389,8 +1490,8 @@ enum { BV_ROOT, BV_FIFTH, BV_OCT };
 typedef struct {
     uint8_t step, what;
 } bnote_t;
-#define BFIG_N 6
-#define BFIG_MAX 6
+#define BFIG_N 12
+#define BFIG_MAX 7
 static const bnote_t BFIG[BFIG_N][BFIG_MAX] = {
     {{0, BV_ROOT}, {10, BV_ROOT}, {16, BV_FIFTH}, {26, BV_ROOT}, {255, 0}},                   /* lighter */
     {{0, BV_ROOT}, {12, BV_FIFTH}, {16, BV_ROOT}, {26, BV_OCT}, {255, 0}},
@@ -1398,6 +1499,12 @@ static const bnote_t BFIG[BFIG_N][BFIG_MAX] = {
     {{0, BV_ROOT}, {10, BV_ROOT}, {16, BV_FIFTH}, {22, BV_OCT}, {26, BV_ROOT}, {255, 0}},     /* fuller */
     {{0, BV_ROOT}, {6, BV_FIFTH}, {10, BV_ROOT}, {16, BV_OCT}, {26, BV_FIFTH}, {255, 0}},
     {{0, BV_ROOT}, {10, BV_OCT}, {14, BV_FIFTH}, {16, BV_ROOT}, {26, BV_FIFTH}, {255, 0}},
+    {{0, BV_ROOT}, {6, BV_OCT}, {10, BV_ROOT}, {16, BV_FIFTH}, {22, BV_OCT}, {26, BV_ROOT}, {255, 0}},   /* rolling */
+    {{0, BV_ROOT}, {6, BV_ROOT}, {10, BV_OCT}, {16, BV_ROOT}, {22, BV_FIFTH}, {26, BV_OCT}, {255, 0}},
+    {{0, BV_ROOT}, {4, BV_OCT}, {10, BV_ROOT}, {16, BV_FIFTH}, {20, BV_ROOT}, {26, BV_FIFTH}, {255, 0}},
+    {{0, BV_ROOT}, {16, BV_FIFTH}, {255, 0}},                                                 /* long */
+    {{0, BV_ROOT}, {26, BV_ROOT}, {255, 0}},
+    {{0, BV_ROOT}, {255, 0}},
 };
 #define BASS_LEAD_STEP 62u
 
@@ -1406,7 +1513,7 @@ static int bass_off(int b)                       /* the chord's bass note: in oc
     return b < 4 ? b + 12 : b;
 }
 
-/* what the bass plays on a step of a chord, at levels 2 and 3: a pure function. Its note in semitones above the tonic (in
+/* what the bass plays on a step of a chord, from a set of figures (EN_BASS_*): a pure function. Its note in semitones above the tonic (in
  * the bass's octaves), and how many steps until the next one; -1 nothing on this step. Never the tonic. id is the walk's,
  * for the seeded figure; ch and nx what this chord and the next are in the pool p */
 int en_bass_ch(int id, const en_hchord_t *ch, const en_hchord_t *nx, uint32_t p, uint32_t cycle, uint32_t cs, int level,
@@ -1414,7 +1521,7 @@ int en_bass_ch(int id, const en_hchord_t *ch, const en_hchord_t *nx, uint32_t p,
 {
     const uint32_t half = cs / 32u;
     const uint32_t h = hhash(seed, cycle, 40u + (uint32_t)HNODE[(unsigned)id < EN_HARM_N ? id : 0].hid * 7u + half * 3u);
-    const uint32_t pick = (level == 3 ? 3u : 0u) + (h >> 8) % 3u;
+    const uint32_t pick = (level == EN_BASS_LONG ? 9u : level == EN_BASS_ROLL ? 6u : level == EN_BASS_FULL ? 3u : 0u) + (h >> 8) % 3u;
     const bnote_t *f = BFIG[pick];
     const int root = bass_off(ch->bass), next = bass_off(nx->bass);
     const int lead = half == 1u && root != next && (h >> 16 & 3u) != 0u;
@@ -1543,7 +1650,7 @@ static void bell_strike(int kind, int n, float vel, int32_t wait)
     midi(0x91, (uint32_t)n, (uint32_t)(vel * 110.0f));
 }
 
-/* ----------------------------------------------------------------- the timeline --- */
+/* ------------------------------------------------------------- the drums' levels --- */
 /* per level: the stems' levels, the low-pass on the break (Hz), the hats' level, the pad's filter */
 static const float CORE_LVL[5] = {0.0f, 0.0f, 0.86f, 1.0f, 0.55f}, TOP_LVL[5] = {0.0f, 0.0f, 0.5f, 0.6f, 0.4f};
 static const float BRK_FC[5] = {6000.0f, 6000.0f, 13000.0f, 16000.0f, 6000.0f}, TOP_FC[5] = {7000.0f, 7000.0f, 11000.0f, 12000.0f, 7000.0f};
@@ -1593,9 +1700,14 @@ static uint32_t song;
 static int song_level;
 static float brk_fc, brk_fc_t, pad_fc, pad_fc_t, duck, duck_s, lift, lift_t;
 
-static void level_set(const part_t *p, int first)
+static int memcmp_part(const en_part_t *a, const en_part_t *b)
 {
-    const float ramp = first ? 1.0f : (float)p->bars * 16.0f * step_len;
+    return a->level != b->level || a->character != b->character || a->ramp != b->ramp || a->bass != b->bass || a->touch != b->touch;
+}
+
+static void level_set(const en_part_t *p, int first)
+{
+    const float ramp = first ? 1.0f : (float)p->ramp * 16.0f * step_len;
     song_level = p->level;
     hat_lvl_t = HAT_LVL[p->level];
     brk_levels(CORE_LVL[p->level], TOP_LVL[p->level], ramp);
@@ -1603,8 +1715,84 @@ static void level_set(const part_t *p, int first)
     pad_fc_t = PAD_FC[p->level];
     bass_song_t = (float)p->bass * 0.01f;
     song_touch = (float)p->touch * 0.01f;
-    lift_t = p->harm == 3 || (p->level == 3 && lift_t > 0.0f) ? 1.0f : 0.0f;
+    lift_t = p->character == 3 || (p->level == 3 && lift_t > 0.0f) ? 1.0f : 0.0f;
 }
+
+/* where the arranger has got to: this section and the next, which is known only as far ahead as anyone needs to ask */
+static en_arr_t arr_cur, arr_nxt;
+static uint32_t arr_start;                       /* the step this section began */
+static en_part_t part_now, part_nxt;             /* this bar's and the next bar's */
+static int arr_style;                            /* the style the bar is played in: taken on the bar */
+#if defined EN_HOST || defined PLAT_HOST
+static const en_script_t *script;
+static int script_n;
+#define SCRIPTED (script != 0)
+void (*en_trace)(uint32_t step, int section, int level, int character, int break_bars);
+#else
+#define SCRIPTED 0
+#endif
+
+static void part_at(uint32_t s, en_part_t *o)
+{
+#if defined EN_HOST || defined PLAT_HOST
+    if (script) {
+        int i = 0;
+        while (i + 1 < script_n && script[i + 1].step <= s)
+            i++;
+        o->section = 0u;
+        o->level = script[i].level;
+        o->character = script[i].character;
+        o->ramp = script[i].ramp;
+        o->bass = script[i].bass;
+        o->touch = script[i].touch;
+        return;
+    }
+#endif
+    {
+        const uint32_t in = (s - arr_start) / 16u;
+        if (in < arr_cur.bars)
+            en_arr_part(&arr_cur, in, arr_style, par[P_ENERGY], o);
+        else
+            en_arr_part(&arr_nxt, in - arr_cur.bars, arr_style, par[P_ENERGY], o);
+    }
+}
+
+static uint32_t pass_at(uint32_t s)
+{
+    return SCRIPTED || (s - arr_start) / 16u < arr_cur.bars ? arr_cur.pass : arr_nxt.pass;
+}
+
+static void arr_follow(void)                     /* what comes after this section, as things stand */
+{
+    arr_nxt = arr_cur;
+    en_arr_next(&arr_nxt, song_seed, arr_style, par[P_ENERGY]);
+}
+
+static void arr_bar(uint32_t s)                  /* on the bar */
+{
+    uint32_t in;
+    arr_style = par[P_STYLE];
+    if (SCRIPTED)
+        return;
+    if (s == 0u) {
+        en_arr_first(&arr_cur, song_seed, arr_style, par[P_ENERGY]);
+        arr_start = 0u;
+        arr_follow();
+        return;
+    }
+    in = (s - arr_start) / 16u;
+    if (in >= arr_cur.bars) {
+        arr_cur = arr_nxt;
+        arr_start = s;
+        arr_follow();
+    } else if (in + 1u == arr_cur.bars) {
+        arr_follow();                            /* the style or the energy may have moved since it was first thought of */
+    }
+}
+
+/* the harmony's end of it: it hears the arranger's character at its own seams */
+static uint32_t h_pass;                          /* the pass the chords playing belong to */
+static uint32_t motif_base;                      /* the cycle that pass began at, for the harmony */
 
 /* the next cycle's notes, from h_next and the pool and the key as they are now */
 static uint32_t prep_pool;
@@ -1634,8 +1822,13 @@ static void next_voices(void)
 /* the next cycle, a little ahead of its seam */
 static void cycle_prepare(uint32_t cycle)
 {
+    const uint32_t seam = cycle * CYCLE_STEPS;
+    en_part_t p;
+    part_at(seam, &p);
     h_next = h_cur;
-    en_harm_step(&h_next, cycle, HARM_SEED, en_song_level(cycle));
+    if (pass_at(seam) != h_pass)
+        en_harm_new_pass(&h_next);
+    en_harm_step(&h_next, cycle, song_seed, p.character);
     next_voices();
 }
 
@@ -1675,13 +1868,15 @@ int en_motif_note_ch(int m, int n, const en_hchord_t *ch)
 static void harmony_restart(void)                /* the top of the song */
 {
     int s, v;
+    en_part_t p;
     en_home_voicing(pool, par[P_ROOT], home_kn, home_pn);
     for (s = 0; s < 4; s++)
         for (v = 0; v < 4; v++) {
             keys_n[s][v] = home_kn[s][v];
             pad_n[s][v] = home_pn[s][v];
         }
-    en_harm_step(&h_next, 0u, HARM_SEED, en_song_level(0u));
+    part_at(0u, &p);
+    en_harm_step(&h_next, 0u, song_seed, p.character);
     for (s = 0; s < 4; s++)
         en_harm_resolve(pool, h_next.chord[s], &h_chn[s]);
     prep_pool = pool;
@@ -1696,35 +1891,56 @@ static void song_step(uint32_t s)
     int i, flags = 0;
     float k;
 
+    if (!(s & 15u))
+        arr_bar(s);
     if (s == 0u) {
         inner_set = 0;
+        h_pass = pass_at(0u);
+        motif_base = 0u;
         harmony_restart();
     } else if (!cy) {
+        const uint32_t pass = pass_at(s);
         if (prep_pool != pool || prep_root != par[P_ROOT])   /* changed in the very last step */
             cycle_prepare(cycle);
         cycle_commit();
+        if (pass != h_pass) {
+            h_pass = pass;
+            motif_base = cycle;
+        }
     }
     if (cy == CYCLE_STEPS - 8u)
         cycle_prepare(cycle + 1u);
     else if (cy > CYCLE_STEPS - 8u && (prep_pool != pool || prep_root != par[P_ROOT]))
         cycle_prepare(cycle + 1u);               /* changed since: this seam takes it */
-    if (!(s & 15u)) {                            /* on the bar: the timeline */
-        for (i = 0; PART[i + 1].step <= s; i++)
-            ;
-        if (PART[i].step == s)
-            level_set(&PART[i], s == 0u);
+    if (!(s & 15u)) {                            /* on the bar: what the arranger wants of it */
+        const uint32_t bar = s / 16u;
+        uint32_t in = 0u;
+        en_part_t p;
+        int want;
+        part_at(s, &p);
+        if (s == 0u || memcmp_part(&p, &part_now))
+            level_set(&p, s == 0u);
+        part_now = p;
+        part_at(s + 16u, &part_nxt);
+        want = en_arr_break(bar, song_level, arr_style, par[P_BREAKS], song_seed, &in);
+        brk_drums_for(en_style_rhythm(arr_style), song_level, par[P_ENERGY], song_seed, bar, want, in);
+        en_section = p.section;
+        en_drum_level = p.level;
+        en_break_bars = (uint8_t)want;
+#if defined EN_HOST || defined PLAT_HOST
+        if (en_trace)
+            en_trace(s, p.section, p.level, p.character, want);
+#endif
     }
     /* the kit holds its breath in the last bar before a higher level, with the air rising into it */
-    for (i = 0; PART[i + 1].step <= s; i++)
-        ;
-    if ((PART[i + 1].level == 2 || PART[i + 1].level == 3) && PART[i].level != PART[i + 1].level) {
-        const uint32_t to = PART[i + 1].step - s;
-        if (to <= 16u && PART[i].level >= 2)
+    if ((part_nxt.level == 2 || part_nxt.level == 3) && part_now.level != part_nxt.level) {
+        const uint32_t to = 16u - (s & 15u);
+        if (part_now.level >= 2)
             flags |= BRK_DROP;
         if (to == 12u)
             flags |= BRK_SWELL;
     }
-    k = brk_pattern_step(s, song_level, flags, HARM_SEED);
+    k = brk_pattern_step(s, song_level, flags, song_seed);
     if (k > 0.0f)
         duck = fm_maxf(duck, k);
     if (brk_hat_hit != '.')
@@ -1741,39 +1957,30 @@ static void song_step(uint32_t s)
     } else if (cs == 24u) {
         pad_swell_t = 0.80f;
     }
-    pad_gate = s < PAD_OFF ? 1.0f : 0.0f;
+    pad_gate = 1.0f;
 
     /* the piano */
     if (!cy)
-        inner_set = (uint8_t)en_song_level(cycle);
-    if (!cs)
+        inner_set = part_now.character;
+    if (!cs) {
         ep_lone = 0u;
-    if (s <= LAST_CHORD) {
-        if (!cs)
-            ep_chord(c, 0.44f + 0.04f * frand(), bass_song_t <= 0.0f);
-        if (s < LAST_CHORD)
-            for (i = 0; i < INNER_MAX; i++) {
-                const inner_t *g = &INNER[inner_set][cycle & 1u][i];
-                /* each chord its own place: a little later along the cycle, so no two are the same */
-                if (g->vel && (uint32_t)g->step + 2u * (uint32_t)c == cs)
-                    ep_inner(g, c);
-            }
-        if (fresh && !(s & 1u) && s < LAST_CHORD)
-            ep_fresh(c);
-    } else if (s == 2800u) {                     /* the last chord lets go, slowly */
-        for (i = 0; i < NKEYS; i++)
-            if (ep[i].on && ep[i].held) {
-                ep[i].rel = fm_expf(-1.0f / (0.9f * EN_SR));
-                ep_key_up(&ep[i]);
-            }
+        ep_chord(c, 0.44f + 0.04f * frand(), bass_song_t <= 0.0f);
     }
+    for (i = 0; i < INNER_MAX; i++) {
+        const inner_t *g = &INNER[inner_set][cycle & 1u][i];
+        /* each chord its own place: a little later along the cycle, so no two are the same */
+        if (g->vel && (uint32_t)g->step + 2u * (uint32_t)c == cs)
+            ep_inner(g, c);
+    }
+    if (fresh && !(s & 1u))
+        ep_fresh(c);
 
     /* the bass */
     if (song_level == 2 || song_level == 3) {
         int len = 0;
         /* into a new key the bass does not lead: the next root's step would mean nothing in this one */
         const en_hchord_t *nx = c < 3 ? &h_ch[c + 1] : prep_root == h_root ? &h_chn[0] : &h_ch[c];
-        const int off = en_bass_ch(h_cur.chord[c], &h_ch[c], nx, h_pool, cycle, cs, song_level, HARM_SEED, &len);
+        const int off = en_bass_ch(h_cur.chord[c], &h_ch[c], nx, h_pool, cycle, cs, STYLE[arr_style].bass[song_level == 3], song_seed, &len);
         if (off >= 0)
             bass_note(off, (uint32_t)len);
     } else if (bass_song_t > 0.0f && !cs) {
@@ -1781,8 +1988,8 @@ static void song_step(uint32_t s)
     }
 
     /* the motifs */
-    if (cycle < 12u) {
-        const uint32_t when = MOTIF_WHEN[cycle];
+    {
+        const uint32_t when = MOTIF_WHEN[(cycle - motif_base) % 12u];
         int m, n;
         for (m = 0; m < 2; m++)
             if (when >> m & 1u)
@@ -1802,8 +2009,7 @@ static void tick(void)
 {
     if (!en_frozen) {
         song_step(song);
-        if (++song >= SONG_STEPS)
-            song = 0u;
+        song++;
     }
     sixteenth++;
     en_bars = sixteenth;
@@ -1991,7 +2197,7 @@ static void heads_step(uint32_t n)
     /* its speed (a part of the loop per tape sample): at most a bend of ~14 cents, easing in and out */
     vmax = 0.008f / fm_maxf(echo_len, 100.0f);
     want = fm_clampf((head2_t - head2) * (1.0f / (2.0f * TAPE_SR)), -vmax, vmax);
-    head2_v += (want - head2_v) * fm_minf((float)n * (1.0f / EN_SR), 1.0f);
+    head2_v = fm_flush(head2_v + (want - head2_v) * fm_minf((float)n * (1.0f / EN_SR), 1.0f));
 }
 
 /* one sample of both: the input (a mono send) to the tape's heads (el, er) and the Echoplex (xl, xr) */
@@ -2041,6 +2247,23 @@ static inline void echoes(float in, float *el, float *er, float *xl, float *xr)
 static int pulse;
 static uint32_t ext_age;
 
+#if defined EN_HOST || defined PLAT_HOST
+void en_test_script(const en_script_t *sc, int n)
+{
+    script = n ? sc : 0;
+    script_n = n;
+}
+void en_test_ticks(uint32_t n)
+{
+    while (n--)
+        tick();
+}
+void en_test_jump(uint32_t step)
+{
+    song = step;
+    arr_start = step;
+}
+#endif
 static void tempo_set(void) { step_len = EN_SR * 60.0f / ((float)par[P_TEMPO] * 4.0f); }
 
 /* the key or the pool changed. Playing: nothing now, the next seam takes it (song_step). Stopped: at once, the walk's
@@ -2074,6 +2297,7 @@ static void apply(int p, int v)
     case P_BREAK: break_vol = (float)(v * v) * 0.0001f; break;
     case P_SWELL: ep_vol = (float)(v * v) * 0.0001f; break;   /* in this demo, the electric piano's level */
     case P_KIT: brk_set_kit(v); break;
+    case P_STYLE: en_style = (uint8_t)v; break;
     case P_ECHO: echo_send = (float)(v * v) * 0.0001f; break;
     case P_ETIME: echo_time(); break;
     case P_REVERB: rev_send = (float)(v * v) * 0.0001f; break;
@@ -2172,6 +2396,22 @@ void en_init(void)
     plp[0] = plp[1] = plp[2] = plp[3] = eplp[0] = eplp[1] = 0.0f;
     song = 0u;
     song_level = 0;
+    song_seed = EN_HARM_SEED;
+    rng = RNG_START;
+    hat_noise = 0x6C8E9CF5u;
+    head_left = 0u;
+    arr_cur.pass = arr_nxt.pass = 0u;
+    arr_cur.bars = arr_nxt.bars = 0u;
+    arr_cur.section = arr_nxt.section = 0u;
+    arr_start = 0u;
+    arr_style = 0;
+    part_now.level = part_nxt.level = 0u;
+    h_pass = motif_base = 0u;
+    en_section = en_drum_level = en_break_bars = 0u;
+#if defined EN_HOST || defined PLAT_HOST
+    script = 0;
+    script_n = 0;
+#endif
     brk_init();                                  /* before apply: it resets what apply sets */
     for (i = 0; i < P_NPARAMS; i++)
         apply(i, PARAMS[i].def);
@@ -2257,7 +2497,8 @@ static void drain(void)
         case C_NEXT: break;                      /* the cycle is fixed */
         case C_FREEZE: en_frozen = (uint8_t)(a != 0); break;
         case C_SEED:
-            rng ^= (uint32_t)(b & 0xFFFF) * 2654435761u;
+            song_seed = (uint32_t)a << 16 | (uint32_t)(b & 0xFFFF);
+            rng = RNG_START ^ song_seed * 2654435761u;   /* the small errors of time and touch follow it too */
             if (!rng)
                 rng = 1u;
             break;
@@ -2673,7 +2914,8 @@ static void render_chunk(int32_t *out, uint32_t n, float gain)
     /* the duck: the kick pulls the melodic bus down a little and lets it back in a quarter of a second */
     duck0 = duck_s;
     duck_s += (duck - duck_s) * fm_minf((float)n * (1.0f / (0.005f * EN_SR)), 1.0f);
-    duck *= fm_expf(-(float)n * (1.0f / (0.11f * EN_SR)));
+    duck = fm_flush(duck * fm_expf(-(float)n * (1.0f / (0.11f * EN_SR))));
+    duck_s = fm_flush(duck_s);                   /* no kick for minutes: never down among the denormals */
     duck1 = duck_s;
     render_pad(n);
     render_keys(n);
@@ -2701,14 +2943,14 @@ static void control(uint32_t n)                 /* once a chunk: the slow things
     en_arc = 0.0f;
     brk_fc += (brk_fc_t - brk_fc) * fm_minf(slow * (lift_t > 0.0f ? 4.0f : 1.0f), 1.0f);
     pad_fc += (pad_fc_t - pad_fc) * fm_minf(slow * (lift_t > 0.0f ? 4.0f : 1.0f), 1.0f);
-    bass_song += (bass_song_t - bass_song) * slow;
+    bass_song = fm_flush(bass_song + (bass_song_t - bass_song) * slow);
     pad_swell += (pad_swell_t - pad_swell) * fm_minf((float)n * (1.0f / (1.1f * EN_SR)), 1.0f);
-    lift += (lift_t - lift) * (lift_t > lift ? (float)n * (1.0f / (0.8f * EN_SR)) : slow * 0.75f);
+    lift = fm_flush(lift + (lift_t - lift) * (lift_t > lift ? (float)n * (1.0f / (0.8f * EN_SR)) : slow * 0.75f));
     pl_decay += ((en_frozen ? 0.9995f : pl_decay_t) - pl_decay) * 0.002f;
     pl_dd2 = fm_clampf(pl_decay + 0.15f, 0.25f, 0.5f);
     rev_in_gain += ((en_frozen ? 0.0f : 1.0f) - rev_in_gain) * 0.01f;
     for (i = 0; i < EN_NLOOP; i++)
-        en_loop_glow[i] *= 0.985f;
+        en_loop_glow[i] = fm_flush(en_loop_glow[i] * 0.985f);
 }
 
 void en_render(int32_t *out, uint32_t n, uint32_t gain_q12)

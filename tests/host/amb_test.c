@@ -1,12 +1,13 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Charles Vestal */
 /* The instrument on the host: the pure parts (scales, chords, voice leading, names) and the
- * render (sound, no NaN, bounded, the loops evolve, the chord drifts, freeze holds). */
+ * render (sound, no NaN, bounded, the cycle, freeze holds). */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
 #include "amb.h"
+#include "demo_script.h"
 
 static int fails;
 #define CHECK(c, ...)                                                                                              \
@@ -138,14 +139,12 @@ int main(void)
     CHECK(en_bars / 16u >= 5u, "the grid ran (%u sixteenths)", en_bars);
     CHECK(en_pad_level > 0.5f, "the pad swelled (%f)", (double)en_pad_level);
 
-    /* (demo-loading) the fixed timeline: no drums for the first 40 s, then the patterns; the checks on the old skeleton
-     * are off, and the break's pace is checked at level 3 below */
-    /* (demo-loading) the chord no longer drifts and the bell loops no longer evolve: a four-chord cycle repeats exactly,
-     * and two fixed motifs replace the loops. The drift, chord-change and loop-evolve checks do not apply. Instead: */
+    /* a four-chord cycle: each chord its own, and it comes again (over the demo's fixed song, demo_script.h) */
     {
         uint8_t seen[4];
         int k, changes = 0, again = 0;
         en_init();
+        en_test_script(DEMO_SCRIPT, DEMO_SCRIPT_N);
         en_play(1);
         run(0.1f);
         for (k = 0; k < 4; k++) {
@@ -181,6 +180,7 @@ int main(void)
     /* the break alone: it sounds, and with its level at 0 it is silent after the block's tail */
     {
         en_init();
+        en_test_script(DEMO_SCRIPT, DEMO_SCRIPT_N);
         en_set(P_PAD, 0);
         en_set(P_BELLS, 0);
         en_set(P_BASS, 0);
@@ -206,6 +206,7 @@ int main(void)
         float gl = 0.0f;
         int k;
         en_init();
+        en_test_script(DEMO_SCRIPT, DEMO_SCRIPT_N);
         en_set(P_DENSITY, 100);
         en_play(1);
         en_shed();
@@ -239,6 +240,7 @@ int main(void)
     /* (demo-loading) Bell tone no longer shapes the motifs (each has its fixed timbre) and they are too sparse for this
      * test's 20 s: the Bell tone and Bell oct checks do not apply */
     en_init();
+    en_test_script(DEMO_SCRIPT, DEMO_SCRIPT_N);
     en_play(1);
     run(20.0f);
 

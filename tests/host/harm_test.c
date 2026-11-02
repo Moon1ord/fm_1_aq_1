@@ -1,10 +1,12 @@
 /* SPDX-License-Identifier: MPL-2.0 */
-/* The demo's growing harmony and its living drums: both pure functions of a seed, so both can be read and checked. */
+/* The growing harmony and the living drums: both pure functions of a seed, so both can be read and checked. All of it over
+ * the demo's song as a fixed script (demo_script.h): what the arranger does with them is arr_test.c's. */
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
 #include "amb.h"
 #include "brk.h"
+#include "demo_script.h"
 
 static int fails;
 #define CHECK(c, ...)                                                                                                  \
@@ -17,14 +19,57 @@ static int fails;
         }                                                                                                              \
     } while (0)
 static void ev_note(uint32_t st, uint32_t d1);
+static uint32_t golden, golden_on;
 void en_midi_out(uint32_t st, uint32_t d1, uint32_t d2)
 {
-    (void)d2;
+    if (golden_on && en_bars < 2752u) {
+        golden = (golden ^ en_bars) * 16777619u;
+        golden = (golden ^ st) * 16777619u;
+        golden = (golden ^ d1) * 16777619u;
+        golden = (golden ^ d2) * 16777619u;
+    }
     ev_note(st, d1);
 }
 
-#define NCYCLES 11u                              /* the song's: cycle 10 holds its last chord */
+#define NCYCLES 11u                              /* the script's */
 #define NSEEDS 300u
+
+/* the script's character at a cycle's seam */
+static int script_level(uint32_t cycle)
+{
+    int i = 0;
+    while (i + 1 < DEMO_SCRIPT_N && DEMO_SCRIPT[i + 1].step <= cycle * 256u)
+        i++;
+    return DEMO_SCRIPT[i].character;
+}
+
+/* the walk replayed: level is this cycle's; the ones before it come from the script */
+static void en_cycle_chords(uint32_t cycle, uint32_t seed, int level, uint8_t *out)
+{
+    en_harm_t st;
+    uint32_t c;
+    for (c = 0u; c <= cycle; c++)
+        en_harm_step(&st, c, seed, c == cycle ? level : script_level(c));
+    memcpy(out, st.chord, 4);
+}
+
+static void en_cycle_voicing(uint32_t cycle, uint32_t seed, int level, int root, uint8_t keys[4][4], uint8_t pad[4][4])
+{
+    const uint32_t p = 0xAB5u;
+    uint8_t hk[4][4], hp[4][4];
+    en_harm_t st, was;
+    en_hchord_t ch[4];
+    uint32_t c;
+    en_home_voicing(p, root, hk, hp);
+    memcpy(keys, hk, sizeof hk);
+    memcpy(pad, hp, sizeof hp);
+    en_harm_step(&st, 0u, seed, cycle == 0u ? level : script_level(0u));
+    for (c = 1u; c <= cycle; c++) {
+        was = st;
+        en_harm_walk(&st, p, root, c, seed, c == cycle ? level : script_level(c), ch);
+        en_voice_cycle(&was, &st, ch, 0, root, (const uint8_t (*)[4])hk, (const uint8_t (*)[4])hp, keys, pad);
+    }
+}
 
 static int popcount(uint32_t m)
 {
@@ -52,7 +97,7 @@ static void harmony_checks(void)
     for (sd = 0u; sd < NSEEDS; sd++) {
         uint8_t seq[NCYCLES][4], ks[NCYCLES][4][4], ps[NCYCLES][4][4];
         for (c = 0u; c < NCYCLES; c++) {
-            const int lv = en_song_level(c);
+            const int lv = script_level(c);
             uint8_t again[4];
             en_cycle_chords(c, sd, lv, seq[c]);
             en_cycle_chords(c, sd, lv, again);
@@ -92,7 +137,7 @@ static void harmony_checks(void)
          * the exception is entering the second cycle */
         for (c = 1u; c < NCYCLES; c++) {
             int diff = 0;
-            const int enter = en_song_level(c) == 3 && en_song_level(c - 1u) != 3;
+            const int enter = script_level(c) == 3 && script_level(c - 1u) != 3;
             for (s = 0; s < 4; s++)
                 if (seq[c][s] != seq[c - 1u][s]) {
                     diff++;
@@ -129,6 +174,7 @@ static void engine_checks(void)
     uint32_t chords[4] = {0}, attacks[4] = {0}, singles[4] = {0}, notes[4] = {0};
     int s, l;
     en_init();
+    en_test_script(DEMO_SCRIPT, DEMO_SCRIPT_N);
     en_play(1);
     en_render(buf, 256, 1024);
     memcpy(now, (const void *)en_cycle_now, 4);
@@ -139,7 +185,7 @@ static void engine_checks(void)
         frames += 256u;
         /* the piano flows: at most one chord's attack a change (two at level 3), three lone notes a chord */
         if ((en_bars - 1u) / 64u != last_chord) {
-            const int lv = en_song_level(last_chord / 4u);
+            const int lv = script_level(last_chord / 4u);
             const uint32_t a = en_ep_chords - c0, b = en_ep_singles - s0;
             CHECK(a <= (lv == 3 ? 2u : 1u), "level %d chord %u: %u chord attacks", lv, last_chord, a);
             CHECK(b <= 3u, "level %d chord %u: %u lone notes", lv, last_chord, b);
@@ -156,7 +202,7 @@ static void engine_checks(void)
             const uint32_t steps = en_bars - 1u, cycle = steps / 256u;
             moves++;
             CHECK(steps % 256u == 0u, "the chords moved at step %u, off the seam", steps);
-            en_cycle_chords(cycle, EN_HARM_SEED, en_song_level(cycle), want);
+            en_cycle_chords(cycle, EN_HARM_SEED, script_level(cycle), want);
             memcpy(now, (const void *)en_cycle_now, 4);
             for (s = 0; s < 4; s++)
                 CHECK(now[s] == want[s], "cycle %u slot %d: plays %s, the walk says %s", cycle, s, en_harm_name(now[s]),
@@ -175,18 +221,39 @@ static void engine_checks(void)
     CHECK(en_ep_peak <= 12, "peak %d voices", en_ep_peak);
 }
 
+/* the demo as the owner approved it: the fixed song, seed and defaults, must play every note and clock it played when it
+ * was a fixed song (commit 4e2387c, the last of them; its audio was compared with this, sample for sample, by hand) */
+static void golden_checks(void)
+{
+    static int32_t buf[512];
+    en_init();
+    en_test_script(DEMO_SCRIPT, DEMO_SCRIPT_N);
+    golden = 2166136261u;
+    golden_on = 1u;
+    en_play(1);
+    while (en_bars < 2752u)
+        en_render(buf, 256, 1024);
+    golden_on = 0u;
+    en_play(0);
+    en_render(buf, 256, 1024);
+    CHECK(golden == 0x4B17C9A8u, "the demo's notes changed: %08x", golden);
+}
+
 /* the bass: long notes, on the chord, never landing on the tonic, moving a little */
 static void bass_checks(void)
 {
     uint32_t sd, c, cs;
-    int level, s;
-    for (level = 2; level <= 3; level++) {
+    int s;
+    static const int SETS[4] = {EN_BASS_LIGHT, EN_BASS_FULL, EN_BASS_ROLL, EN_BASS_LONG};
+    int set;
+    for (set = 0; set < 4; set++) {
+        const int level = SETS[set];
         uint32_t notes = 0u, chords_n = 0u, steps = 0u, held = 0u, leads = 0u, seen = 0u;
         for (sd = 0u; sd < NSEEDS; sd++)
             for (c = 0u; c < NCYCLES - 1u; c++) {
                 uint8_t q[4], nx[4];
-                en_cycle_chords(c, sd, en_song_level(c), q);
-                en_cycle_chords(c + 1u, sd, en_song_level(c + 1u), nx);
+                en_cycle_chords(c, sd, script_level(c), q);
+                en_cycle_chords(c + 1u, sd, script_level(c + 1u), nx);
                 for (s = 0; s < 4; s++) {
                     const int next = s < 3 ? q[s + 1] : nx[0];
                     chords_n++;
@@ -214,7 +281,7 @@ static void bass_checks(void)
             }
         printf("  bass level %d: %.2f notes a bar, %u leading tones in %u chords\n", level,
                (double)notes * 16.0 / ((double)chords_n * 64.0), leads, chords_n);
-        CHECK((double)notes * 16.0 / ((double)chords_n * 64.0) <= (level == 3 ? 3.0 : 2.25), "level %d: too many notes", level);
+        CHECK((double)notes * 16.0 / ((double)chords_n * 64.0) <= (level == EN_BASS_ROLL ? 3.25 : level == EN_BASS_FULL ? 3.0 : 2.25), "level %d: too many notes", level);
         CHECK(steps == chords_n * 64u, "level %d: the notes do not fill the time: %u of %u steps", level, steps, chords_n * 64u);
         CHECK(leads > 0u && held > 0u && seen, "level %d: nothing moves", level);
     }
@@ -223,12 +290,19 @@ static void bass_checks(void)
 /* the drums: a plain two-step, breaks now and then, back on the grid; deterministic for a seed */
 #define DSTEPS 6400u
 static char core_a[DSTEPS], top_a[DSTEPS], hat_a[DSTEPS];
+static uint8_t brk_in_bar[DSTEPS / 16u];
 static void drums(uint32_t seed, int level, char *c, char *t, char *h)
 {
     uint32_t i;
     brk_init();
     brk_levels(1.0f, 1.0f, 1.0f);
     for (i = 0u; i < DSTEPS; i++) {
+        if (!(i & 15u)) {
+            uint32_t in = 0u;
+            const int want = en_arr_break(i / 16u, level, EN_ST_LIQUID, en_param_info(P_BREAKS)->def, seed, &in);
+            brk_drums_for(en_style_rhythm(EN_ST_LIQUID), level, en_param_info(P_ENERGY)->def, seed, i / 16u, want, in);
+            brk_in_bar[i / 16u] = (uint8_t)want;
+        }
         brk_pattern_step(i, level, 0, seed);
         c[i] = brk_hit_core;
         t[i] = brk_hit_top;
@@ -251,7 +325,7 @@ static void drum_checks(void)
               "level %d: same seed, other drums", level);
         for (i = 0u; i < DSTEPS; i++) {
             const uint32_t bs = i % 16u;
-            const int in = brk_break_at(i, level, 1234u, 0);
+            const int in = brk_in_bar[i / 16u] ? 0 : -1;
             const char c = core_a[i];
             CHECK(c != 0 && top_a[i] != 0 && hat_a[i] != 0, "a pattern too short at %u", i);
             if (in < 0) {                        /* plain: exactly the skeleton */
@@ -315,6 +389,7 @@ static void hat_checks(void)
     en_play(0);                                  /* from a standstill: the clock's pulse starts at its top */
     en_render(buf, 256, 1024);
     en_init();
+    en_test_script(DEMO_SCRIPT, DEMO_SCRIPT_N);
     en_set(P_PAD, 0);
     en_set(P_BELLS, 0);
     en_set(P_BASS, 0);
@@ -426,11 +501,11 @@ static void pool_checks(void)
             en_home_voicing(p, root, hk, hp);
             memcpy(k, hk, sizeof k);
             memcpy(q, hp, sizeof q);
-            en_harm_walk(&st, p, root, 0u, EN_HARM_SEED, en_song_level(0u), ch);
+            en_harm_walk(&st, p, root, 0u, EN_HARM_SEED, script_level(0u), ch);
             voices_valid(p, root, (const uint8_t (*)[4])k, (const uint8_t (*)[4])q, ch, 0u);
             for (cy = 1u; cy < NCYCLES; cy++) {
                 was = st;
-                en_harm_walk(&st, p, root, cy, EN_HARM_SEED, en_song_level(cy), ch);
+                en_harm_walk(&st, p, root, cy, EN_HARM_SEED, script_level(cy), ch);
                 en_voice_cycle(&was, &st, ch, 0, root, (const uint8_t (*)[4])hk, (const uint8_t (*)[4])hp, k, q);
                 voices_valid(p, root, (const uint8_t (*)[4])k, (const uint8_t (*)[4])q, ch, cy);
                 for (s = 0; s < 4; s++)
@@ -525,8 +600,8 @@ static void family_checks(void)
         en_hchord_t ca[4], cb[4];
         uint32_t cy;
         for (cy = 0u; cy < NCYCLES; cy++) {
-            en_harm_walk(&a, EN_MODE_POOL[MODE_DORIAN], 2, cy, 5u, en_song_level(cy), ca);
-            en_harm_walk(&b, EN_MODE_POOL[MODE_DORIAN], 2, cy, 5u, en_song_level(cy), cb);
+            en_harm_walk(&a, EN_MODE_POOL[MODE_DORIAN], 2, cy, 5u, script_level(cy), ca);
+            en_harm_walk(&b, EN_MODE_POOL[MODE_DORIAN], 2, cy, 5u, script_level(cy), cb);
             CHECK(!memcmp(&a, &b, sizeof a) && !memcmp(ca, cb, sizeof ca), "cycle %u: the same seed differs", cy);
         }
     }
@@ -580,6 +655,7 @@ static void engine_start(uint32_t p, int root)
         en_render(b, 256, 1024);
     }
     en_init();
+    en_test_script(DEMO_SCRIPT, DEMO_SCRIPT_N);
     en_set(P_ROOT, root);
     en_pool(p);
     en_play(1);
@@ -612,10 +688,10 @@ static void change_seen(const char *what, uint32_t p0, int r0, uint32_t p1, int 
         en_pool(p1);
     render_until(end);
     for (cy = 0u; cy <= at / 256u; cy++)
-        en_harm_walk(&st, p0, r0, cy, EN_HARM_SEED, en_song_level(cy), old);
+        en_harm_walk(&st, p0, r0, cy, EN_HARM_SEED, script_level(cy), old);
     st2 = st;
     for (; cy <= seam / 256u; cy++)
-        en_harm_walk(&st2, p1, r1, cy, EN_HARM_SEED, en_song_level(cy), fresh_ch);
+        en_harm_walk(&st2, p1, r1, cy, EN_HARM_SEED, script_level(cy), fresh_ch);
     /* (a note's step is en_bars as it is struck: song step s runs while en_bars is s) */
     for (i = 0; i < nev; i++) {
         const ev_t *e = &ev[i];
@@ -690,7 +766,7 @@ static void live_checks(void)
         en_pool(EN_MODE_POOL[MODE_DORIAN]);
         render_until(1281u);
         for (cy = 0u; cy <= 5u; cy++)
-            en_harm_walk(&st, EN_MODE_POOL[MODE_DORIAN], 2, cy, EN_HARM_SEED, en_song_level(cy), ch);
+            en_harm_walk(&st, EN_MODE_POOL[MODE_DORIAN], 2, cy, EN_HARM_SEED, script_level(cy), ch);
         pcs[0] = en_chord_root;
         for (v = 0; v < 4; v++)
             pcs[v + 1] = en_chord[v] % 12;
@@ -722,7 +798,7 @@ static void live_checks(void)
         while (step < 2600u) {
             render_until(step);
             en_pool(CH[i++ % 3u]);
-            en_cycle_chords(step / 256u, EN_HARM_SEED, en_song_level(step / 256u), want);
+            en_cycle_chords(step / 256u, EN_HARM_SEED, script_level(step / 256u), want);
             CHECK(!memcmp(want, (const void *)en_cycle_now, 4), "step %u: the walk lost its place", step);
             step += 300u;
         }
@@ -768,7 +844,7 @@ static void flow_run(const char *name, uint32_t p, int root, int live)
         for (j = 0; j < 512; j++)
             CHECK(buf[j] > -(1 << 24) && buf[j] < (1 << 24), "%s: out of range", name);
         if ((en_bars - 1u) / 64u != last_chord) {
-            const int lv = en_song_level(last_chord / 4u);
+            const int lv = script_level(last_chord / 4u);
             const uint32_t a = en_ep_chords - c0, b = en_ep_singles - s0;
             CHECK(a <= (lv == 3 ? 2u : 1u), "%s: level %d chord %u: %u chord attacks", name, lv, last_chord, a);
             CHECK(b <= 3u, "%s: level %d chord %u: %u lone notes", name, lv, last_chord, b);
@@ -809,6 +885,7 @@ static void flow_checks(void)
 
 int main(void)
 {
+    golden_checks();
     harmony_checks();
     pool_checks();
     family_checks();

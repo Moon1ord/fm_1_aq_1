@@ -33,6 +33,7 @@
  * elsewhere. Float only, no libm: fastmath.h. */
 #pragma once
 #include <stdint.h>
+#include "brk.h"
 
 #define EN_SR 44100.0f
 #define EN_NLOOP 4                     /* bell tape loops */
@@ -58,6 +59,7 @@ enum {
     P_BASSOCT, P_GLIDE, P_FIFTH,                      /* bass: its octave, its glide, how often it leans on the fifth */
     P_WATER, P_KIT,                                   /* the water's level; the break's kit: Glass, Moss */
     P_TIDE,                                           /* how much of the tide is calm: set by the piece, no knob */
+    P_ENERGY, P_STYLE, P_BREAKS,                      /* the arranger: how far it may rise, its style, how often a break */
     P_NPARAMS
 };
 typedef struct {
@@ -74,7 +76,7 @@ void en_pool(uint32_t pool);                   /* the scale, relative to the roo
 void en_play(int on);                          /* the garden grows / rests (the tails ring on) */
 void en_next(void);                            /* the next chord: on the next bar (now while resting) */
 void en_freeze(int on);
-void en_seed(uint32_t s);                      /* stir some entropy into the generators */
+void en_seed(uint32_t s);                      /* a new seed (24 bits are used): every choice from now on follows it */
 void en_panic(void);                           /* everything quiet, now */
 void en_regrow(void);                          /* a new piece: fresh loops, the home chord */
 /* MIDI clock in (as FoMni): ticks drive the 1/16 grid (6 a step) while they keep coming */
@@ -113,12 +115,55 @@ int en_chord_tones(uint32_t pool, int root, int deg, int *pcs);
 void en_voice_lead(const int *from, const int *pcs, int ntones, int *to, int lo, int hi);
 const char *en_chord_name(const int *pcs, int n, char *buf);   /* "Em7", "Dsus4", "C" ... */
 
-#define EN_HARM_SEED 7u                         /* the fixed seed of this render: harmony and drums */
+#define EN_HARM_SEED 7u                         /* the seed until en_seed says otherwise */
+
+/* The arranger: endless passes through the sections, each a whole number of phrases of bars, each section a part of what
+ * is asked of the drums and the harmony. Nothing here knows how the harmony is made or which pattern a drum level is: it
+ * says the section, the drums' level, a character for the harmony and, for a bar, whether a break is wanted and how long.
+ * Pure: state, seed, style, energy in; the next section and its length out. See "the arranger" in amb.c. */
+enum { EN_SEC_INTRO, EN_SEC_HATS, EN_SEC_LIGHT, EN_SEC_DOWN, EN_SEC_FULL, EN_SEC_OUT, EN_NSECTIONS };
+enum { EN_ST_LIQUID, EN_ST_ROLLER, EN_ST_JUNGLE, EN_ST_HALF, EN_ST_DRIFT, EN_ST_LOADING, EN_NSTYLES };
+#define EN_ARR_PHRASE 8u                        /* bars: sections and break placement go by it */
+extern const char *const EN_SECTION_NAME[EN_NSECTIONS];
+extern const char *const EN_STYLE_NAME[EN_NSTYLES];
+typedef struct {
+    uint32_t pass;                              /* passes completed */
+    uint16_t bars;                              /* this section's length */
+    uint8_t section;
+} en_arr_t;
+typedef struct {
+    uint8_t section, level;                     /* the drums: 0 none, 1 hats, 2 light, 3 full, 4 half time */
+    uint8_t character;                          /* the harmony: 0 alone, 1 drifting, 2 grown, 3 the peak */
+    uint8_t ramp;                               /* bars the drums take to arrive */
+    uint8_t bass, touch;                        /* the bass's level and how firmly the piano plays, % */
+} en_part_t;
+void en_arr_first(en_arr_t *a, uint32_t seed, int style, int energy);
+void en_arr_next(en_arr_t *a, uint32_t seed, int style, int energy);
+void en_arr_range(int style, int section, int energy, int *lo_bars, int *hi_bars);
+void en_arr_part(const en_arr_t *a, uint32_t bar_in, int style, int energy, en_part_t *out);   /* a bar of the section */
+/* a break wanted at this bar of the song: its length in bars, 0 none, and *in how many of them are already gone. breaks:
+ * the knob, 50 the style's own rate. It always ends with its phrase */
+int en_arr_break(uint32_t bar, int level, int style, int breaks, uint32_t seed, uint32_t *in);
+const brk_rhythm_t *en_style_rhythm(int style);
+extern volatile uint8_t en_section, en_style;   /* for the screen: what is playing */
+extern volatile uint8_t en_drum_level, en_break_bars;   /* the level now; the length of the break now, 0 none */
+#if defined EN_HOST || defined PLAT_HOST
+typedef struct {                                /* a fixed song in place of the arranger */
+    uint16_t step;
+    uint8_t level, character, ramp, bass, touch;
+} en_script_t;
+void en_test_script(const en_script_t *s, int n);   /* after en_init; 0 the arranger again */
+void en_test_ticks(uint32_t n);                 /* n sixteenths at once, no time passing: hours in a test */
+void en_test_jump(uint32_t step);               /* the song's counter, as if it had played this far */
+/* each bar as it starts: step, section, level, character, break's bars */
+extern void (*en_trace)(uint32_t step, int section, int level, int character, int break_bars);
+#endif
 /* the demo's harmony: a small vocabulary of functions (ids), a walk over it, and what each is in a pool; pure and testable.
  * See "the demo's song" in amb.c. en_harm_name, _bass, _colour, _tones, en_bass_at and en_motif_note: as in Ionian */
 typedef struct {
     uint8_t chord[4];
     uint8_t section, age, exiting, since, next_sub, borrowed;
+    uint8_t away, nudge;                       /* cycles since it was last all home; a move is due whatever the level */
 } en_harm_t;
 enum { EN_FAM_MAJOR, EN_FAM_MINOR, EN_FAM_SPARSE };
 typedef struct {                               /* a chord in a pool: pitch classes in semitones above the tonic */
@@ -136,14 +181,11 @@ int en_pool_nearest(uint32_t pool, int root, int note);        /* the pool's not
 void en_home_voicing(uint32_t pool, int root, uint8_t keys[4][4], uint8_t pad[4][4]);
 void en_voice_cycle(const en_harm_t *was, const en_harm_t *now, const en_hchord_t *ch, int anew, int root,
                     const uint8_t home_k[4][4], const uint8_t home_p[4][4], uint8_t keys[4][4], uint8_t pad[4][4]);
-void en_cycle_voicing_pool(uint32_t cycle, uint32_t seed, int level, uint32_t pool, int root, uint8_t keys[4][4], uint8_t pad[4][4]);
 int en_bass_ch(int id, const en_hchord_t *ch, const en_hchord_t *nx, uint32_t pool, uint32_t cycle, uint32_t cs, int level,
                uint32_t seed, int *len);
 int en_motif_note_ch(int m, int n, const en_hchord_t *ch);
 void en_harm_step(en_harm_t *st, uint32_t cycle, uint32_t seed, int level);   /* from the last cycle's state; cycle 0 starts it */
-void en_cycle_chords(uint32_t cycle, uint32_t seed, int level, uint8_t *out);  /* the four chords; a pure function */
-void en_cycle_voicing(uint32_t cycle, uint32_t seed, int level, int root, uint8_t keys[4][4], uint8_t pad[4][4]);
-int en_song_level(uint32_t cycle);             /* the fixed timeline's level at that cycle's seam */
+void en_harm_new_pass(en_harm_t *st);          /* a new pass: another place on the way, a borrowed chord allowed again */
 int en_harm_count(void);
 const char *en_harm_name(int id);
 int en_harm_bass(int id);                      /* the bass's pitch class */
@@ -158,7 +200,9 @@ int en_motif_note(int m, int n, const uint8_t *chords);   /* its note over a cyc
 #define EN_ECHO_STEPS 6                        /* the echo's default place, in sixteenths */
 extern volatile uint32_t en_ep_notes, en_ep_chords, en_ep_singles, en_ep_steals;
 extern volatile uint8_t en_ep_peak;
-int en_bass_at(int id, int next_id, uint32_t cycle, uint32_t cs, int level, uint32_t seed, int *len);   /* levels 2, 3: pure */
+#define EN_HOME_CYCLES 24                      /* it goes home after this long away, whatever the arranger asks */
+enum { EN_BASS_LIGHT = 2, EN_BASS_FULL = 3, EN_BASS_ROLL = 5, EN_BASS_LONG = 6 };   /* the figures en_bass_* draw from */
+int en_bass_at(int id, int next_id, uint32_t cycle, uint32_t cs, int level, uint32_t seed, int *len);   /* level: EN_BASS_*: pure */
 extern volatile uint32_t en_bass_notes;
 extern volatile uint8_t en_hat_peak;           /* the hat voices sounding at once: at most two */
 extern volatile uint8_t en_cycle_now[4];       /* the chords playing now */

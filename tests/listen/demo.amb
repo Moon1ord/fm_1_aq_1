@@ -1,7 +1,0 @@
-# the listening demo: the whole fixed timeline, as the device would play it from power-on (see "the demo's song" in
-# app/dsp/amb.c). Not one of the tests.
-#   PYTHON=.venv/bin/python3 sh build.sh --host && app/build/host/aq1_host tests/listen/demo.amb app/build/listen
-master 2430
-wav demo.wav
-wait 253000
-wavstop

@@ -1025,7 +1025,8 @@ static const char *const CHORD_Q[][2] = {
     {"", "major"}, {"m", "minor"}, {"7", "7"}, {"M7", "major 7"}, {"m7", "minor 7"}, {"6", "6"},
     {"m6", "minor 6"}, {"add9", "add 9"}, {"madd9", "minor add 9"}, {"aug", "augmented"}, {"dim", "diminished"},
     {"dim7", "diminished 7"}, {"m7b5", "half diminished"}, {"mM7", "minor major 7"}, {"sus2", "suspended 2"},
-    {"sus4", "suspended 4"}, {"7sus4", "7 suspended 4"}, {"5", "5"},
+    {"sus4", "suspended 4"}, {"7sus4", "7 suspended 4"}, {"5", "5"}, {"M9", "major 9"}, {"9", "9"}, {"m9", "minor 9"},
+    {"m11", "minor 11"}, {"6/9", "6 9"}, {"m6/9", "minor 6 9"}, {"9sus", "9 suspended"}, {"13sus", "13 suspended"},
 };
 #define NCHORD_Q (sizeof CHORD_Q / sizeof CHORD_Q[0])
 

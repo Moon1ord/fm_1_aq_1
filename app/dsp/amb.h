@@ -90,9 +90,9 @@ void en_midi_out(uint32_t st, uint32_t d1, uint32_t d2);
 
 /* state for the screen (UI) */
 extern volatile uint8_t en_playing, en_frozen, en_ext;
-extern volatile uint8_t en_chord[EN_NPAD];     /* the chord's notes (MIDI), pad voices' targets */
-extern volatile uint8_t en_chord_root;         /* the chord's root, MIDI pitch class 0..11 */
-extern volatile uint8_t en_chord_n;            /* its distinct tones: 3 or 4 */
+extern volatile uint8_t en_chord[EN_NPAD];     /* the chord's notes (MIDI), the piano's hand: with the root, its name */
+extern volatile uint8_t en_chord_root;         /* the chord's root (not always its bass), MIDI pitch class 0..11 */
+extern volatile uint8_t en_chord_n;            /* its distinct tones, with the root: 2 .. 5 */
 extern volatile float en_drift;                /* 0..1: how far to the next chord */
 extern volatile float en_pad_level, en_bass_level;
 extern volatile uint8_t en_loop_pos[EN_NLOOP];
@@ -114,12 +114,32 @@ void en_voice_lead(const int *from, const int *pcs, int ntones, int *to, int lo,
 const char *en_chord_name(const int *pcs, int n, char *buf);   /* "Em7", "Dsus4", "C" ... */
 
 #define EN_HARM_SEED 7u                         /* the fixed seed of this render: harmony and drums */
-/* the demo's harmony: a small vocabulary of chords (ids), a walk over it, pure and testable. Tones in semitones above
- * the tonic. See "the demo's song" in amb.c. */
+/* the demo's harmony: a small vocabulary of functions (ids), a walk over it, and what each is in a pool; pure and testable.
+ * See "the demo's song" in amb.c. en_harm_name, _bass, _colour, _tones, en_bass_at and en_motif_note: as in Ionian */
 typedef struct {
     uint8_t chord[4];
-    uint8_t section, age, exiting, since, next_sub;
+    uint8_t section, age, exiting, since, next_sub, borrowed;
 } en_harm_t;
+enum { EN_FAM_MAJOR, EN_FAM_MINOR, EN_FAM_SPARSE };
+typedef struct {                               /* a chord in a pool: pitch classes in semitones above the tonic */
+    uint8_t root, bass, col;                   /* col: its passing colour */
+    uint8_t family, borrowed, tonic;           /* borrowed: some of its tones may lie outside the pool; tonic: en_harm_walk's root */
+    uint16_t tones;                            /* bass, hand and pad, bit i */
+    int8_t keys[4], pad[4];
+} en_hchord_t;
+int en_pool_family(uint32_t pool);
+void en_harm_resolve(uint32_t pool, int id, en_hchord_t *out);
+/* the pure function: state, pool, root, cycle, seed, level in; next state and the four chords out */
+void en_harm_walk(en_harm_t *st, uint32_t pool, int root, uint32_t cycle, uint32_t seed, int level, en_hchord_t *out);
+const char *en_hchord_name(const en_hchord_t *c, char *buf);   /* as the screen names it */
+int en_pool_nearest(uint32_t pool, int root, int note);        /* the pool's note nearest a MIDI note */
+void en_home_voicing(uint32_t pool, int root, uint8_t keys[4][4], uint8_t pad[4][4]);
+void en_voice_cycle(const en_harm_t *was, const en_harm_t *now, const en_hchord_t *ch, int anew, int root,
+                    const uint8_t home_k[4][4], const uint8_t home_p[4][4], uint8_t keys[4][4], uint8_t pad[4][4]);
+void en_cycle_voicing_pool(uint32_t cycle, uint32_t seed, int level, uint32_t pool, int root, uint8_t keys[4][4], uint8_t pad[4][4]);
+int en_bass_ch(int id, const en_hchord_t *ch, const en_hchord_t *nx, uint32_t pool, uint32_t cycle, uint32_t cs, int level,
+               uint32_t seed, int *len);
+int en_motif_note_ch(int m, int n, const en_hchord_t *ch);
 void en_harm_step(en_harm_t *st, uint32_t cycle, uint32_t seed, int level);   /* from the last cycle's state; cycle 0 starts it */
 void en_cycle_chords(uint32_t cycle, uint32_t seed, int level, uint8_t *out);  /* the four chords; a pure function */
 void en_cycle_voicing(uint32_t cycle, uint32_t seed, int level, int root, uint8_t keys[4][4], uint8_t pad[4][4]);

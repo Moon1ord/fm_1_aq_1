@@ -1,0 +1,45 @@
+# demo5: changes while it plays, as a person would. It starts in D Lydian; about every 50 s something changes; the chords
+# follow at the next seam (every 22.59 s: steps 256 n), single notes and motifs at once.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && app/build/host/aq1_host tests/listen/demo5_live.amb app/build/listen
+master 2430
+wav demo5_live.wav
+wait 2000
+shot live_a_d_lydian.png
+wait 47960
+# 0:50 the mode: Lydian to Aeolian (D), two detents
+turn ALGO 2
+expect par20 5
+expect pool 0x5AD
+wait 17840
+shot live_b_d_aeolian_chords.png
+wait 32000
+# 1:40 the root: D to A
+tap GLO
+spin K1 7
+tap HOME
+expect par19 9
+wait 15000
+shot live_c_a_aeolian_chords.png
+wait 34800
+# 2:30 a key: F# in (A Aeolian with a major sixth)
+tapkey 1
+expect pool 0x7AD
+wait 3000
+# 2:33 a key: F out: A Dorian's notes, reached by hand
+tapkey 0
+expect pool 0x6AD
+wait 7000
+shot live_d_a_dorian_keys_chords.png
+wait 40000
+# 3:20 back: the mode, then the root
+turn ALGO -2
+tap GLO
+spin K1 -7
+tap HOME
+expect par19 2
+expect par20 3
+expect pool 0xAD5
+wait 5000
+shot live_e_d_lydian_chords.png
+wait 48000
+wavstop

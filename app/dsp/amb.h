@@ -113,6 +113,27 @@ int en_chord_tones(uint32_t pool, int root, int deg, int *pcs);
 void en_voice_lead(const int *from, const int *pcs, int ntones, int *to, int lo, int hi);
 const char *en_chord_name(const int *pcs, int n, char *buf);   /* "Em7", "Dsus4", "C" ... */
 
+#define EN_HARM_SEED 3u                         /* the fixed seed of this render: harmony and drums */
+/* the demo's harmony: a small vocabulary of chords (ids), a walk over it, pure and testable. Tones in semitones above
+ * the tonic. See "the demo's song" in amb.c. */
+typedef struct {
+    uint8_t chord[4];
+    uint8_t section, age, exiting, since, next_sub;
+} en_harm_t;
+void en_harm_step(en_harm_t *st, uint32_t cycle, uint32_t seed, int level);   /* from the last cycle's state; cycle 0 starts it */
+void en_cycle_chords(uint32_t cycle, uint32_t seed, int level, uint8_t *out);  /* the four chords; a pure function */
+void en_cycle_voicing(uint32_t cycle, uint32_t seed, int level, int root, uint8_t keys[4][4], uint8_t pad[4][4]);
+int en_song_level(uint32_t cycle);             /* the fixed timeline's level at that cycle's seam */
+int en_harm_count(void);
+const char *en_harm_name(int id);
+int en_harm_bass(int id);                      /* the bass's pitch class */
+int en_harm_plain(int id);                     /* the family's plain chord */
+int en_harm_sub(int id);                       /* the relative along the graph, -1 none */
+int en_harm_home(int slot);
+int en_harm_section(int slot);
+uint32_t en_harm_tones(int id);                /* all its pitch classes, bit i */
+extern volatile uint8_t en_cycle_now[4];       /* the chords playing now */
+
 /* the pieces: recipes for every parameter (Tune and MIDI out included, but they are the player's) */
 #define EN_NPIECES 8
 const char *en_piece_name(int i);

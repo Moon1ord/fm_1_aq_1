@@ -1,0 +1,6 @@
+# the listening demo, second render: the harmony grows, the drums live a little. Same timeline as demo.amb, a new file.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && app/build/host/aq1_host tests/listen/demo2.amb app/build/listen
+master 2430
+wav demo2.wav
+wait 253000
+wavstop

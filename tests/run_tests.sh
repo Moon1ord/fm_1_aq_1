@@ -26,6 +26,8 @@ run() {
 }
 run amb sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promotion -Werror -DEN_HOST -Iapp/dsp -Ibase/include \
     -o $OUT/amb_test tests/host/amb_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/amb_test"
+run harm sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promotion -Werror -DEN_HOST -Iapp/dsp -Ibase/include \
+    -o $OUT/harm_test tests/host/harm_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/harm_test"
 run brk sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promotion -Werror -Iapp/dsp -o $OUT/brk_test tests/host/brk_test.c app/dsp/brk.c -lm && $OUT/brk_test"
 if [ -f $B/aq1.fwsc ]; then
     run ota-entry sh -c "$CC -w -o $OUT/ota_test base/tests/ota_test.c && $OUT/ota_test $B/aq1.fwsc"

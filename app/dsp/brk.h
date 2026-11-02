@@ -26,10 +26,13 @@ void brk_levels(float core, float top, float ramp_samples);   /* call on a chang
                                          restarts the ramp from the remaining distance */
 void brk_step(uint32_t sixteenth);       /* one call a sixteenth, counted from the start */
 /* the demo's patterns: one call a sixteenth, instead of brk_step. A level, 0 none .. 3 two-step (the tables are in
- * brk.c); flags: BRK_DROP the kit holds its breath, BRK_SWELL the rising air starts here. Returns the kick's strength,
- * 0 none, what the melodic bus ducks under. */
+ * brk.c); flags: BRK_DROP the kit holds its breath, BRK_SWELL the rising air starts here; seed: the player's small
+ * variations are a pure function of it and the step. Returns the kick's strength, 0 none, what the melodic bus ducks
+ * under. */
 enum { BRK_DROP = 1, BRK_SWELL = 2 };
-float brk_pattern_step(uint32_t step, int level, int flags);
+float brk_pattern_step(uint32_t step, int level, int flags, uint32_t seed);
+extern volatile char brk_hit_core, brk_hit_top;   /* the sound this step chose on each stem: its pattern letter, else '.' */
+extern volatile uint32_t brk_kicks, brk_snares;
 void brk_stop(void);                     /* what sounds fades out; the next step starts cleanly */
 void brk_render(float *out, uint32_t n); /* ADDS mono */
 void brk_render_stem(int stem, float *out, uint32_t n);   /* ADDS one stem, mono */

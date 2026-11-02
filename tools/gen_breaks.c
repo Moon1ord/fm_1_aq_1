@@ -24,8 +24,8 @@ typedef struct {
     double kick_hz, kick_sweep, kick_dec, sn_hz, sn_dec, sn_tail, sn_lp, hat_hp, hat_dec;
 } kit_t;
 static const kit_t KIT[2] = {
-    {"GLASS", 55.0, 58.0, 0.135, 188.0, 0.085, 0.27, 4300.0, 5600.0, 0.020},
-    {"MOSS", 49.0, 48.0, 0.160, 172.0, 0.100, 0.32, 3200.0, 4800.0, 0.026},
+    {"GLASS", 55.0, 58.0, 0.135, 188.0, 0.050, 0.095, 4300.0, 4600.0, 0.022},
+    {"MOSS", 49.0, 48.0, 0.160, 172.0, 0.060, 0.110, 3200.0, 4200.0, 0.028},
 };
 
 static uint32_t rs = 0x1234567u;
@@ -83,10 +83,10 @@ static void snare(const kit_t *k, int slice, int nsl, int lag, double vel, doubl
         lp1 += cl * ((nz - hp) - lp1);
         lp2 += cl * (lp1 - lp2);
         ph += (k->sn_hz * (1.0 + 0.10 * exp(-t / 0.012))) / SR;
-        x = sin(2.0 * PI * ph) * 0.58 * exp(-t / 0.060);                     /* the head */
-        x += sin(2.0 * PI * ph * 1.59) * 0.22 * exp(-t / 0.036);
+        x = sin(2.0 * PI * ph) * 0.40 * exp(-t / 0.036);                     /* the head: warm, and gone */
+        x += sin(2.0 * PI * ph * 1.59) * 0.18 * exp(-t / 0.024);
         x += (sin(2.0 * PI * 1190.0 * t) * 0.5 + sin(2.0 * PI * 1860.0 * t) * 0.3) * 0.34 * dark * exp(-t / 0.0065);   /* the rim */
-        x += lp2 * (0.90 * exp(-t / k->sn_dec) + 0.42 * exp(-t / k->sn_tail));   /* the wires, then their long soft tail */
+        x += lp2 * (0.95 * exp(-t / k->sn_dec) + 0.16 * exp(-t / k->sn_tail));   /* the wires, tight */
         add(slice, nsl, lag, i, x * a * vel);
     }
 }
@@ -152,27 +152,44 @@ static void swell(int slice, int nsl, double vel)
     }
 }
 
+/* a soft tom for a pickup at a phrase's end: low, round, quickly over */
+static void tom(const kit_t *k, int slice, int nsl, int lag, double vel)
+{
+    double ph = 0.0;
+    int i, n = nsl * SLICE - lag;
+    for (i = 0; i < n; i++) {
+        double t = i / SR, a = 1.0 - exp(-t / 0.003);
+        ph += (k->sn_hz * 0.62 * (1.0 + 0.12 * exp(-t / 0.03))) / SR;
+        add(slice, nsl, lag, i, sin(2.0 * PI * ph) * exp(-t / 0.075) * a * vel);
+    }
+}
+
 /* the banks: see brk.c's BANK_CORE and BANK_TOP */
 static void render_core(const kit_t *k)
 {
     memset(buf, 0, sizeof buf);
     kick(k, 0, 6, 1.0, 1.0);                                 /* K */
     kick(k, 6, 6, 0.70, 0.65);                               /* k: softer, rounder */
-    snare(k, 12, 10, (int)(0.019 * SR), 0.62, 1.0);          /* S: well behind */
-    snare(k, 22, 10, (int)(0.009 * SR), 0.48, 0.72);         /* s: softer, darker, less late */
+    snare(k, 12, 6, (int)(0.019 * SR), 0.80, 1.0);           /* S: well behind */
+    snare(k, 18, 6, (int)(0.009 * SR), 0.60, 0.72);          /* s: softer, darker, less late */
+    tom(k, 24, 4, (int)(0.010 * SR), 0.30);                  /* t: a soft pickup */
 }
 
 static void render_top(const kit_t *k)
 {
     memset(buf, 0, sizeof buf);
-    hat(0, 2, 0, 0.62, k->hat_hp, 0.0009, k->hat_dec);                       /* h */
-    hat(2, 2, (int)(0.012 * SR), 0.42, k->hat_hp * 1.1, 0.0012, k->hat_dec * 0.75);  /* i: softer, later */
-    hat(4, 6, 0, 0.36, k->hat_hp * 0.9, 0.006, 0.115);                       /* o: open, a long soft breath */
-    ghost(k, 10, 3, (int)(0.014 * SR), 0.62, 1.0);                           /* g */
-    ghost(k, 13, 3, (int)(0.022 * SR), 0.42, 0.75);                          /* f: softer, later */
-    rim(16, 2, (int)(0.008 * SR), 0.5);                                      /* r */
-    hat(18, 2, 0, 0.34, k->hat_hp * 0.7, 0.009, 0.024);                      /* x: a shaker's push */
-    swell(20, 12, 0.85);                                                     /* ~ */
+    /* three closed hats, not one sample: each a little different, the off ones later (the swing is in the sound) */
+    hat(0, 1, 0, 1.0, k->hat_hp, 0.0010, k->hat_dec);                       /* h: on the beat */
+    hat(1, 1, (int)(0.006 * SR), 1.15, k->hat_hp * 1.12, 0.0013, k->hat_dec * 0.80);   /* j: a little later, thinner */
+    hat(2, 1, (int)(0.012 * SR), 0.80, k->hat_hp * 0.86, 0.0016, k->hat_dec * 1.15);   /* l: later, rounder */
+    hat(3, 1, (int)(0.010 * SR), 0.62, k->hat_hp * 1.1, 0.0014, k->hat_dec * 0.8);     /* i: the quiet one, level 1's */
+    hat(4, 6, 0, 0.60, k->hat_hp * 0.9, 0.006, 0.115);                       /* o: open, a long soft breath */
+    ghost(k, 10, 2, (int)(0.014 * SR), 0.085, 1.0);                           /* g */
+    ghost(k, 12, 2, (int)(0.022 * SR), 0.07, 0.75);                          /* f: softer, later */
+    ghost(k, 14, 2, (int)(0.008 * SR), 0.05, 0.60);                          /* e: barely touched */
+    rim(16, 2, (int)(0.008 * SR), 0.07);                                     /* r */
+    hat(18, 2, 0, 0.30, k->hat_hp * 0.7, 0.009, 0.024);                      /* x: a shaker's push */
+    swell(20, 12, 0.22);                                                     /* ~ */
 }
 
 /* IMA ADPCM (the standard's tables) */

@@ -17,7 +17,7 @@ static const int8_t INDEX[16] = {-1, -1, -1, -1, 2, 4, 6, 8, -1, -1, -1, -1, 2, 
 typedef struct {
     uint32_t pos;                        /* the next source sample to decode */
     int32_t pred, idx, left;             /* left: source samples before this slice is over */
-    float frac, s0, s1, g, dg;
+    float frac, s0, s1, g, dg, vel;      /* vel: this hit's gain */
     int8_t slice, kit;
     uint8_t on;
 } voice_t;
@@ -32,10 +32,12 @@ static stem_t stem[BRK_NSTEM];
 static int kit;
 static float inc = BRK_RATE / 44100.0f, evolve, busy, tol = TOL_INT;
 static float xf_out = XF;                /* how fast what sounds gets out of a new hit's way */
+static float next_vel = 1.0f;            /* the gain of the next voice started */
 static uint8_t fill;
 static uint32_t rs = 0x2545F491u;
 
-volatile uint32_t brk_hits, brk_jumps, brk_decoded;
+volatile uint32_t brk_hits, brk_jumps, brk_decoded, brk_kicks, brk_snares;
+volatile char brk_hit_core, brk_hit_top;
 volatile int8_t brk_st_core, brk_st_top;
 
 static uint32_t rnd(void)
@@ -92,6 +94,7 @@ static void voice_start(voice_t *v, int st, int slice, float t)
     brk_decoded += 2u;
     v->g = 0.0f;
     v->dg = XF;
+    v->vel = next_vel;
     v->on = 1u;
 }
 
@@ -156,7 +159,8 @@ void brk_init(void)
     pat[0].cur = pat[1].cur = -1;
     swelling = 0u;
     fill = 0u;
-    brk_hits = brk_jumps = brk_decoded = 0u;
+    brk_hits = brk_jumps = brk_decoded = brk_kicks = brk_snares = 0u;
+    next_vel = 1.0f;
     brk_st_core = brk_st_top = -1;
 }
 
@@ -212,16 +216,23 @@ void brk_step(uint32_t sixteenth)
  * A stem is a bank of sounds (tools/gen_breaks.c lays them out; these maps must match it). A pattern names a sound on
  * a step; the following steps ask for its following slices, so the sound rings out over stem_step's seamless path and
  * no join is heard; and when the sound is over the stem goes quiet. One grid, 170 BPM sixteenths; the levels differ
- * only in what they choose. A new hit takes over from the tail it cuts over about 45 ms, not 2 ms. */
-#define PAT_XF (1.0f / 2048.0f)
+ * only in what they choose. The tables are the skeleton; on it, what a player would do differently each time, all of
+ * it a pure function of (step, level, seed):
+ *   a gain for each hit: a stable accent across the bar, a small human error around it
+ *   which closed hat: three sounds, the off ones later (swing), so no machine gun
+ *   a few soft ghosts, from a small set of shapes, changing from bar to bar
+ *   now and then the softer snare on the backbeat, the open hat at a phrase's end
+ *   every four bars a small change in the last bar: a dropped kick, a ghost run, a rim or tom pickup. The backbeat stays. */
+#define PAT_XF (1.0f / 2048.0f)          /* a new hit takes over from the tail it cuts over about 45 ms, not 2 ms */
+#define PAT_CHOKE (1.0f / 500.0f)        /* the top: a hat chokes what rang before it, about 11 ms */
 #define PAT_N 64u
 typedef struct {
     char c;
     uint8_t slice, len;
 } bank_t;
-static const bank_t BANK_CORE[] = {{'K', 0, 6}, {'k', 6, 6}, {'S', 12, 10}, {'s', 22, 10}, {0, 0, 0}};
-static const bank_t BANK_TOP[] = {{'h', 0, 2},  {'i', 2, 2},  {'o', 4, 6},  {'g', 10, 3}, {'f', 13, 3},
-                                  {'r', 16, 2}, {'x', 18, 2}, {'~', 20, 12}, {0, 0, 0}};
+static const bank_t BANK_CORE[] = {{'K', 0, 6}, {'k', 6, 6}, {'S', 12, 6}, {'s', 18, 6}, {'t', 24, 4}, {0, 0, 0}};
+static const bank_t BANK_TOP[] = {{'h', 0, 1},  {'j', 1, 1},  {'l', 2, 1},  {'i', 3, 1},  {'o', 4, 6},  {'g', 10, 2},
+                                  {'f', 12, 2}, {'e', 14, 2}, {'r', 16, 2}, {'x', 18, 2}, {'~', 20, 12}, {0, 0, 0}};
 
 /* four bars of 170: at level 2 sixteen steps are a half-time bar (85 BPM: kick, then the one backbeat snare) */
 static const char PAT_CORE[4][PAT_N + 1] = {
@@ -233,9 +244,30 @@ static const char PAT_CORE[4][PAT_N + 1] = {
 static const char PAT_TOP[4][PAT_N + 1] = {
     "................................................................",
     "....i.......f...............i.......i.........f.............o...",
-    "....h.......h.i.....h.....g.h.......h.......h.i.....h.......o...",
-    "..h...i...h...i...h...i.g.h...i...h...if..h...i...h...i.g.h...o.",
+    "....h.......h.h.....h.......h.......h.......h.h.....h.......o...",
+    "..h...h...h...h...h...h...h...h...h...h...h...h...h...h...h...o.",
 };
+/* the bar's accent, on the hats */
+static const uint8_t HAT_ACC[16] = {90, 60, 84, 60, 100, 60, 90, 60, 94, 60, 80, 60, 100, 60, 88, 60};
+/* ghosts, by level (2, 3): which of a bar's sixteen steps. Off the kick, the snare and the hats' places */
+#define NGHOST 6
+#define B1(a) (1u << (a))
+static const uint16_t GHOSTS[2][NGHOST] = {
+    {0u, B1(11), 0u, B1(6), B1(11) | B1(13), B1(3)},
+    {0u, B1(7), B1(15), 0u, B1(7) | B1(9), B1(3)},
+};
+#undef B1
+
+static uint32_t hmix(uint32_t seed, uint32_t what, uint32_t a)
+{
+    uint32_t x = (seed + what * 0x9E3779B1u) ^ (a * 2654435761u);
+    x ^= x >> 15;
+    x *= 0x85EBCA77u;
+    x ^= x >> 13;
+    x *= 0xC2B2AE3Du;
+    return x ^ x >> 16;
+}
+static float hfrac(uint32_t h) { return (float)(h >> 8) * (1.0f / 16777216.0f); }   /* 0..1 */
 
 static const bank_t *bank_find(const bank_t *b, char c)
 {
@@ -245,12 +277,14 @@ static const bank_t *bank_find(const bank_t *b, char c)
     return 0;
 }
 
-static void pat_play(int st, const bank_t *hit)
+static void pat_play(int st, const bank_t *hit, float vel)
 {
     if (hit) {
         pat[st].cur = (int8_t)hit->slice;
         pat[st].left = (uint8_t)(hit->len - 1u);
+        next_vel = vel;
         stem_step(st, hit->slice);
+        next_vel = 1.0f;
     } else if (pat[st].left) {
         pat[st].cur++;
         pat[st].left--;
@@ -261,26 +295,71 @@ static void pat_play(int st, const bank_t *hit)
     }
 }
 
-float brk_pattern_step(uint32_t step, int level, int flags)
+enum { PV_NONE, PV_DROP, PV_RUN, PV_RIM, PV_TOM };
+static const uint8_t PHRASE_END[8] = {PV_NONE, PV_DROP, PV_RUN, PV_NONE, PV_RIM, PV_RUN, PV_TOM, PV_DROP};
+
+float brk_pattern_step(uint32_t step, int level, int flags, uint32_t seed)
 {
-    const uint32_t s = step % PAT_N;
-    const char *core = PAT_CORE[(unsigned)level < 4u ? level : 0], *top = PAT_TOP[(unsigned)level < 4u ? level : 0];
-    const char cc = flags & BRK_DROP ? '.' : core[s];
-    char tc = flags & BRK_SWELL ? '~' : flags & BRK_DROP ? '.' : top[s];
-    const bank_t *hc = bank_find(BANK_CORE, cc);
+    const uint32_t s = step % PAT_N, bs = step % 16u, bar = step / 16u, phrase = step / PAT_N;
+    const int lv = (unsigned)level < 4u ? level : 0;
+    const uint32_t pv = lv >= 2 && s >= 48u ? PHRASE_END[hmix(seed, 1u, phrase) & 7u] : PV_NONE;
+    const uint32_t h = hmix(seed, 2u, step);
+    char cc = flags & BRK_DROP ? '.' : PAT_CORE[lv][s];
+    char tc = flags & BRK_SWELL ? '~' : flags & BRK_DROP ? '.' : PAT_TOP[lv][s];
+    const bank_t *hc;
+    float vc, vt;
+    /* what the core does with this hit */
+    if (pv == PV_DROP && cc == 'k')
+        cc = '.';
+    if (pv == PV_TOM && s == 62u && cc == '.')
+        cc = 't';
+    if (cc == 'S' && h % 6u == 0u)
+        cc = 's';                        /* now and then, the softer one */
+    else if (cc == 's' && h % 5u == 0u)
+        cc = 'S';                        /* and the other way round */
+    vc = cc == 'K' || cc == 'k' ? 0.95f + 0.10f * hfrac(h) : 0.92f + 0.14f * hfrac(h);
+    /* what the top does with this step */
+    if (lv >= 2 && !(flags & (BRK_DROP | BRK_SWELL))) {
+        if (tc == 'o' && (phrase & 1u) == 0u && (h & 1u))
+            tc = 'h';                    /* the open hat: at an eight bars' end, and sometimes at a four's */
+        if (tc == 'h' && (bs & 3u) == 2u)
+            tc = "hjjl"[h >> 3 & 3u];    /* the off sixteenths: mostly later, and not the same twice */
+        else if (tc == 'h' && (bs & 3u) == 0u && (h >> 3 & 3u) == 0u)
+            tc = 'l';
+        if (pv == PV_RUN && s >= 61u)
+            tc = s == 61u ? 'e' : s == 62u ? 'f' : 'g';   /* two or three rising ghosts */
+        else if (pv == PV_RIM && s == 62u)
+            tc = 'r';
+        else if (tc == '.' && !(pv == PV_RUN) && GHOSTS[lv - 2][hmix(seed, 3u, bar) % NGHOST] >> bs & 1u)
+            tc = (h >> 5) & 1u ? 'f' : 'e';
+    }
     if (flags & BRK_SWELL)
         swelling = 12u;
     else if (swelling) {                 /* the rising air has the top to itself until it has arrived */
         swelling--;
         tc = '.';
     }
-    xf_out = PAT_XF;
+    if (tc == 'h' || tc == 'j' || tc == 'l' || tc == 'i')
+        vt = (float)HAT_ACC[bs] * 0.01f * (0.88f + 0.24f * hfrac(hmix(seed, 4u, step)));
+    else if (tc == 'g' || tc == 'f' || tc == 'e')
+        vt = 0.72f + 0.42f * hfrac(hmix(seed, 4u, step));
+    else
+        vt = 1.0f;
+    hc = bank_find(BANK_CORE, cc);
     brk_st_core = (int8_t)(hc ? hc->slice : -1);
-    pat_play(BRK_CORE, hc);
-    pat_play(BRK_TOP, bank_find(BANK_TOP, tc));
+    brk_hit_core = cc;
+    brk_hit_top = tc;
+    xf_out = PAT_XF;
+    pat_play(BRK_CORE, hc, vc);
+    xf_out = PAT_CHOKE;
+    pat_play(BRK_TOP, bank_find(BANK_TOP, tc), vt);
+    if (cc == 'K' || cc == 'k')
+        brk_kicks++;
+    if (cc == 'S' || cc == 's')
+        brk_snares++;
     if (hc && stem[BRK_CORE].tgt > 0.0f)
         brk_hits++;
-    return cc == 'K' ? 1.0f : cc == 'k' ? 0.7f : 0.0f;
+    return cc == 'K' ? vc : cc == 'k' ? 0.7f * vc : 0.0f;
 }
 
 void brk_stop(void)
@@ -335,7 +414,7 @@ void brk_render_stem(int st, float *out, uint32_t n)
             }
             x = v->s0 + (v->s1 - v->s0) * v->frac;
             lv += dl;
-            out[j] += x * v->g * lv;
+            out[j] += x * v->g * lv * v->vel;
         }
     }
     s->lvl = l1;

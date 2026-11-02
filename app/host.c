@@ -4,9 +4,26 @@
  * "expect", its command, a reboot and the screen reader's dump.
  *
  * AMB-1's checks: playing frozen view piece pool dirty sixteenths ext pad_level bass_level chordroot chordN loopnotes
- * parN battery (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min). Its commands: storeamb
- * (what AMB-1 leaves in the store: its magic and format, nothing of ours); battery N (the
- * battery read as N, plat.h's plat_battery: -1..4; "battery off" the simulator's own, full). */
+ * parN battery section style level (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min). Its commands:
+ * storeamb (what AMB-1 leaves in the store: its magic and format, nothing of ours); battery N (the battery read as N,
+ * plat.h's plat_battery: -1..4; "battery off" the simulator's own, full); seed N (the musical seed, from the next choice on;
+ * until told it is EN_HARM_SEED); setpar P V (parameter P to V, as a knob would); style NAME; energy N; breaks N; trace FILE
+ * (a line for each bar: step section level character break's bars) and trace off. */
+#include <stdio.h>
+#include <strings.h>
+static FILE *trace_f;
+static void trace_bar(uint32_t step, int section, int level, int character, int break_bars)
+{
+    if (trace_f)
+        fprintf(trace_f, "%u %d %d %d %d\n", step, section, level, character, break_bars);
+}
+static void host_par(int p, int v)
+{
+    if ((unsigned)p < P_NPARAMS) {
+        proj.par[p] = (int16_t)v;
+        en_set(p, v);
+    }
+}
 
 int app_expect(const char *what, int *got)
 {
@@ -27,6 +44,12 @@ int app_expect(const char *what, int *got)
         g = ui.dirty;
     else if (!strcmp(what, "hits"))
         g = (int)en_hits;
+    else if (!strcmp(what, "section"))
+        g = en_section;
+    else if (!strcmp(what, "style"))
+        g = en_style;
+    else if (!strcmp(what, "level"))
+        g = en_drum_level;
     else if (!strcmp(what, "sixteenths"))
         g = (int)en_bars;
     else if (!strcmp(what, "ext"))
@@ -55,9 +78,41 @@ int app_expect(const char *what, int *got)
 
 int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, const char *d)
 {
-    (void)b, (void)c, (void)d;
+    (void)c, (void)d;
     if (!strcmp(cmd, "battery")) {               /* battery N: plat_battery as N (-1..4), "battery off" its own */
         batt_host = (int8_t)(strcmp(a, "off") ? atoi(a) : -2);
+        return 1;
+    }
+    if (!strcmp(cmd, "seed")) {
+        en_seed((uint32_t)strtoul(a, 0, 0));
+        return 1;
+    }
+    if (!strcmp(cmd, "setpar")) {
+        host_par(atoi(a), atoi(b));
+        return 1;
+    }
+    if (!strcmp(cmd, "energy")) {
+        host_par(P_ENERGY, atoi(a));
+        return 1;
+    }
+    if (!strcmp(cmd, "breaks")) {
+        host_par(P_BREAKS, atoi(a));
+        return 1;
+    }
+    if (!strcmp(cmd, "style")) {
+        int s;
+        for (s = 0; s < EN_NSTYLES; s++)
+            if (!strcasecmp(a, EN_STYLE_NAME[s])) {
+                host_par(P_STYLE, s);
+                return 1;
+            }
+        return 0;
+    }
+    if (!strcmp(cmd, "trace")) {
+        if (trace_f)
+            fclose(trace_f);
+        trace_f = strcmp(a, "off") ? fopen(a, "w") : 0;
+        en_trace = trace_f ? trace_bar : 0;
         return 1;
     }
     if (!strcmp(cmd, "storeamb")) {               /* what AMB-1 leaves in the store: its magic, its format */

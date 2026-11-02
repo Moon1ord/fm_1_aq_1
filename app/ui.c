@@ -280,11 +280,23 @@ static void set_mode(int m)
     mark_dirty();
 }
 
+/* a new seed at each power-on and each new piece, from the crystal's counter (at boot it only differs by the jitter of the
+ * start, so the master pot's reading goes in too). The simulator's is fixed, so that a scenario repeats: "seed N" there */
+static uint32_t seed_now(void)
+{
+#if defined PLAT_HOST && !defined PLAT_WEB
+    return EN_HARM_SEED;
+#else
+    const uint32_t t = plat_ticks24();
+    return (t ^ t >> 13) * 2654435761u + plat_master();
+#endif
+}
+
 static void set_piece(int i)                    /* the piece playing kept as it is; piece i as it was left */
 {
     project_piece(i);
     project_apply();
-    en_seed(plat_ms());
+    en_seed(seed_now());
     en_regrow();
     say_as("PIECE", piece_name(proj.piece), 0);
     sp_piece();                                  /* a screen reader: the piece with its key and tempo */
@@ -322,7 +334,6 @@ static void button(int b)
             en_play(0);
             say("RESTING", 0);
         } else {
-            en_seed(plat_ms());
             en_play(1);
             say("GROWING", 0);
         }
@@ -1439,6 +1450,7 @@ void ui_init(void)
     memset(&ui, 0, sizeof ui);
     ui.touched = -1;
     lcd_fill(0, 0, 240, 240, K_BG);
+    en_seed(seed_now());
     if (!en_playing)
         en_play(1);                              /* it grows from the start */
     sp_tp.playing = 1;

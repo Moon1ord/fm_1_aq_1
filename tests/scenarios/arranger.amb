@@ -1,0 +1,37 @@
+# The arranger in the simulator: a fixed seed, a style, the energy held down, and all of it repeats.
+master 2430
+expect style 0
+expect section 0
+expect level 0
+expect sixteenths >0
+tap PLAY
+wait 200
+seed 1234
+style roller
+wait 50
+expect style 1
+tap PLAY
+# the first section, then on: the hats come after the intro's two phrases at most (at most 45 s)
+wait 40000
+expect playing 1
+wait 20000
+expect section >0
+# energy 0: hats at most from the next bar
+energy 0
+wait 2000
+expect level <2
+wait 90000
+expect level <2
+expect peak_db_max -0.5
+# back up: drums again in time
+energy 100
+breaks 100
+wait 120000
+expect hits >0
+# a stop and a new start: from the top
+tap PLAY
+wait 200
+tap PLAY
+wait 2000
+expect section 0
+expect level 0

@@ -266,7 +266,7 @@ static void harmony_checks(void)
                     en_hchord_t ch[4];
                     uint8_t hk[4][4], hp[4][4], k[4][4], q[4][4];
                     uint32_t bar = 0u, cy = 0u, in = 0u, lastpass = 0u, passes = 1u, borrowed = 0u;
-                    int gap = 0, s, v, second = 0;
+                    int gap = 0, s, v, second = 0, counted = 0;
                     en_home_voicing(POOLS[p], 2, hk, hp);
                     memcpy(k, hk, sizeof k);
                     memcpy(q, hp, sizeof q);
@@ -304,8 +304,13 @@ static void harmony_checks(void)
                             CHECK(borrowed <= 1u, "%s seed %u: %u borrowed chords in a pass", EN_STYLE_NAME[st], sd, borrowed);
                             gap = home ? 0 : gap + 1;
                             worst = gap > worst ? gap : worst;
-                            if (passes == 2u && a.section == EN_SEC_INTRO && !home)
-                                elsewhere++;
+                            if (passes == 2u && !counted) {       /* the second pass's first chords: a chord of another function */
+                                int sub = 0;
+                                for (s = 0; s < 4; s++)
+                                    sub += en_harm_plain(h.chord[s]) != en_harm_home(s);
+                                elsewhere += sub > 0;
+                                counted = 1;
+                            }
                             cy++;
                         }
                         bar++;
@@ -315,7 +320,8 @@ static void harmony_checks(void)
                 }
                 CHECK(worst <= HOME_WITHIN, "%s energy %d: %d cycles away from home", EN_STYLE_NAME[st], ENERGY[e], worst);
                 if (!p) {
-                    CHECK(elsewhere > NSEEDS / 2u, "%s energy %d: the second pass starts where the first did: %u", EN_STYLE_NAME[st], ENERGY[e], elsewhere);
+                    printf("  %-8s energy %3d: of %u seeds, %u start their second pass away from the home chords; at most %d cycles from home\n", EN_STYLE_NAME[st], ENERGY[e], NSEEDS, elsewhere, worst);
+                    CHECK(elsewhere > NSEEDS * 8u / 10u, "%s energy %d: the second pass starts where the first did: %u", EN_STYLE_NAME[st], ENERGY[e], elsewhere);
                     /* the peak's second cycle: at the energy that reaches it, and never below */
                     if (ENERGY[e] < 60)
                         CHECK(seconds == 0u, "%s energy %d: the second cycle %u times", EN_STYLE_NAME[st], ENERGY[e], seconds);

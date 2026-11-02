@@ -129,6 +129,7 @@ extern volatile uint32_t en_test_nans;          /* blocks with a NaN on the way 
 extern volatile uint32_t en_hat_hits;           /* hats struck */
 extern int en_test_pad_off;                     /* the pad out of the mix: to hear the piano by itself */
 extern float en_test_peak_in;                   /* the most that has gone into the limiter (1: its knee, about) */
+uint32_t en_test_degrees(void);                 /* the degrees the engine has been told */
 float en_test_bass_pitch(void);                 /* the bass, cycles a sample: where it is and where it is going */
 float en_test_bass_target(void);
 /* each bar as it starts: step, section, level, character, break's bars */

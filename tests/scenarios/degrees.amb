@@ -20,6 +20,8 @@ listen
 tapkey 1
 said NO CHORDS ON F#
 expect mask 0xFEF
+wait 20
+expect enmask 0xFEF
 expect pool 0xAD5
 # the light goes while SEL is held
 expect keyslit 0xB58B58
@@ -139,16 +141,23 @@ tap SAVE
 expect dirty 0
 turn PRESET 1
 expect mask 0xFFF
+wait 20
+expect enmask 0xFFF
 turn PRESET -1
 expect mask 0x5EA
+wait 20
+expect enmask 0x5EA
 reboot
 wait 300
 expect mask 0x5EA
+expect enmask 0x5EA
 expect piece 0
 press SAVE
 wait 1700
 release SAVE
 expect mask 0xFFF
+wait 20
+expect enmask 0xFFF
 # help: HOME's card says it, and fits
 press HOME
 wait 1000

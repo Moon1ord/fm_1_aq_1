@@ -2548,6 +2548,7 @@ static uint32_t ext_age;
 #if defined EN_HOST || defined PLAT_HOST
 volatile uint32_t en_test_nans;
 float en_test_peak_in;
+uint32_t en_test_degrees(void) { return degrees; }
 float en_test_bass_pitch(void) { return bass.inc; }
 float en_test_bass_target(void) { return bass.inc_t; }
 void en_test_ticks(uint32_t n)

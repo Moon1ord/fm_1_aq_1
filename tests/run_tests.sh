@@ -28,6 +28,8 @@ run amb sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promoti
     -o $OUT/amb_test tests/host/amb_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/amb_test"
 run harm sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promotion -Werror -DEN_HOST -Iapp/dsp -Ibase/include \
     -o $OUT/harm_test tests/host/harm_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/harm_test"
+run gen sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promotion -Werror -DEN_HOST -Iapp/dsp -Ibase/include \
+    -o $OUT/gen_test tests/host/gen_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/gen_test"
 run arr sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promotion -Werror -DEN_HOST -Iapp/dsp -Ibase/include \
     -o $OUT/arr_test tests/host/arr_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/arr_test"
 run brk sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promotion -Werror -Iapp/dsp -o $OUT/brk_test tests/host/brk_test.c app/dsp/brk.c -lm && $OUT/brk_test"

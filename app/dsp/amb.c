@@ -1117,6 +1117,643 @@ static void lead_to(const int8_t *ch, uint32_t tones, const int *from, int root,
         out[v] = (uint8_t)to[v];
 }
 
+/* ---------------------------------------------------------- the chords, one at a time --- */
+/* No cycle: the next chord is composed when it is nearly due, from any degree of the pool, and that is all the harmony there
+ * is. en_gen_next is pure: state, pool, key, seed, Evolve and the arranger's character in; the state and one chord with its
+ * voicing and its length out.
+ *
+ * Which degree. A weight for every root that can carry a chord in this pool: the family's table of function to function
+ * (FN_W), times the bass's motion (MOTION: a fourth or a fifth or a step above all, a tritone hardly), times one more than the
+ * tones it shares with the chord before, times what the character wants of that function (CHAR_FN) and what the place in the
+ * phrase does (FN_POS: phrases lean, ending on a dominant and starting on a subdominant or a relative). Nothing is ever at zero
+ * but the chord just played, a chord on the same bass, and half-diminished roots, which do not count as usable while two
+ * others stand.
+ *
+ * The tonic stays out of the bass. A chord on the tonic exists only over its third, or its fifth where that fits better or
+ * there is no third, is gated (at least TONIC_GAP chords apart) and weighs little: a glimpse of home, the waiting goes on.
+ *
+ * The key stays clear without any walk home: a chord of the tonic area (the tonic chord, and the relatives: FN_T, FN_M) gets
+ * heavier with every chord since the last one (away), more so in calm or falling sections, and a colour that has the tonic
+ * in it counts double once it has been away a little.
+ *
+ * Which colour. For the chosen root every shape the pool allows, shapes that come out the same counted once, is weighed: the
+ * shape's own (GSHAPE: calm or bright by character), then how little the hand moves from the voicing before and how many of
+ * its notes stay. Fuller sections like the ninths and the 6/9s; the hand also sits SEC_UP higher at the peak.
+ *
+ * How long. A phrase's rhythm comes first (TMPL, by character): a whole phrase is 8 or 16 bars of 2 to 4 chords, so every 8th
+ * bar is a change, a chord is 4 bars or 2, and 1-bar chords only come in pairs late in a half. Calm is slow, the peak quicker.
+ *
+ * What it remembers. The last phrase. Evolve 0: it plays again for ever, note for note. In between it plays again a few times
+ * (at 50 once or twice), most of those with one chord recoloured or changed, then a new one. Evolve 100: never again, and no
+ * three chords in a row that have come within the last EN_GEN_WINDOW. A rise to the peak does not wait: new phrase, Evolve 0
+ * apart. A chord from outside the pool comes rarely in a new phrase (BORROW_GAP chords apart at least), and is never kept.
+ *
+ * A new pool empties the memory: the rest of the phrase is composed in it, on the same rhythm. A new key moves the same
+ * phrase there: the degrees are relative to it. */
+enum { SH_7, SH_9, SH_ADD9, SH_69, SH_11, SH_7SUS, SH_9SUS, SH_13SUS, SH_7_3, SH_ADD9_3, SH_7_5, SH_S2, SH_S4, SH_S2_7, SH_S4_7,
+       SH_S2_6, SH_S2_5, SH_S4_5, SH_BORROW };
+typedef struct {
+    uint8_t bass, col, sus, calm, bright;        /* calm, bright: how much it is liked, by character */
+    uint8_t keys[4], pad[4];
+} gshape_t;
+static const gshape_t GSHAPE[SH_BORROW] = {
+    /* bass col sus calm bright  keys                pad */
+    {F1, F11, 0, 6, 3, {F1, F3, F5, F7},   {F1, F3, F5, F7}},    /* maj7, m7 (a maj7's pad leaves the seventh to the hand) */
+    {F1, F11, 0, 4, 7, {F3, F5, F7, F9},   {F1, F3, F5, F7}},    /* maj9, m9 */
+    {F1, F13, 0, 4, 3, {F1, F9, F3, F5},   {F1, F3, F5, F9}},    /* add9 */
+    {F1, F1,  0, 1, 3, {F3, F13, F9, F5},  {F1, F3, F5, F13}},   /* 6/9 */
+    {F1, F1,  0, 2, 3, {F3, F11, F5, F7},  {F1, F3, F5, F7}},    /* m11 */
+    {F1, F9,  1, 1, 1, {F1, F11, F5, F7},  {F1, F11, F5, F7}},   /* 7sus4 */
+    {F1, F1,  1, 1, 2, {F5, F7, F9, F11},  {F1, F11, F5, F7}},   /* 9sus */
+    {F1, F1,  1, 1, 2, {F7, F9, F11, F13}, {F1, F11, F5, F7}},   /* 13sus */
+    {F3, F9,  0, 1, 1, {F5, F7, F1, F3},   {F3, F5, F1, F7}},    /* a seventh chord over its third */
+    {F3, F7,  0, 1, 1, {F1, F3, F5, F9},   {F3, F5, F1, F9}},    /* add9 over its third */
+    {F5, F9,  0, 1, 1, {F3, F7, F1, F5},   {F5, F3, F1, F7}},    /* a seventh chord over its fifth: the tonic's only */
+    /* a pool without thirds to speak of: open chords */
+    {F1, F11, 1, 4, 3, {F1, F9, F5, F1},   {F1, F5, F9, F1}},
+    {F1, F9,  1, 3, 3, {F1, F11, F5, F1},  {F1, F5, F11, F1}},
+    {F1, F11, 1, 2, 3, {F1, F9, F5, F7},   {F1, F5, F9, F1}},
+    {F1, F9,  1, 2, 3, {F1, F11, F5, F7},  {F1, F5, F11, F1}},
+    {F1, F11, 1, 1, 3, {F1, F9, F5, F13},  {F1, F5, F9, F1}},
+    {F5, F11, 1, 1, 1, {F1, F9, F5, F1},   {F1, F5, F9, F1}},    /* the tonic's, over its fifth */
+    {F5, F9,  1, 1, 1, {F1, F11, F5, F1},  {F1, F5, F11, F1}},
+};
+static const uint8_t LIST_MAJOR[] = {SH_7, SH_9, SH_ADD9, SH_69, SH_7SUS, SH_9SUS, SH_13SUS, SH_7_3, SH_ADD9_3};
+static const uint8_t LIST_MINOR[] = {SH_7, SH_9, SH_11, SH_ADD9, SH_7SUS, SH_9SUS, SH_13SUS, SH_7_3};
+static const uint8_t LIST_OPEN[] = {SH_S2, SH_S4, SH_S2_7, SH_S4_7, SH_S2_6};
+static const uint8_t LIST_TONIC[] = {SH_7_3, SH_7_5};
+static const uint8_t LIST_TONIC_OPEN[] = {SH_S2_5, SH_S4_5};
+#define COUNTOF(a) ((int)(sizeof(a) / sizeof((a)[0])))
+
+/* the functions: a root's by its distance from the tonic. T the tonic, M its relatives, S the subdominant side, D the dominant
+ * side, C whatever else a pool may have (weak) */
+enum { FN_T, FN_M, FN_S, FN_D, FN_C, FN_N };
+static const uint8_t FN_OF[3][12] = {
+    /*           1     2     b3    3     4     #4    5     b6    6     b7    7 */
+    {FN_T, FN_C, FN_S, FN_C, FN_M, FN_S, FN_C, FN_D, FN_C, FN_M, FN_D, FN_C},
+    {FN_T, FN_C, FN_S, FN_M, FN_C, FN_S, FN_C, FN_D, FN_M, FN_C, FN_D, FN_C},
+    {FN_T, FN_C, FN_S, FN_M, FN_M, FN_S, FN_C, FN_D, FN_M, FN_M, FN_D, FN_C},
+};
+/* from a function (row) to a function (column). Major: the relatives go to the subdominant, the subdominant to the dominant,
+ * and the dominant mostly does not land: to a relative, or back to the subdominant. Minor: the same, the falling fifths of
+ * III VI iv VII stronger. Sparse: all but level, a pentatonic has little to pull with */
+static const uint8_t FN_W[3][FN_N][FN_N] = {
+    {   /*  T  M  S  D  C */
+        {0, 5, 8, 3, 1},
+        {1, 4, 8, 3, 1},
+        {2, 3, 3, 8, 1},
+        {3, 8, 5, 1, 1},
+        {1, 4, 4, 4, 1},
+    },
+    {
+        {0, 5, 8, 3, 1},
+        {1, 5, 8, 4, 1},
+        {2, 4, 2, 8, 1},
+        {3, 8, 4, 1, 1},
+        {1, 4, 4, 4, 1},
+    },
+    {
+        {0, 4, 5, 4, 1},
+        {1, 4, 5, 4, 1},
+        {1, 4, 3, 5, 1},
+        {2, 5, 4, 2, 1},
+        {1, 4, 4, 4, 1},
+    },
+};
+/* the bass's move, in semitones up. A fourth up, a fifth down: the strongest; then the fifth up and the steps */
+static const uint8_t MOTION[12] = {1, 3, 6, 3, 3, 8, 1, 6, 3, 3, 6, 3};
+static const uint8_t CHAR_FN[4][FN_N] = {        /* the character's taste: quarters */
+    {5, 5, 4, 3, 2},
+    {4, 5, 4, 4, 2},
+    {3, 4, 4, 4, 3},
+    {2, 4, 5, 5, 3},
+};
+static const uint8_t FN_POS[3][FN_N] = {         /* mid-phrase, first, last: halves */
+    {2, 2, 2, 2, 2},
+    {1, 3, 3, 1, 2},
+    {1, 2, 2, 4, 1},
+};
+#define TONIC_GAP 6u                             /* chords between chords on the tonic, at least */
+#define BORROW_GAP 40u                           /* and between borrowed ones */
+/* a phrase's rhythm, in bars. 1-bar chords late, in pairs, so what follows still starts on an even bar */
+static const struct {
+    uint8_t n, bars[4];
+} TMPL[6] = {{4, {4, 4, 4, 4}}, {2, {4, 4}}, {3, {4, 2, 2}}, {3, {2, 2, 4}}, {4, {2, 2, 2, 2}}, {4, {4, 2, 1, 1}}};
+static const uint8_t TMPL_W[4][6] = {            /* by character: slower when it is calm */
+    {9, 2, 3, 2, 0, 0},
+    {7, 2, 4, 3, 1, 0},
+    {3, 1, 4, 4, 3, 1},
+    {2, 1, 3, 3, 5, 2},
+};
+
+static int pop12(uint32_t m)
+{
+    int n = 0;
+    for (m &= 0xFFFu; m; m &= m - 1u)
+        n++;
+    return n;
+}
+
+/* a shape on a root: the old voices-by-function resolver. 0: no such chord (nothing to borrow here) */
+int en_chord_make(uint32_t p, int r, int sh, en_hchord_t *o)
+{
+    const int fam = en_pool_family(p);
+    const gshape_t *g;
+    int third = -1, v;
+    p = (p | 1u) & 0xFFFu;
+    o->family = (uint8_t)fam;
+    o->borrowed = 0u;
+    if (sh == SH_BORROW)
+        return chord_borrow(p, fam, o);
+    g = &GSHAPE[(unsigned)sh < SH_BORROW ? sh : 0];
+    if (!g->sus) {
+        const int m = IN_POOL(p, r, 4), n = IN_POOL(p, r, 3);
+        third = m && n ? (fam == FAM_MINOR ? 3 : 4) : m ? 4 : n ? 3 : -1;
+    }
+    o->root = (uint8_t)r;
+    fn_voices(p, r, third, g->keys, o->keys);
+    fn_voices(p, r, third, g->pad, o->pad);
+    if (sh == SH_7 && third == 4)
+        o->pad[3] = (int8_t)r;
+    v = fn_iv(p, r, third, g->col);
+    o->col = (uint8_t)((r + (v >= 0 ? v : fn_instead(p, r, third, g->col, 0u))) % 12);
+    v = fn_iv(p, r, third, g->bass);
+    o->bass = (uint8_t)((r + (v >= 0 ? v : fn_instead(p, r, third, g->bass, 1u))) % 12);
+    chord_tones_of(o);
+    return 1;
+}
+
+/* may it stand? Always: nothing a minor ninth over its root or its bass, no flat fifth or flat thirteenth over the root, the
+ * tonic not in the bass. If strict, as well: no dominant seventh, and three tones at the least. A sus chord has its fourth */
+static int chord_fit(const en_hchord_t *c, int sh, int strict)
+{
+    const uint32_t t = c->tones;
+#define OVER(iv) (t >> ((c->root + (iv)) % 12) & 1u)
+    if (!c->bass || t >> ((c->bass + 1) % 12) & 1u)
+        return 0;
+    if (OVER(1) || OVER(6) || OVER(8))
+        return 0;
+    if (strict) {
+        if ((OVER(4) && OVER(10)) || pop12(t) < 3)
+            return 0;
+        if (sh != SH_BORROW && sh >= SH_7SUS && sh <= SH_13SUS && !OVER(5))
+            return 0;
+    }
+#undef OVER
+    return 1;
+}
+
+/* the roots a chord may stand on in this pool: those with a real chord; if fewer than two have one, those with less, never
+ * one with nothing over it. The tonic is not among them unless nothing else is */
+uint32_t en_gen_roots(uint32_t p)
+{
+    const int fam = en_pool_family(p);
+    uint32_t m = 0u;
+    int tier, r;
+    p = (p | 1u) & 0xFFFu;
+    for (tier = 0; tier < 3 && pop12(m) < 2; tier++) {
+        m = 0u;
+        for (r = 1; r < 12; r++)
+            if (p >> r & 1u && (tier == 0 ? root_stands(p, r, fam) : root_tones(p, r) >= 3 - (tier - 1)))
+                m |= 1u << r;
+    }
+    return m ? m : 1u;
+}
+
+void en_gen_start(en_gen_t *st)
+{
+    int i;
+    uint8_t *b = (uint8_t *)st;
+    for (i = 0; i < (int)sizeof *st; i++)
+        b[i] = 0u;
+    st->prev_root = st->prev2 = st->prev3 = 0xFFu;
+    st->since_t = TONIC_GAP;
+    st->since_b = BORROW_GAP / 2u;
+}
+
+typedef struct {
+    uint32_t p, seed;
+    int fam, key, evolve, character, up, pos;    /* pos: 0 mid-phrase, 1 first, 2 last */
+    int avoid_root, avoid_bass;                  /* the chord after this one, when it is already known */
+    int from_k[4], from_p[4];
+    uint32_t usable;
+    int window;                                  /* how far back three chords may not come again */
+} gen_ctx_t;
+
+static uint16_t tri_key(int a, int b, int c)
+{
+    return (uint16_t)(hhash((uint32_t)a << 18 | (uint32_t)b << 9 | (uint32_t)c, 77u, 3u) & 0xFFFFu);
+}
+
+static int tri_seen(const en_gen_t *st, const gen_ctx_t *x, int id)
+{
+    const uint16_t k = tri_key(st->id2, st->id1, id);
+    int i;
+    if (st->n < 2u)
+        return 0;
+    for (i = 1; i <= x->window && (uint32_t)i <= st->n; i++)
+        if (st->seen[(st->seen_i + EN_GEN_WINDOW - (uint32_t)i) % EN_GEN_WINDOW] == k)
+            return 1;
+    return 0;
+}
+
+/* a voicing for the hand: led from the one before; a huddle, a sprawl or two notes a minor ninth apart are led afresh from an
+ * open one */
+static int hand_ugly(const uint8_t *n)
+{
+    int a, b;
+    if (n[3] - n[0] < 7)
+        return 1;
+    for (a = 0; a < 4; a++)
+        for (b = a + 1; b < 4; b++)
+            if (n[b] - n[a] == 13)
+                return 1;
+    return 0;
+}
+static void gen_hand(const gen_ctx_t *x, const en_hchord_t *c, uint8_t *out)
+{
+    const int r = x->key, lo = KEYS_LO(r) + x->up, hi = KEYS_HI(r) + x->up;
+    lead_to(c->keys, c->tones, x->from_k, r, lo, hi, KEYS_LO(r), out);
+    if (hand_ugly(out)) {
+        int from[4], v;
+        uint8_t again[4];
+        for (v = 0; v < 4; v++)
+            from[v] = lo + 5 + 4 * v;
+        lead_to(c->keys, c->tones, from, r, lo, hi, KEYS_LO(r), again);
+        if (!hand_ugly(again))
+            for (v = 0; v < 4; v++)
+                out[v] = again[v];
+    }
+}
+
+/* the colour for a root; its shape, -1 none left. not: a shape that will not do (the one being recoloured) */
+static int gen_colour(const en_gen_t *st, const gen_ctx_t *x, int r, int not_sh, int use_window, uint32_t h)
+{
+    const uint8_t *list;
+    uint32_t w[10], sum = 0u, masks[10];
+    uint8_t sh_of[10], bass_of[10];
+    int n = 0, cnt, i, strict, picked = -1;
+    const int fn = FN_OF[x->fam][r];
+    if (x->fam == FAM_SPARSE || (!IN_POOL(x->p, r, 3) && !IN_POOL(x->p, r, 4))) {
+        list = r ? LIST_OPEN : LIST_TONIC_OPEN;
+        cnt = r ? COUNTOF(LIST_OPEN) : COUNTOF(LIST_TONIC_OPEN);
+    } else if (!r) {
+        list = LIST_TONIC;
+        cnt = COUNTOF(LIST_TONIC);
+    } else if (IN_POOL(x->p, r, 4) && !(IN_POOL(x->p, r, 3) && x->fam == FAM_MINOR)) {
+        list = LIST_MAJOR;
+        cnt = COUNTOF(LIST_MAJOR);
+    } else {
+        list = LIST_MINOR;
+        cnt = COUNTOF(LIST_MINOR);
+    }
+    for (strict = 1; strict >= 0 && !sum; strict--) {
+        n = 0;
+        for (i = 0; i < cnt; i++) {
+            const int sh = list[i];
+            const gshape_t *g = &GSHAPE[sh];
+            en_hchord_t c;
+            uint8_t kv[4];
+            uint32_t wt, mask;
+            int v, k, dup = 0, move = 0, far = 0, held = 0;
+            en_chord_make(x->p, r, sh, &c);
+            if (sh == not_sh || !chord_fit(&c, sh, strict) || (st->n && c.bass == st->prev_bass) || (int)c.bass == x->avoid_bass)
+                continue;
+            if (r && c.bass != r && pop12(x->usable) < 3)   /* two roots only: an inversion would leave no way on */
+                continue;
+            mask = 0u;
+            for (v = 0; v < 4; v++)
+                mask |= 1u << c.keys[v];
+            for (k = 0; k < n; k++)
+                dup |= masks[k] == mask && bass_of[k] == c.bass;
+            if (dup || (use_window && tri_seen(st, x, r << 5 | sh)))
+                continue;
+            gen_hand(x, &c, kv);
+            for (v = 0; v < 4; v++) {
+                const int d = (int)kv[v] > x->from_k[v] ? (int)kv[v] - x->from_k[v] : x->from_k[v] - (int)kv[v];
+                move += d;
+                far = d > far ? d : far;
+                held += !d;
+            }
+            wt = x->character >= 3 ? g->bright : x->character == 2 ? (uint32_t)(g->calm + g->bright + 1) / 2u : g->calm;
+            if (sh >= SH_7SUS && sh <= SH_13SUS && fn == FN_D)
+                wt *= 3u;                        /* a sus chord is a dominant that does not insist */
+            if (c.tones & 1u && st->away >= 2u)
+                wt *= 2u;
+            wt *= (uint32_t)(far > 7 ? 1 : move <= 4 ? 8 : move <= 8 ? 6 : move <= 12 ? 3 : 1);
+            wt *= (uint32_t)(1 + held);
+            wt *= (uint32_t)(1 + pop12(c.tones & st->prev_tones));
+            if (n < 10) {
+                w[n] = wt;
+                masks[n] = mask;
+                sh_of[n] = (uint8_t)sh;
+                bass_of[n] = c.bass;
+                sum += wt;
+                n++;
+            }
+        }
+    }
+    if (!sum)
+        return -1;
+    h %= sum;
+    for (i = 0; i < n && picked < 0; i++) {
+        if (h < w[i])
+            picked = sh_of[i];
+        else
+            h -= w[i];
+    }
+    return picked;
+}
+
+/* the root: -1 none left. off: roots that were tried */
+static int gen_root(const en_gen_t *st, const gen_ctx_t *x, uint32_t off, uint32_t h)
+{
+    uint32_t w[12], sum = 0u;
+    int r;
+    const int fn0 = st->n ? FN_OF[x->fam][st->prev_root & 15] : FN_T;
+    for (r = 0; r < 12; r++) {
+        uint32_t wt;
+        int fn, bass = r;
+        en_hchord_t c;
+        w[r] = 0u;
+        if (!(x->p >> r & 1u) || off >> r & 1u || !(r ? x->usable >> r & 1u : (st->since_t >= TONIC_GAP && x->evolve > 0) || x->usable == 1u))
+            continue;
+        if (r == st->prev_root || r == x->avoid_root)
+            continue;
+        en_chord_make(x->p, r, r ? (x->fam == FAM_SPARSE ? SH_S2 : SH_7) : (x->fam == FAM_SPARSE ? SH_S2_5 : SH_7_3), &c);
+        if (!r) {
+            if (!c.bass && x->usable != 1u)
+                continue;
+            bass = c.bass;
+        }
+        if (st->n && bass == st->prev_bass)
+            continue;
+        fn = FN_OF[x->fam][r];
+        wt = FN_W[x->fam][fn0][fn];
+        if (!wt)
+            wt = 1u;
+        wt *= MOTION[(bass - (int)st->prev_bass + 12) % 12];
+        wt *= (uint32_t)(1 + pop12(c.tones & st->prev_tones));
+        wt *= CHAR_FN[x->character][fn];
+        wt *= FN_POS[x->pos][fn];
+        if (fn == FN_T || fn == FN_M) {          /* the key stays clear: the tonic area, the longer it has been */
+            uint32_t a = st->away;
+            if (x->character <= 1)
+                a += 1u;
+            wt *= 2u + (a > 1u ? a - 1u : 0u) + (a > 6u ? 2u * (a - 6u) : 0u);
+            wt /= 2u;
+            if (!wt)
+                wt = 1u;
+        }
+        if (r == st->prev2)                      /* not back and forth */
+            wt = wt / 4u + 1u;
+        else if (r == st->prev3)
+            wt = wt / 2u + 1u;
+        w[r] = wt;
+        sum += wt;
+    }
+    if (!sum)
+        return -1;
+    h %= sum;
+    for (r = 0; r < 12; r++) {
+        if (h < w[r])
+            return r;
+        h -= w[r];
+    }
+    return -1;
+}
+
+/* a chord to compose here: root, then colour, then if three chords would come again, another */
+static en_gid_t gen_compose(const en_gen_t *st, gen_ctx_t *x)
+{
+    en_gid_t id;
+    int attempt;
+    id.bars = 0u;
+    for (attempt = 0; attempt < 3; attempt++) {
+        uint32_t off = 0u;
+        int tries;
+        if (attempt)                             /* a pool too small to keep its distance from the next chord too */
+            x->avoid_root = x->avoid_bass = -1;
+        for (tries = 0; tries < 12; tries++) {
+            const int r = gen_root(st, x, off, hhash(x->seed, st->n, 62u + (uint32_t)tries));
+            int sh;
+            if (r < 0)
+                break;
+            sh = gen_colour(st, x, r, -1, attempt < 2 && x->window > 0, hhash(x->seed, st->n, 80u + (uint32_t)tries));
+            if (sh >= 0) {
+                id.root = (uint8_t)r;
+                id.shape = (uint8_t)sh;
+                return id;
+            }
+            off |= 1u << r;
+        }
+    }
+    /* a pool with one root to stand on: that, plainly */
+    {
+        int r;
+        id.root = 0u;
+        for (r = 11; r > 0; r--)
+            if (x->usable >> r & 1u && (!id.root || r != st->prev_root))
+                id.root = (uint8_t)r;
+        id.shape = x->fam == FAM_SPARSE ? SH_S2 : SH_7;
+    }
+    return id;
+}
+
+/* how many times a phrase may come again */
+static uint32_t rep_most(int e)
+{
+    const uint32_t r = e <= 0 ? 32u : e <= 50 ? 100u / (uint32_t)e : e < 100 ? 1u : 0u;
+    return r > 32u ? 32u : r;
+}
+static uint32_t rep_draw(int e, uint32_t h)
+{
+    const uint32_t most = rep_most(e), lo = (most + 1u) / 2u;
+    if (e > 50)
+        return h % 50u < (uint32_t)(100 - e) ? 1u : 0u;
+    return lo + h % (most - lo + 1u);
+}
+
+/* at a phrase's end: again or a new one */
+static void gen_turn(en_gen_t *st, const gen_ctx_t *x)
+{
+    const uint32_t h = hhash(x->seed, st->n, 61u);
+    int fresh = !st->valid;
+    st->var_kind = 0u;
+    if (!fresh && x->evolve > 0) {
+        if (st->repeats > rep_most(x->evolve))
+            st->repeats = (uint8_t)rep_most(x->evolve);
+        if (x->character == 3 && st->ph_char != 3u)
+            fresh = 1;
+        else if (!st->repeats)
+            fresh = 1;
+        else
+            st->repeats--;
+    }
+    st->ph_i = 0u;
+    if (fresh) {
+        uint32_t sum = 0u, pick;
+        int t;
+        for (t = 0; t < 6; t++)
+            sum += TMPL_W[x->character][t];
+        pick = (h >> 8) % sum;
+        for (t = 0; t < 6; t++) {
+            if (pick < TMPL_W[x->character][t])
+                break;
+            pick -= TMPL_W[x->character][t];
+        }
+        st->tmpl = (uint8_t)t;
+        st->composing = 1u;
+        st->valid = 1u;
+        st->ph_char = (uint8_t)x->character;
+        st->repeats = (uint8_t)rep_draw(x->evolve, h >> 20);
+    } else {
+        const uint32_t vary = (uint32_t)x->evolve * 7u / 5u;
+        st->composing = 0u;
+        if (x->evolve > 0 && (h >> 4) % 100u < vary) {
+            st->var_kind = (h >> 12) % 5u < 3u ? 1u : 2u;   /* a recolouring, or one chord changed */
+            st->var_slot = (uint8_t)((h >> 16) % TMPL[st->tmpl].n);
+        }
+    }
+}
+
+void en_gen_next(en_gen_t *st, uint32_t p, int key, uint32_t seed, int evolve, int character, en_gchord_t *out)
+{
+    gen_ctx_t x;
+    en_gid_t id;
+    int v, i, n;
+    p = (p | 1u) & 0xFFFu;
+    key = (key % 12 + 12) % 12;
+    x.p = p;
+    x.seed = seed;
+    x.fam = en_pool_family(p);
+    x.key = key;
+    x.evolve = evolve < 0 ? 0 : evolve > 100 ? 100 : evolve;
+    x.character = (unsigned)character < 4u ? character : 0;
+    x.up = x.character == 3 ? SEC_UP : 0;
+    x.usable = en_gen_roots(p);
+    x.window = x.evolve > 50 ? (x.evolve - 50) * EN_GEN_WINDOW / 50 : 0;
+    x.avoid_root = x.avoid_bass = -1;
+    if (st->n) {
+        int d = key - st->key;                   /* into a new key the hand moves with it, then leads as ever */
+        if (d > 6)
+            d -= 12;
+        else if (d < -5)
+            d += 12;
+        for (v = 0; v < 4; v++) {
+            x.from_k[v] = st->keys[v] + d;
+            x.from_p[v] = st->pad[v] + d;
+        }
+        if (p != st->pool) {                     /* the memory is of another pool now */
+            st->valid = 0u;
+            st->composing = 1u;
+        }
+    } else {
+        for (v = 0; v < 4; v++) {
+            x.from_k[v] = 57 + key + x.up + 4 * v;
+            x.from_p[v] = 49 + key + 4 * v;
+        }
+    }
+    st->pool = p;
+    if (x.character < st->was_char && st->away < 200u)
+        st->away = (uint8_t)(st->away + 1u);     /* falling: a little nearer home */
+    st->was_char = (uint8_t)x.character;
+    if (!st->n || st->ph_i >= TMPL[st->tmpl].n)
+        gen_turn(st, &x);
+    i = st->ph_i;
+    n = TMPL[st->tmpl].n;
+    x.pos = i == 0 ? 1 : i == n - 1 ? 2 : 0;
+    if (st->composing) {
+        if (i == n - 1 && st->valid && i > 0) {  /* it may come again: its end must lead to its start */
+            en_hchord_t f;
+            en_chord_make(p, st->phrase[0].root, st->phrase[0].shape, &f);
+            x.avoid_root = f.root;
+            x.avoid_bass = f.bass;
+        }
+        id.root = 0u;
+        id.shape = 0u;
+        if (st->since_b >= BORROW_GAP && x.evolve > 0 && x.fam != FAM_SPARSE && x.pos == 0 && !(hhash(seed, st->n, 63u) & 15u)) {
+            en_hchord_t b;
+            if (en_chord_make(p, 0, SH_BORROW, &b) && b.root != st->prev_root && b.bass != st->prev_bass &&
+                (int)b.root != x.avoid_root && (int)b.bass != x.avoid_bass && !tri_seen(st, &x, b.root << 5 | SH_BORROW)) {
+                id.root = b.root;
+                id.shape = SH_BORROW;
+            }
+        }
+        if (id.shape != SH_BORROW)
+            id = gen_compose(st, &x);
+    } else {
+        en_hchord_t c;
+        en_hchord_t nx;
+        const en_gid_t *mem = &st->phrase[i], *after = &st->phrase[(i + 1) % n];
+        int redo, sh = -1;
+        id = *mem;
+        en_chord_make(p, after->root, after->shape == SH_BORROW ? SH_7 : after->shape, &nx);
+        en_chord_make(p, id.root, id.shape, &c);
+        x.avoid_root = nx.root;
+        x.avoid_bass = nx.bass;
+        redo = id.shape == SH_BORROW || id.root == st->prev_root || (st->n && c.bass == st->prev_bass);
+        if (st->var_kind == 1u && st->var_slot == i && !redo) {
+            sh = gen_colour(st, &x, id.root, id.shape, 0, hhash(seed, st->n, 64u));
+            if (sh >= 0)
+                id.shape = (uint8_t)sh;
+        } else if (st->var_kind == 2u && st->var_slot == i) {
+            redo = 1;
+        }
+        if (redo)
+            id = gen_compose(st, &x);
+    }
+    id.bars = TMPL[st->tmpl].bars[i];
+    st->phrase[i] = id;
+    st->ph_i = (uint8_t)(i + 1);
+
+    /* the chord, its voices, and what it leaves behind */
+    en_chord_make(p, id.root, id.shape, &out->ch);
+    out->ch.tonic = (uint8_t)key;
+    out->shape = id.shape;
+    out->bars = id.bars;
+    gen_hand(&x, &out->ch, out->keys_v);
+    lead_to(out->ch.pad, out->ch.tones, x.from_p, key, PAD_LO(key), PAD_HI(key), PAD_LO(key), out->pad_v);
+    for (v = 0; v < 4; v++) {
+        st->keys[v] = out->keys_v[v];
+        st->pad[v] = out->pad_v[v];
+    }
+    st->key = (uint8_t)key;
+    st->prev3 = st->prev2;
+    st->prev2 = st->prev_root;
+    st->prev_root = id.root;
+    st->prev_bass = out->ch.bass;
+    st->prev_tones = out->ch.tones;
+    {
+        const int fn = FN_OF[x.fam][id.root], cur = id.root << 5 | id.shape;
+        st->away = fn == FN_T || fn == FN_M ? 0u : st->away < 200u ? (uint8_t)(st->away + 1u) : st->away;
+        st->since_t = !id.root ? 0u : st->since_t < 200u ? (uint8_t)(st->since_t + 1u) : st->since_t;
+        st->since_b = id.shape == SH_BORROW ? 0u : st->since_b < 200u ? (uint8_t)(st->since_b + 1u) : st->since_b;
+        st->seen[st->seen_i] = tri_key(st->id2, st->id1, cur);
+        st->seen_i = (uint8_t)((st->seen_i + 1u) % EN_GEN_WINDOW);
+        st->id2 = st->id1;
+        st->id1 = (uint16_t)cur;
+    }
+    st->n++;
+}
+
+/* as a score, for the eye: its name, and the bass if the bass is not the root */
+const char *en_gchord_name(const en_gchord_t *g, char *buf)
+{
+    int k = 0;
+    const char *s = EN_NOTE_NAME[(g->ch.tonic + g->ch.bass) % 12];
+    en_hchord_name(&g->ch, buf);
+    if (g->ch.bass != g->ch.root) {
+        while (buf[k])
+            k++;
+        buf[k++] = '/';
+        while (*s)
+            buf[k++] = *s++;
+        buf[k] = 0;
+    }
+    return buf;
+}
+
 void en_home_voicing(uint32_t p, int root, uint8_t keys[4][4], uint8_t pad_[4][4])
 {
     en_hchord_t h[4];

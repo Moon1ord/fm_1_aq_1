@@ -172,7 +172,35 @@ typedef struct {                               /* a chord in a pool: pitch class
     uint16_t tones;                            /* bass, hand and pad, bit i */
     int8_t keys[4], pad[4];
 } en_hchord_t;
+/* The harmony: chords composed one at a time, on any degree of the pool. See "the chords, one at a time" in amb.c.
+ * en_gen_next is pure: state, pool, key, seed, Evolve and the arranger's character in; the state and the next chord out. Every
+ * choice hangs on the seed and the state, so calling it again from a copy of the state with another pool gives the chord
+ * that pool would have had: how a prepared chord is remade. */
+#define EN_GEN_WINDOW 96                       /* chords: at Evolve 100 no three chords in a row come again within this */
+typedef struct {
+    uint8_t root, shape, bars;                 /* root: semitones above the tonic */
+} en_gid_t;
+typedef struct {
+    uint32_t n, pool;                          /* chords so far; the pool of the last */
+    en_gid_t phrase[4];                        /* the memory: the phrase being played */
+    uint8_t tmpl, ph_i, composing, valid, repeats, ph_char, was_char, var_kind, var_slot;
+    uint8_t prev_root, prev2, prev3, prev_bass, away, since_t, since_b, key, seen_i;
+    uint16_t prev_tones, id1, id2;
+    uint8_t keys[4], pad[4];                   /* the last voicing */
+    uint16_t seen[EN_GEN_WINDOW];              /* every three chords in a row, hashed */
+} en_gen_t;
+typedef struct {
+    en_hchord_t ch;
+    uint8_t keys_v[4], pad_v[4];               /* its voicing, MIDI notes */
+    uint8_t shape, bars;                       /* its colour; its length, 1, 2 or 4 */
+} en_gchord_t;
 int en_pool_family(uint32_t pool);
+void en_gen_start(en_gen_t *st);
+uint32_t en_gen_roots(uint32_t pool);          /* the roots it may use, bit i: i above the tonic; the tonic only if nothing else */
+void en_gen_next(en_gen_t *st, uint32_t pool, int key, uint32_t seed, int evolve, int character, en_gchord_t *out);
+int en_chord_make(uint32_t pool, int root, int shape, en_hchord_t *out);   /* a colour on a root; 0 none. What a shape can be */
+const char *en_gchord_name(const en_gchord_t *g, char *buf);   /* as a score: with its bass, if that is not its root */
+#define EN_SHAPE_BORROWED 18                   /* the shape of a chord from outside the pool */
 void en_harm_resolve(uint32_t pool, int id, en_hchord_t *out);
 /* the pure function: state, pool, root, cycle, seed, level in; next state and the four chords out */
 void en_harm_walk(en_harm_t *st, uint32_t pool, int root, uint32_t cycle, uint32_t seed, int level, en_hchord_t *out);

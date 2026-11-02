@@ -1,0 +1,14 @@
+# Six minutes of jungle's generated rhythm, from the top, with a fixed seed (rhy_test --chart prints its bars). Not one of the tests.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/rhy_jungle.amb app/build/listen
+master 2430
+tap PLAY
+wait 200
+seed 1003
+style jungle
+wait 200
+trace app/build/listen/rhy_jungle.trace
+wav rhy_jungle.wav
+tap PLAY
+wait 360000
+wavstop
+trace off

@@ -42,6 +42,7 @@ static void harmony_checks(void)
     /* the graph: a substitution shares at least two tones; D is never in the bass */
     for (id = 0; id < en_harm_count(); id++) {
         CHECK(en_harm_bass(id) != 0, "%s has the tonic in the bass", en_harm_name(id));
+        CHECK(en_harm_colour(id) >= 0, "%s has no colour", en_harm_name(id));
         if (en_harm_sub(id) >= 0)
             CHECK(popcount(en_harm_tones(id) & en_harm_tones(en_harm_sub(id))) >= 2, "%s to %s shares too little",
                   en_harm_name(id), en_harm_name(en_harm_sub(id)));
@@ -67,6 +68,18 @@ static void harmony_checks(void)
                     }
                 }
             }
+        }
+        /* every motif note sits in the chord that sounds, and its first two echoes in the same chord */
+        for (c = 0u; c < NCYCLES; c++) {
+            int m, n;
+            for (m = 0; m < 2; m++)
+                for (n = 0; n < 4; n++) {
+                    const int st = en_motif_step(m, n), slot = st / 64;
+                    const int note = en_motif_note(m, n, seq[c]);
+                    CHECK((st + 2 * EN_ECHO_STEPS) / 64 == slot, "motif %d note %d: its echo leaves its chord", m, n);
+                    CHECK(en_harm_tones(seq[c][slot]) >> ((note + 120) % 12) & 1u, "seed %u cycle %u: motif %d note %d not in %s", sd,
+                          c, m, n, en_harm_name(seq[c][slot]));
+                }
         }
         /* it starts at home and comes home by the end, voicing and all */
         for (s = 0; s < 4; s++) {
@@ -111,15 +124,33 @@ static void engine_checks(void)
 {
     static int32_t buf[512];
     uint8_t now[4], want[4];
-    uint32_t moves = 0u, frames = 0u;
-    int s;
+    uint32_t moves = 0u, frames = 0u, last_chord = 0u, c0 = 0u, s0 = 0u, n0 = 0u;
+    uint32_t chords[4] = {0}, attacks[4] = {0}, singles[4] = {0}, notes[4] = {0};
+    int s, l;
     en_init();
     en_play(1);
     en_render(buf, 256, 1024);
     memcpy(now, (const void *)en_cycle_now, 4);
+    c0 = en_ep_chords;
+    n0 = en_ep_notes;
     while (frames < 44100u * 248u) {
         en_render(buf, 256, 1024);
         frames += 256u;
+        /* the piano flows: at most one chord's attack a change (two at level 3), three lone notes a chord */
+        if ((en_bars - 1u) / 64u != last_chord) {
+            const int lv = en_song_level(last_chord / 4u);
+            const uint32_t a = en_ep_chords - c0, b = en_ep_singles - s0;
+            CHECK(a <= (lv == 3 ? 2u : 1u), "level %d chord %u: %u chord attacks", lv, last_chord, a);
+            CHECK(b <= 3u, "level %d chord %u: %u lone notes", lv, last_chord, b);
+            chords[lv]++;
+            attacks[lv] += a;
+            singles[lv] += b;
+            notes[lv] += en_ep_notes - n0;
+            c0 = en_ep_chords;
+            s0 = en_ep_singles;
+            n0 = en_ep_notes;
+            last_chord = (en_bars - 1u) / 64u;
+        }
         if (memcmp(now, (const void *)en_cycle_now, 4)) {
             const uint32_t steps = en_bars - 1u, cycle = steps / 256u;
             moves++;
@@ -133,6 +164,14 @@ static void engine_checks(void)
     }
     CHECK(moves >= 5u, "only %u moves", moves);
     printf("  engine: %u moves, all on the seam\n", moves);
+    for (l = 0; l < 4; l++)
+        if (chords[l])
+            printf("  piano level %d: %.2f chord attacks, %.2f lone notes, %.2f notes struck, a chord\n", l,
+                   (double)attacks[l] / (double)chords[l], (double)singles[l] / (double)chords[l],
+                   (double)notes[l] / (double)chords[l]);
+    printf("  piano: peak %d voices, %u stolen while sounding\n", en_ep_peak, en_ep_steals);
+    CHECK(en_ep_steals == 0u, "%u voices stolen while sounding", en_ep_steals);
+    CHECK(en_ep_peak <= 12, "peak %d voices", en_ep_peak);
 }
 
 #define DSTEPS 6400u

@@ -372,7 +372,7 @@ static const part_t PART[] = {
  * en_cycle_chords replays it. Tones in semitones above the tonic; pitch classes. */
 typedef struct {
     const char *name;
-    int8_t bass, col;                            /* col: a passing colour above the hand */
+    int8_t bass, col;                            /* col: a passing colour, never one of the hand's notes */
     int8_t keys[4], pad[4];
     int8_t plain;                                /* the family's plain chord: itself when it has no other */
     int8_t colour[2];                            /* other colours of this family (from plain), -1 none */
@@ -383,13 +383,13 @@ enum { H_G7, H_G9, H_G69, H_FM7, H_FM11, H_BM9, H_BM7, H_AADD9, H_A7SUS, H_A69, 
 static const hchord_t HCH[EN_HARM_N] = {
     /* name       bass col  keys              pad            plain     colours          sub */
     {"Gmaj7",       5,  7, {5, 9, 0, 4},   {5, 9, 0, 5},   H_G7,    {H_G9, H_G69},    H_EM9},
-    {"Gmaj9",       5,  4, {9, 0, 4, 7},   {5, 9, 0, 7},   H_G7,    {-1, -1},         -1},
-    {"G6/9",        5,  4, {9, 2, 7, 0},   {5, 9, 0, 2},   H_G7,    {-1, -1},         -1},
+    {"Gmaj9",       5,  5, {9, 0, 4, 7},   {5, 9, 0, 7},   H_G7,    {-1, -1},         -1},
+    {"G6/9",        5,  5, {9, 2, 7, 0},   {5, 9, 0, 2},   H_G7,    {-1, -1},         -1},
     {"F#m7",        4,  9, {4, 7, 11, 2},  {4, 7, 11, 2},  H_FM7,   {H_FM11, -1},     H_DF},
     {"F#m11",       4,  4, {7, 9, 11, 2},  {4, 7, 11, 2},  H_FM7,   {-1, -1},         -1},
     {"Bm9",         9,  9, {0, 4, 7, 11},  {9, 0, 4, 7},   H_BM9,   {H_BM7, -1},      H_GB},
     {"Bm7",         9,  2, {9, 0, 4, 7},   {9, 0, 4, 7},   H_BM9,   {-1, -1},         -1},
-    {"Aadd9",       7, 11, {7, 9, 11, 2},  {7, 11, 2, 9},  H_AADD9, {H_A7SUS, H_A69}, H_A9SUS},
+    {"Aadd9",       7,  4, {7, 9, 11, 2},  {7, 11, 2, 9},  H_AADD9, {H_A7SUS, H_A69}, H_A9SUS},
     {"A7sus4",      7,  9, {7, 0, 2, 5},   {7, 0, 2, 5},   H_AADD9, {-1, -1},         -1},
     {"A6/9",        7,  7, {11, 4, 9, 2},  {7, 11, 2, 4},  H_AADD9, {-1, -1},         -1},
     {"Em9",         2,  7, {5, 9, 0, 4},   {2, 5, 9, 0},   H_EM9,   {H_EM7, -1},      H_G7},
@@ -397,14 +397,15 @@ static const hchord_t HCH[EN_HARM_N] = {
     {"Dmaj7/F#",    4,  2, {7, 11, 0, 4},  {4, 7, 0, 11},  H_DF,    {-1, -1},         H_FM7},
     {"Gadd9/B",     9,  4, {5, 9, 0, 7},   {9, 0, 5, 7},   H_GB,    {-1, -1},         H_BM9},
     {"A13sus",      7,  7, {5, 9, 0, 4},   {7, 0, 2, 5},   H_A13,   {H_A9SUS, -1},    -1},
-    {"A9sus",       7,  9, {2, 5, 9, 0},   {7, 0, 2, 5},   H_A9SUS, {-1, -1},         H_AADD9},
-    {"Cmaj9",      10,  0, {2, 5, 9, 0},   {10, 2, 5, 9},  H_CM9,   {-1, -1},         -1},   /* the one borrowed chord */
+    {"A9sus",       7,  7, {2, 5, 9, 0},   {7, 0, 2, 5},   H_A9SUS, {-1, -1},         H_AADD9},
+    {"Cmaj9",      10, 10, {2, 5, 9, 0},   {10, 2, 5, 9},  H_CM9,   {-1, -1},         -1},   /* the one borrowed chord */
 };
 static const uint8_t HOME[4] = {H_G7, H_FM7, H_BM9, H_AADD9};
 static const uint8_t SECTION[4] = {H_EM9, H_A13, H_FM7, H_BM9};
 
 const char *en_harm_name(int id) { return HCH[(unsigned)id < EN_HARM_N ? id : 0].name; }
 int en_harm_count(void) { return EN_HARM_N; }
+int en_harm_colour(int id) { return HCH[(unsigned)id < EN_HARM_N ? id : 0].col; }
 int en_harm_bass(int id) { return HCH[(unsigned)id < EN_HARM_N ? id : 0].bass; }
 int en_harm_plain(int id) { return HCH[(unsigned)id < EN_HARM_N ? id : 0].plain; }
 int en_harm_sub(int id) { return HCH[(unsigned)id < EN_HARM_N ? id : 0].sub; }
@@ -699,15 +700,15 @@ static void publish_chord(int c)
 }
 
 /* ---------------------------------------------------------------- pad --- */
-/* Beneath the piano: two soft saws to a voice, a few cents apart, one weaker and each leaning to its own side so the
- * pair moves in the field more than it pulses in level; then a dark 12 dB low-pass. A voice whose note the next chord
- * keeps simply holds; the others let go just before the change and swell back on their new note. */
+/* Beneath the piano, carrying the flow: two soft saws to a voice, a few cents apart, one weaker and each leaning to its
+ * own side so the pair moves in the field more than it pulses in level; then a dark 12 dB low-pass. It never lets go: a
+ * voice whose note changes glides there over a third of a second, and the whole swells a little with each chord. */
 typedef struct {
-    float ph[2], inc[2], amp, tgt;
-    uint8_t note, next;
+    float ph[2], inc[2], amp, tgt, now;          /* now: the pitch sounding, on its way to note */
+    uint8_t note;
 } pad_t;
 static pad_t pad[EN_NPAD];
-static float pad_gain, pad_gate, pad_vol;
+static float pad_gain, pad_gate, pad_vol, pad_swell = 0.8f, pad_swell_t = 0.8f;
 static const float PAD_PAN[EN_NPAD] = {-0.45f, -0.15f, 0.15f, 0.45f};
 
 static inline float blep_saw(float t, float dt)
@@ -724,27 +725,41 @@ static inline float blep_saw(float t, float dt)
 }
 
 /* ---------------------------------------------------------- electric piano --- */
-/* A tine piano in FM: one carrier and two modulators. A modulator at the carrier's pitch is the warm body (index by
- * how hard the key went down, falling away to a little); one at 14 times its pitch is the tine, a short soft ping that
- * only a firm touch brings out. Attack a few ms, softer when played softer. Key up: a damper, about 0.1 s. */
-#define NKEYS 6
+/* A tine piano in FM, played to flow: one carrier and two modulators. A modulator at the carrier's pitch is the warm
+ * body; one at 14 times its pitch is the tine, kept very low. A chord blooms: a slow attack, and the body's index opens
+ * after it rather than at it. The damper stays down: a chord holds until the next one, and then what the next chord
+ * does not have lets go over a second or two, so one dissolves into the other. What it does have is not struck again:
+ * it swells gently, phase unbroken. Between the changes, now and then one soft note. */
+#define NKEYS 12
 typedef struct {
     float cph, tph, cinc, tinc;
     float amp, dec, rel, att, arate;
-    float ib, ibd, it, itd, gl, gr, last;
-    int32_t wait, hold;
-    uint8_t on, note;
+    float ib, ibt, ibd, it, itd, gl, gr, last;
+    int32_t wait, hold;                          /* hold: samples before the key comes up; 0 held or already up */
+    uint8_t on, note, held;
 } ep_t;
 static ep_t ep[NKEYS];
 static int ep_lim = NKEYS;
-void en_shed(void) { ep_lim = 4; }
+void en_shed(void) { ep_lim = 6; }
 static float ep_vol, song_touch = 0.9f;
 static float ep_gone[2];                         /* what a stolen voice was saying, let down quickly: no click */
+volatile uint32_t en_ep_notes, en_ep_chords, en_ep_singles, en_ep_steals;   /* notes struck; chord gestures; lone notes; cuts */
+volatile uint8_t en_ep_peak;                     /* the most voices sounding at once */
 
-static void ep_strike(int n, float vel, int32_t hold, int32_t wait)
+static void ep_key_up(ep_t *e)
+{
+    e->hold = 0;
+    e->held = 0;
+    e->dec = e->rel;
+    midi(0x80, e->note, 0);
+}
+
+static float ep_amp_of(float vel) { return 0.42f + 0.58f * fm_clampf(vel * song_touch, 0.05f, 1.0f); }
+
+static ep_t *ep_strike(int n, float vel, float att_s, int32_t hold, int32_t wait)
 {
     int i, best = 0;
-    float lo = 9.0f, v2, top, p, amp;
+    float lo = 9.0f, v2, top, p;
     ep_t *e;
     while (n > 96)
         n -= 12;
@@ -760,120 +775,131 @@ static void ep_strike(int n, float vel, int32_t hold, int32_t wait)
         }
     }
     e = &ep[best];
-    if (e->on)
+    if (e->on) {
+        if (e->note != n && e->amp > 0.004f)
+            en_ep_steals++;
+        ep_gone[0] += e->last * e->gl;           /* (last: at the bus's gain) */
+        ep_gone[1] += e->last * e->gr;
         midi(0x80, e->note, 0);
+    }
+    e->amp = ep_amp_of(vel);
     vel = fm_clampf(vel * song_touch, 0.05f, 1.0f);
     v2 = vel * vel;
     top = 1.0f - 0.022f * fm_clampf((float)(n - 67), 0.0f, 24.0f);   /* the high notes are less bright for the same touch */
-    amp = 0.42f + 0.58f * vel;
-    if (e->on) {
-        ep_gone[0] += e->last * e->gl;               /* (last: at the bus's gain) */
-        ep_gone[1] += e->last * e->gr;
-    }
     e->att = 0.0f;
     e->cph = 0.0f;
     e->tph = 0.0f;
     e->on = 1;
+    e->held = 0;
     e->note = (uint8_t)n;
     e->cinc = mtof((float)n) * (1.0f / EN_SR);
     e->tinc = e->cinc * 14.0f;
-    e->amp = amp;
-    e->dec = fm_expf(-6.9f / (fm_clampf(8.0f - (float)(n - 48) * 0.11f, 3.5f, 9.0f) * EN_SR));
-    e->rel = fm_expf(-1.0f / (0.10f * EN_SR));
-    e->arate = 1.0f / ((0.0065f - 0.0035f * vel) * EN_SR);
-    e->ib = (0.10f + 1.25f * v2) * top * (1.0f / FM_TWO_PI);
-    e->ibd = fm_expf(-1.0f / (0.38f * EN_SR));
-    e->it = (0.02f + 0.42f * v2) * top * (1.0f / FM_TWO_PI);
+    e->dec = fm_expf(-6.9f / (fm_clampf(16.0f - (float)(n - 48) * 0.14f, 9.0f, 18.0f) * EN_SR));
+    e->rel = fm_expf(-1.0f / (0.45f * EN_SR));
+    e->arate = 1.0f / (att_s * EN_SR);
+    e->ib = 0.0f;                                /* the body opens after the attack, then slowly closes */
+    e->ibt = (0.10f + 0.95f * v2) * top * (1.0f / FM_TWO_PI);
+    e->ibd = fm_expf(-1.0f / (1.7f * EN_SR));
+    e->it = (0.008f + 0.10f * v2) * top * (1.0f / FM_TWO_PI);
     e->itd = fm_expf(-1.0f / (0.055f * EN_SR));
     p = (fm_clampf((float)(n - 62) * 0.03f, -0.35f, 0.35f) + 1.0f) * (FM_PI / 4.0f);
     e->gl = fm_cosf(p);
     e->gr = fm_sinf(p);
     e->wait = wait;
     e->hold = hold;
+    en_ep_notes++;
     midi(0x90, (uint32_t)n, (uint32_t)(vel * 120.0f));
+    return e;
 }
 
-/* one comping gesture: on its step, these of the chord's voices, this hard, this long */
-#define M_LH 0x10u                               /* the root, an octave under the hand: while there is no bass */
-#define M_NEXT 0x20u                             /* the next chord's notes: played ahead of the change */
-#define M_COL 0x40u                              /* a passing colour above the hand */
-typedef struct {
-    uint8_t step, mask, vel, len;
-} comp_t;
-#define COMP_MAX 6
-/* how the hand plays each of the four chords, by how far the music has come, in two ways that take turns cycle by
- * cycle. Sparse: a chord lives 5.6 s, and is touched two to five times; off the kick and the snare, on the even
- * sixteenths of the half-time feel */
-#define F 0x0Fu
-static const comp_t COMP[3][2][4][COMP_MAX] = {
-    {   /* alone with the pad: slow, the root in the left hand */
-        {
-            {{0, 0x1F, 58, 34}, {36, 0x0C, 34, 22}},
-            {{0, 0x1F, 54, 34}, {38, 0x06, 34, 16}, {56, M_COL, 30, 6}},
-            {{0, 0x1F, 58, 20}, {22, 0x0E, 40, 26}},
-            {{0, 0x1F, 52, 44}, {46, 0x0C, 34, 12}},
-        },
-        {
-            {{0, 0x1F, 54, 30}, {32, 0x0E, 38, 22}},
-            {{0, 0x1F, 52, 44}, {46, 0x0C, 34, 12}},
-            {{0, 0x1F, 56, 18}, {20, 0x0C, 36, 6}, {40, 0x06, 38, 18}},
-            {{0, 0x1F, 50, 28}, {30, 0x0E, 36, 20}, {56, M_COL, 30, 6}},
-        },
-    },
-    {   /* with the half-time drums: the bass has the root */
-        {
-            {{0, F, 56, 20}, {22, 0x0E, 40, 6}, {38, F, 46, 16}},
-            {{0, F, 54, 14}, {14, 0x0C, 38, 4}, {32, F, 46, 18}, {54, 0x06, 34, 6}},
-            {{0, F, 56, 20}, {22, 0x0E, 40, 6}, {38, F, 46, 14}, {56, M_COL, 32, 6}},
-            {{0, F, 54, 18}, {30, 0x0C, 38, 6}, {44, 0x0E, 42, 14}},
-        },
-        {
-            {{0, F, 54, 12}, {14, 0x0C, 36, 4}, {32, F, 46, 22}},
-            {{0, F, 52, 20}, {22, 0x06, 38, 8}, {38, 0x0E, 44, 6}, {46, 0x0C, 34, 4}},
-            {{0, F, 56, 14}, {30, 0x0E, 40, 8}, {44, F, 44, 14}},
-            {{0, F, 52, 10}, {14, 0x06, 36, 4}, {22, 0x0E, 42, 8}, {38, F, 44, 18}},
-        },
-    },
-    {   /* the two-step: a little more syncopated, ahead of the changes, and still not busy */
-        {
-            {{0, F, 56, 12}, {14, 0x0E, 40, 4}, {32, F, 48, 10}, {46, 0x0C, 38, 4}, {62, M_NEXT | F, 52, 12}},
-            {{14, 0x0C, 38, 4}, {22, F, 46, 8}, {38, 0x06, 38, 8}, {54, 0x0E, 42, 4}},
-            {{0, F, 56, 12}, {14, 0x0E, 40, 4}, {32, F, 48, 12}, {46, 0x06, 36, 4}, {62, M_NEXT | F, 52, 14}},
-            {{14, 0x0C, 40, 4}, {22, F, 46, 8}, {46, 0x06, 36, 6}, {54, M_COL, 34, 6}},
-        },
-        {
-            {{0, F, 54, 8}, {22, 0x0E, 42, 6}, {32, F, 48, 8}, {54, 0x0C, 38, 4}, {62, M_NEXT | F, 50, 12}},
-            {{22, F, 46, 10}, {38, 0x0E, 40, 4}, {46, 0x06, 36, 6}},
-            {{0, F, 54, 10}, {22, 0x0C, 40, 4}, {32, F, 46, 14}, {54, 0x0E, 38, 4}, {62, M_NEXT | F, 50, 14}},
-            {{14, 0x0E, 40, 4}, {30, F, 44, 10}, {54, M_COL, 34, 6}},
-        },
-    },
-};
-#undef F
-static uint8_t comp_set;                         /* moves only at the cycle's seam */
-
-static void comp_play(const comp_t *g, int c)
+/* one soft chord a change: common tones carried over, the rest let go, the new ones rolled up 40 .. 120 ms */
+static void ep_chord(int c, float vel, int with_root)
 {
-    const int ch = g->mask & M_NEXT ? (c + 1) & 3 : c;
-    const float base = (float)g->vel * 0.01f * (0.96f + 0.08f * frand());
-    const int32_t hold = (int32_t)((float)g->len * step_len);
-    int32_t wait = irand(120);
-    int v, oct = 12 * par[P_BOCT];
-    if (g->mask & M_LH) {
-        int r = (par[P_ROOT] + HCH[h_cur.chord[ch]].bass) % 12;
-        ep_strike((r < 4 ? 48 : 36) + r + oct, base * 0.8f, hold, wait);
-        wait += 200 + irand(120);
+    int notes[5], nn = 0, i, k, covered[5], todo = 0;
+    float roll;
+    int32_t wait, gap;
+    const int oct = 12 * par[P_BOCT];
+    if (with_root) {
+        const int r = (par[P_ROOT] + HCH[h_cur.chord[c]].bass) % 12;
+        notes[nn++] = (r < 4 ? 48 : 36) + r + oct;
     }
-    for (v = 0; v < 4; v++)
-        if (g->mask >> v & 1u) {                 /* a slight roll up the hand: 4 .. 7 ms a note */
-            ep_strike(keys_v[ch][v] + oct, base * (v == 3 ? 1.04f : 0.94f + 0.02f * (float)v), hold, wait);
-            wait += 180 + irand(130);
+    for (k = 0; k < 4; k++)
+        notes[nn++] = keys_v[c][k] + oct;
+    for (k = 0; k < nn; k++)
+        covered[k] = 0;
+    for (i = 0; i < ep_lim; i++) {
+        ep_t *e = &ep[i];
+        int keep = 0;
+        if (!e->on)
+            continue;
+        for (k = 0; k < nn; k++)
+            if (notes[k] == e->note && !covered[k]) {
+                covered[k] = keep = 1;
+                break;
+            }
+        if (keep) {                              /* it sounds already: no attack, a gentle swell to the new chord's level */
+            const float was = e->amp * e->att, to = ep_amp_of(vel);
+            if (to > was) {
+                e->att = was / to;
+                e->amp = to;
+                e->arate = 1.0f / (0.9f * EN_SR);
+            }
+            e->dec = fm_expf(-6.9f / (fm_clampf(16.0f - (float)((int)e->note - 48) * 0.14f, 9.0f, 18.0f) * EN_SR));
+            e->ibt = fm_maxf(e->ibt, 0.5f * (0.10f + 0.95f * vel * vel) * (1.0f / FM_TWO_PI));
+            e->held = 1;
+            e->hold = 0;
+        } else if (e->held || e->hold > 0) {
+            ep_key_up(e);
         }
-    if (g->mask & M_COL) {
-        int n = keys_v[c][3], want = (par[P_ROOT] + HCH[h_cur.chord[c]].col) % 12;
-        n += ((want - n) % 12 + 12) % 12;
-        ep_strike(n + oct, base, hold, wait);
     }
+    for (k = 0; k < nn; k++)
+        todo += !covered[k];
+    if (!todo)
+        return;
+    en_ep_chords++;
+    roll = (0.040f + 0.080f * frand()) * EN_SR;
+    gap = todo > 1 ? (int32_t)(roll / (float)(todo - 1)) : 0;
+    wait = irand(120);
+    for (k = 0; k < nn; k++)
+        if (!covered[k]) {
+            const float v = vel * (with_root && k == 0 ? 0.8f : k == nn - 1 ? 1.03f : 0.95f);
+            ep_t *e = ep_strike(notes[k], v, 0.075f, 0, wait);
+            e->held = 1;
+            wait += gap + irand(gap / 4 + 1);
+        }
+}
+
+/* the notes between the changes: on a step, a tone relative to a voice of the hand; soft, single. When a chord has
+ * nothing to add at that place, nothing is played. */
+typedef struct {
+    uint8_t step, voice, colour, vel;            /* colour: the chord's passing tone above that voice; else that voice an octave up */
+} inner_t;
+#define INNER_MAX 3
+static const inner_t INNER[4][2][INNER_MAX] = {
+    {{{38, 1, 1, 30}}, {{46, 2, 0, 28}}},                                        /* alone: rarely */
+    {{{30, 1, 1, 30}}, {{44, 2, 1, 30}}},
+    {{{22, 1, 1, 32}, {46, 2, 0, 30}}, {{32, 2, 1, 32}, {52, 1, 0, 28}}},
+    {{{14, 2, 0, 34}, {30, 1, 1, 34}, {46, 2, 1, 32}}, {{22, 1, 0, 34}, {38, 2, 1, 34}, {54, 0, 0, 30}}},   /* level 3: the lift */
+};
+static uint8_t inner_set;                        /* moves only at the seam */
+
+static void ep_inner(const inner_t *g, int c)
+{
+    const float vel = (float)g->vel * 0.01f * (0.94f + 0.12f * frand());
+    const int v0 = keys_v[c][g->voice];
+    int n, i;
+    if (g->colour) {
+        const int want = (par[P_ROOT] + HCH[h_cur.chord[c]].col) % 12;
+        n = v0 + ((want - v0) % 12 + 12) % 12;
+    } else {
+        n = v0 + 12;
+    }
+    n += 12 * par[P_BOCT];
+    for (i = 0; i < ep_lim; i++)
+        if (ep[i].on && ep[i].note == n && ep[i].held)
+            return;                              /* the hand has it already: leave it */
+    en_ep_singles++;
+    ep_strike(n, vel, 0.030f, (int32_t)(12.0f * step_len), irand(300));
 }
 
 /* ------------------------------------------------------------------ bass --- */
@@ -922,9 +948,10 @@ static void bass_note(int off, uint32_t len)
 }
 
 /* ------------------------------------------------------------- the motifs --- */
-/* Two short phrases, a call and its answer a tone away in shape: up, up, a step back. The call a soft vibraphone, on
- * the IV leaning into the iii; the answer glass, on the vi leaning into the V, and it stops on the 9th of that chord,
- * a note that wants to fall and doesn't. Rests much longer than the phrases; the last call goes unanswered. */
+/* Two short phrases, a call and its answer: up, up, a step back. A soft muted vibraphone: harmonic ratios only, a low
+ * index, a soft attack. Each phrase lies inside one chord, early in it, and each note is moved to a tone of that chord, so
+ * the note and its echoes all sit in what sounds. The call on the first chord; the answer on the last, where it stops
+ * on a tone that wants to fall and doesn't. Rests much longer than the phrases; the last call goes unanswered. */
 #define NBELL 4
 typedef struct {
     float cph, mph, cinc, minc, amp, adec, idx, idec, att, arate, gl, gr;
@@ -932,19 +959,19 @@ typedef struct {
     uint8_t on, note, kind;
 } bell_t;
 static bell_t bell[NBELL];
-static float bell_vol, bell_trem_ph;
+static float bell_vol;
 typedef struct {
     uint8_t step;                                /* in the cycle */
     int8_t note;                                 /* above the tonic, an octave over middle C */
     uint8_t vel;
 } mnote_t;
 static const mnote_t MOTIF[2][4] = {
-    {{52, 0, 44}, {55, 4, 46}, {58, 9, 56}, {64, 7, 52}},            /* 1 3 6, 5 */
-    {{180, 4, 40}, {183, 7, 44}, {186, 11, 50}, {194, 9, 54}},       /* 3 5 7, 6 */
+    {{8, 0, 44}, {11, 4, 46}, {14, 9, 54}, {20, 7, 50}},             /* 1 3 6, 5 */
+    {{200, 4, 40}, {203, 7, 44}, {206, 11, 50}, {214, 9, 52}},       /* 3 5 7, 6 */
 };
 static int8_t motif_now[2][4];                   /* this cycle's notes: the phrase, each moved to its chord */
 /* each cycle: bit 0 the call, bit 1 the answer */
-static const uint8_t MOTIF_WHEN[12] = {0, 2, 1, 2, 3, 0, 1, 3, 0, 3, 1, 0};
+static const uint8_t MOTIF_WHEN[12] = {0, 2, 0, 3, 0, 1, 3, 0, 1, 0, 1, 0};
 
 static void bell_strike(int kind, int n, float vel, int32_t wait)
 {
@@ -968,21 +995,14 @@ static void bell_strike(int kind, int n, float vel, int32_t wait)
     v->cinc = mtof((float)n) * (1.0f / EN_SR);
     v->amp = vel;
     v->att = 0.0f;
-    if (kind == 0) {                             /* a vibraphone: a soft bar, a little 4th partial on the strike */
-        v->minc = v->cinc * 4.0f;
-        v->idx = (0.25f + 0.55f * vel) * (1.0f / FM_TWO_PI);
-        v->idec = fm_expf(-1.0f / (0.11f * EN_SR));
-        v->adec = fm_expf(-6.9f / (2.9f * EN_SR));
-        v->arate = 1.0f / (0.003f * EN_SR);
-        p = (-0.35f + 1.0f) * (FM_PI / 4.0f);
-    } else {                                     /* glass: octaves a hair stretched, ringing longer, thinner */
-        v->minc = v->cinc * 3.003f;
-        v->idx = (0.35f + 0.7f * vel) * (1.0f / FM_TWO_PI);
-        v->idec = fm_expf(-1.0f / (0.42f * EN_SR));
-        v->adec = fm_expf(-6.9f / (3.6f * EN_SR));
-        v->arate = 1.0f / (0.0015f * EN_SR);
-        p = (0.42f + 1.0f) * (FM_PI / 4.0f);
-    }
+    /* one family: the fundamental and a little of its neighbours, gone quickly. The answer: its second harmonic's ratio,
+     * a lighter index */
+    v->minc = v->cinc * (kind == 0 ? 1.0f : 2.0f);
+    v->idx = (kind == 0 ? 0.30f + 0.25f * vel : 0.14f + 0.14f * vel) * (1.0f / FM_TWO_PI);
+    v->idec = fm_expf(-1.0f / (0.13f * EN_SR));
+    v->adec = fm_expf(-6.9f / ((kind == 0 ? 2.4f : 2.2f) * EN_SR));
+    v->arate = 1.0f / (0.0040f * EN_SR);         /* about 10 ms to its top */
+    p = ((kind == 0 ? -0.30f : 0.30f) + 1.0f) * (FM_PI / 4.0f);
     v->gl = fm_cosf(p);
     v->gr = fm_sinf(p);
     v->wait = wait;
@@ -1044,6 +1064,13 @@ static void cycle_commit(void)                   /* on the seam, and only there 
             motif_now[m][n] = (int8_t)nearest_tone(h_cur.chord[MOTIF[m][n].step / CHORD_STEPS], MOTIF[m][n].note);
 }
 
+/* for the tests: a motif's note, its step in the cycle, its note (semitones) over this cycle's chords */
+int en_motif_step(int m, int n) { return MOTIF[m & 1][n & 3].step; }
+int en_motif_note(int m, int n, const uint8_t *chords)
+{
+    return nearest_tone(chords[MOTIF[m & 1][n & 3].step / CHORD_STEPS], MOTIF[m & 1][n & 3].note);
+}
+
 static void harmony_restart(void)                /* the top of the song */
 {
     int s, v;
@@ -1060,17 +1087,17 @@ static void harmony_restart(void)                /* the top of the song */
 static void song_step(uint32_t s)
 {
     const uint32_t cs = s % CHORD_STEPS, cy = s % CYCLE_STEPS, cycle = s / CYCLE_STEPS;
-    const int c = (int)(s / CHORD_STEPS & 3u), nc = (c + 1) & 3;
+    const int c = (int)(s / CHORD_STEPS & 3u);
     int i, flags = 0;
     float k;
 
     if (s == 0u) {
-        comp_set = 0;
+        inner_set = 0;
         harmony_restart();
     } else if (!cy) {
         cycle_commit();
     }
-    if (cy == CYCLE_STEPS - 8u)
+    if (cy == CYCLE_STEPS - 1u)
         cycle_prepare(cycle + 1u);
     if (!(s & 15u)) {                            /* on the bar: the timeline */
         for (i = 0; PART[i + 1].step <= s; i++)
@@ -1092,30 +1119,38 @@ static void song_step(uint32_t s)
     if (k > 0.0f)
         duck = fm_maxf(duck, k);
 
-    /* the pad: leave a little before the change, arrive after it */
-    if (cs == CHORD_STEPS - 4u)
-        for (i = 0; i < EN_NPAD; i++) {
-            pad[i].next = nc ? pad_v[nc][i] : pad_n[0][i];
-            if (pad[i].next != pad[i].note)
-                pad[i].tgt = 0.0f;
-        }
+    /* the pad: on the change the voices move to their new notes, gliding, and the whole swells */
     if (cs == 0u) {
         for (i = 0; i < EN_NPAD; i++) {
             pad[i].note = pad_v[c][i];
             pad[i].tgt = 1.0f;
         }
         publish_chord(c);
+        pad_swell_t = 1.0f;
+    } else if (cs == 24u) {
+        pad_swell_t = 0.80f;
     }
     pad_gate = s < PAD_OFF ? 1.0f : 0.0f;
 
     /* the piano */
     if (!cy)
-        comp_set = (uint8_t)(song_level <= 1 ? 0 : song_level - 1);
+        inner_set = (uint8_t)song_level;
     if (s <= LAST_CHORD) {
-        const comp_t *g = COMP[comp_set][cycle & 1u][c];
-        for (i = 0; i < COMP_MAX && (g[i].mask); i++)
-            if (g[i].step == cs && (s < LAST_CHORD - 64u + 62u || s == LAST_CHORD))
-                comp_play(&g[i], c);
+        if (!cs)
+            ep_chord(c, 0.44f + 0.04f * frand(), song_level <= 1);
+        if (s < LAST_CHORD)
+            for (i = 0; i < INNER_MAX; i++) {
+                const inner_t *g = &INNER[inner_set][cycle & 1u][i];
+                /* each chord its own place: a little later along the cycle, so no two are the same */
+                if (g->vel && (uint32_t)g->step + 2u * (uint32_t)c == cs)
+                    ep_inner(g, c);
+            }
+    } else if (s == 2800u) {                     /* the last chord lets go, slowly */
+        for (i = 0; i < NKEYS; i++)
+            if (ep[i].on && ep[i].held) {
+                ep[i].rel = fm_expf(-1.0f / (0.9f * EN_SR));
+                ep_key_up(&ep[i]);
+            }
     }
 
     /* the bass */
@@ -1495,12 +1530,16 @@ void en_init(void)
         pad[i].ph[0] = 0.13f * (float)i;
         pad[i].ph[1] = 0.37f + 0.21f * (float)i;
         pad[i].amp = pad[i].tgt = 0.0f;
+        pad[i].now = 0.0f;
     }
     for (i = 0; i < NKEYS; i++)
         ep[i].on = 0;
     for (i = 0; i < NBELL; i++)
         bell[i].on = 0;
     pad_gain = pad_gate = 0.0f;
+    pad_swell = pad_swell_t = 0.8f;
+    en_ep_notes = en_ep_chords = en_ep_singles = en_ep_steals = 0u;
+    en_ep_peak = 0;
     ep_gone[0] = ep_gone[1] = 0.0f;
     ep_lim = NKEYS;
     duck = duck_s = 0.0f;
@@ -1629,14 +1668,14 @@ static void render_pad(uint32_t n)
     int i;
     float lvl = 0.0f, c;
     uint32_t j;
-    const float g = pad_vol * 0.135f * (1.0f + 0.35f * lift);
+    const float g = pad_vol * 0.20f * pad_swell * (1.0f + 0.30f * lift);
     for (j = 0; j < n; j++)
         padl[j] = padr[j] = 0.0f;
     pad_gain += (pad_gate - pad_gain) * fm_minf((float)n / ((pad_gate > 0.0f ? 2.5f : 2.2f) * EN_SR), 1.0f);
     for (i = 0; i < EN_NPAD; i++) {
         pad_t *v = &pad[i];
         float p0 = v->ph[0], p1 = v->ph[1], amp = v->amp, f, gl, gr, pn;
-        const float tgt = v->tgt * pad_gain, rate = tgt > amp ? 1.0f / (1.1f * EN_SR) : 1.0f / (0.22f * EN_SR),
+        const float tgt = v->tgt * pad_gain, rate = 1.0f / (0.6f * EN_SR),
                     inc0 = v->inc[0], inc1 = v->inc[1];
         if (amp < 1e-5f && tgt < 1e-4f) {
             v->amp = 0.0f;
@@ -1661,7 +1700,10 @@ static void render_pad(uint32_t n)
         v->ph[0] = p0;
         v->ph[1] = p1;
         v->amp = fm_flush(amp);
-        f = mtof((float)v->note + 0.05f * motion * mod[i].v);
+        if (v->now <= 0.0f)
+            v->now = (float)v->note;
+        v->now += ((float)v->note - v->now) * fm_minf((float)n * (1.0f / (0.11f * EN_SR)), 1.0f);   /* a third of a second */
+        f = mtof(v->now + 0.05f * motion * mod[i].v);
         v->inc[0] = f * 0.99856f * (1.0f / EN_SR);           /* -2.5 and +2.5 cents: slow, and warm */
         v->inc[1] = f * 1.00144f * (1.0f / EN_SR);
         en_pad_note[i] = v->note;
@@ -1682,7 +1724,7 @@ static void render_pad(uint32_t n)
             l = plp[1];
             r = plp[3];
             dk += dd;
-            gd = 1.0f - 0.30f * dk;
+            gd = 1.0f - 0.22f * dk;
             mixl[j] += l * gd;
             mixr[j] += r * gd;
             rsend[j] += (l + r) * 0.42f;
@@ -1698,8 +1740,15 @@ static void render_keys(uint32_t n)
 {
     int i;
     uint32_t j;
-    const float g = ep_vol * 0.73f * (1.0f + 0.22f * lift), cl = 0.40f;              /* the bus's one pole: ~3.6 kHz */
+    const float g = ep_vol * 0.62f * (1.0f + 0.18f * lift), cl = 0.40f + 0.12f * lift;              /* the bus's one pole: ~3.6 kHz */
     float trem0, trem1, dt, tr, gd, dg;
+    {
+        int on = 0;
+        for (i = 0; i < ep_lim; i++)
+            on += ep[i].on;
+        if (on > en_ep_peak)
+            en_ep_peak = (uint8_t)on;
+    }
     for (j = 0; j < n; j++) {
         padl[j] = ep_gone[0];
         padr[j] = ep_gone[1];
@@ -1710,7 +1759,7 @@ static void render_keys(uint32_t n)
     ep_gone[1] = fm_flush(ep_gone[1]);
     for (i = 0; i < ep_lim; i++) {
         ep_t *e = &ep[i];
-        float cph = e->cph, tph = e->tph, amp = e->amp, ib = e->ib, it = e->it, att = e->att;
+        float cph = e->cph, tph = e->tph, amp = e->amp, ib = e->ib, ibt = e->ibt, it = e->it, att = e->att;
         const float cinc = e->cinc, tinc = e->tinc, ibd = e->ibd, itd = e->itd, ar = e->arate, gl = e->gl * g, gr = e->gr * g;
         float dec = e->dec, x = 0.0f;
         uint32_t k = 0;
@@ -1727,14 +1776,13 @@ static void render_keys(uint32_t n)
         if (e->hold > 0) {
             e->hold -= (int32_t)n;
             if (e->hold <= 0) {
-                e->dec = e->rel;
+                ep_key_up(e);
                 dec = e->rel;
-                midi(0x80, e->note, 0);
             }
         }
         if (it > 0.0006f) {                      /* the tine's ping, then a lookup saved */
             for (; k < n; k++) {
-                const float m = sine(cph) * (ib + 0.024f) + sine(tph) * it;
+                const float m = sine(cph) * (ib + 0.012f) + sine(tph) * it;
                 x = sine(cph + m + 2.0f) * amp * att * (1.0f + ib * 1.8f);
                 padl[k] += x * gl;
                 padr[k] += x * gr;
@@ -1745,13 +1793,14 @@ static void render_keys(uint32_t n)
                 if (tph >= 1.0f)
                     tph -= 1.0f;
                 amp *= dec;
-                ib *= ibd;
+                ib += (ibt - ib) * 0.00009f;     /* opens over about a quarter of a second */
+                ibt *= ibd;
                 it *= itd;
                 att += (1.0f - att) * ar;
             }
         } else {
             for (; k < n; k++) {
-                const float m = sine(cph) * (ib + 0.024f);
+                const float m = sine(cph) * (ib + 0.012f);
                 x = sine(cph + m + 2.0f) * amp * att * (1.0f + ib * 1.8f);
                 padl[k] += x * gl;
                 padr[k] += x * gr;
@@ -1759,7 +1808,8 @@ static void render_keys(uint32_t n)
                 if (cph >= 1.0f)
                     cph -= 1.0f;
                 amp *= dec;
-                ib *= ibd;
+                ib += (ibt - ib) * 0.00009f;
+                ibt *= ibd;
                 att += (1.0f - att) * ar;
             }
         }
@@ -1767,10 +1817,11 @@ static void render_keys(uint32_t n)
         e->tph = tph;
         e->amp = amp;
         e->ib = fm_flush(ib);
+        e->ibt = fm_flush(ibt);
         e->it = fm_flush(it);
         e->att = att;
         e->last = x * g;
-        if (amp < 0.0005f)
+        if (amp < 0.0035f && !e->held)           /* -45 dB: under everything, and the voice is free */
             e->on = 0;
     }
     /* a slow stereo tremolo: a quarter of 170, just there */
@@ -1790,7 +1841,7 @@ static void render_keys(uint32_t n)
         eplp[1] += cl * (padr[j] - eplp[1]);
         tr += dt;
         gd += dg;
-        dd = 1.0f - 0.16f * gd;
+        dd = 1.0f - 0.05f * gd;                  /* barely: the piano must not be interrupted */
         a = 1.0f - 0.14f * (1.0f + tr);
         b = 1.0f - 0.14f * (1.0f - tr);
         l = eplp[0];
@@ -1848,18 +1899,10 @@ static void render_bass(uint32_t n)
 static void render_bells(uint32_t n)
 {
     int i;
-    const float g = bell_vol * 0.55f;
-    float tr0, tr1;
-    tr0 = sine(bell_trem_ph);
-    bell_trem_ph += (float)n * (4.4f / EN_SR);
-    if (bell_trem_ph >= 1.0f)
-        bell_trem_ph -= 1.0f;
-    tr1 = sine(bell_trem_ph);
+    const float g = bell_vol * 0.62f;
     for (i = 0; i < NBELL; i++) {
         bell_t *v = &bell[i];
         float cph = v->cph, mph = v->mph, amp = v->amp, idx = v->idx, att = v->att;
-        const float depth = v->kind == 0 ? 0.13f : 0.0f;     /* the vibraphone's slow fan */
-        float tr, dt;
         uint32_t j = 0;
         if (!v->on)
             continue;
@@ -1871,15 +1914,13 @@ static void render_bells(uint32_t n)
             j = (uint32_t)v->wait;
             v->wait = 0;
         }
-        tr = 1.0f + depth * tr0;
-        dt = depth * (tr1 - tr0) * (1.0f / (float)n);
         for (; j < n; j++) {
             float m = sine(mph) * idx, x;
-            x = sine(cph + m + 4.0f) * amp * att * g * tr;
-            mixl[j] += x * v->gl * 0.55f;
-            mixr[j] += x * v->gr * 0.55f;
-            rsend[j] += x * 1.10f;
-            esend[j] += x * 0.95f;
+            x = sine(cph + m + 4.0f) * amp * att * g;
+            mixl[j] += x * v->gl * 0.85f;        /* more of the note itself, less of the room */
+            mixr[j] += x * v->gr * 0.85f;
+            rsend[j] += x * 0.55f;
+            esend[j] += x * 0.16f;
             cph += v->cinc;
             mph += v->minc;
             if (cph >= 1.0f)
@@ -1889,7 +1930,6 @@ static void render_bells(uint32_t n)
             amp *= v->adec;
             idx *= v->idec;
             att += (1.0f - att) * v->arate;
-            tr += dt;
         }
         v->cph = cph;
         v->mph = mph;
@@ -1977,6 +2017,7 @@ static void control(uint32_t n)                 /* once a chunk: the slow things
     brk_fc += (brk_fc_t - brk_fc) * fm_minf(slow * (lift_t > 0.0f ? 4.0f : 1.0f), 1.0f);
     pad_fc += (pad_fc_t - pad_fc) * fm_minf(slow * (lift_t > 0.0f ? 4.0f : 1.0f), 1.0f);
     bass_song += (bass_song_t - bass_song) * slow;
+    pad_swell += (pad_swell_t - pad_swell) * fm_minf((float)n * (1.0f / (1.1f * EN_SR)), 1.0f);
     lift += (lift_t - lift) * (lift_t > lift ? (float)n * (1.0f / (0.8f * EN_SR)) : slow * 0.75f);
     pl_decay += ((en_frozen ? 0.9995f : pl_decay_t) - pl_decay) * 0.002f;
     pl_dd2 = fm_clampf(pl_decay + 0.15f, 0.25f, 0.5f);

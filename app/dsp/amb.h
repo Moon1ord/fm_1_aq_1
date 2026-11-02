@@ -132,6 +132,12 @@ int en_harm_sub(int id);                       /* the relative along the graph, 
 int en_harm_home(int slot);
 int en_harm_section(int slot);
 uint32_t en_harm_tones(int id);                /* all its pitch classes, bit i */
+int en_harm_colour(int id);                    /* its passing tone, semitones above the tonic */
+int en_motif_step(int m, int n);               /* motif 0 call, 1 answer; note 0..3: its step in the cycle */
+int en_motif_note(int m, int n, const uint8_t *chords);   /* its note over a cycle's chords, semitones */
+#define EN_ECHO_STEPS 6                        /* the echo's default place, in sixteenths */
+extern volatile uint32_t en_ep_notes, en_ep_chords, en_ep_singles, en_ep_steals;
+extern volatile uint8_t en_ep_peak;
 extern volatile uint8_t en_cycle_now[4];       /* the chords playing now */
 
 /* the pieces: recipes for every parameter (Tune and MIDI out included, but they are the player's) */

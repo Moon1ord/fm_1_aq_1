@@ -34,6 +34,8 @@ run arr sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promoti
     -o $OUT/arr_test tests/host/arr_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/arr_test"
 run rhy sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promotion -Werror -DEN_HOST -Iapp/dsp -Ibase/include \
     -o $OUT/rhy_test tests/host/rhy_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/rhy_test"
+run knob sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promotion -Werror -DEN_HOST -Iapp/dsp -Ibase/include \
+    -o $OUT/knob_test tests/host/knob_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/knob_test"
 run brk sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promotion -Werror -Iapp/dsp -o $OUT/brk_test tests/host/brk_test.c app/dsp/brk.c -lm && $OUT/brk_test"
 if [ -f $B/aq1.fwsc ]; then
     run ota-entry sh -c "$CC -w -o $OUT/ota_test base/tests/ota_test.c && $OUT/ota_test $B/aq1.fwsc"

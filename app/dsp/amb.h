@@ -124,6 +124,12 @@ extern volatile uint8_t en_drum_level, en_break_bars;   /* the level now; the le
 #if defined EN_HOST || defined PLAT_HOST
 void en_test_ticks(uint32_t n);                 /* n sixteenths at once, no time passing: hours in a test */
 void en_test_jump(uint32_t step);               /* the song's counter, as if it had played this far */
+extern volatile uint32_t en_test_nans;          /* blocks with a NaN on the way to the limiter */
+extern volatile uint32_t en_hat_hits;           /* hats struck */
+extern int en_test_pad_off;                     /* the pad out of the mix: to hear the piano by itself */
+extern float en_test_peak_in;                   /* the most that has gone into the limiter (1: its knee, about) */
+float en_test_bass_pitch(void);                 /* the bass, cycles a sample: where it is and where it is going */
+float en_test_bass_target(void);
 /* each bar as it starts: step, section, level, character, break's bars */
 extern void (*en_trace)(uint32_t step, int section, int level, int character, int break_bars);
 #endif
@@ -173,12 +179,21 @@ int en_bass_ch(const en_hchord_t *ch, const en_hchord_t *nx, uint32_t pool, uint
                uint32_t seed, int *len);
 int en_motif_note_ch(int m, int n, const en_hchord_t *ch);
 int en_motif_step(int m, int n);               /* motif 0 call, 1 answer; note 0..3: its step in the chord */
+/* what a turn of the table plays: bit 0 the call, bit 1 the answer. rate: the Rate knob, 50 the table as it is, under it fewer, over it
+ * more; h: a hash of the turn */
+int en_motif_due(int due, int rate, uint32_t h);
+/* a motif note's voice at this Tone: the modulator's ratio to the carrier (whole numbers only: no bells), its index in
+ * radians, how long that index takes to fall, s, and the index it falls to */
+void en_motif_voice(int tone, int kind, float vel, float *ratio, float *index, float *idec_s, float *floor_idx);
 int en_motif_fits(int m, int n, uint32_t steps);   /* it plays on a chord of so many steps, with its first two echoes inside */
 #define EN_ECHO_STEPS 6                        /* the echo's default place, in sixteenths */
 extern volatile uint32_t en_ep_notes, en_ep_chords, en_ep_singles, en_ep_steals;
 extern volatile uint8_t en_ep_peak;
 enum { EN_BASS_LIGHT = 2, EN_BASS_FULL = 3, EN_BASS_ROLL = 5, EN_BASS_LONG = 6 };   /* the figures en_bass_* draw from */
 extern volatile uint32_t en_bass_notes;
+/* the figures the Move knob asks for: 50 the style's own (set), 0 the long roots, 100 the rolling ones. Between, a figure at a
+ * time, as h falls */
+int en_bass_move(int set, int move, uint32_t h);
 extern volatile uint8_t en_hat_peak;           /* the hat voices sounding at once: at most two */
 
 /* the pieces: recipes for every parameter (Tune and MIDI out included, but they are the player's) */

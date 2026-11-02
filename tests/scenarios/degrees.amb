@@ -1,0 +1,158 @@
+# SEL + a key: chords on that note, or not. The note stays in the scale; the key alone still changes the scale; a held SEL alone
+# does nothing and has no card; MIDI in changes the scale only.
+master 2430
+wait 300
+expect mask 0xFFF
+expect pool 0xAD5
+# D Lydian: D E F# G# A B C#. F# (pc 6, 4 above D) is key 1; it is in the scale, chords may stand on it
+expect ring6 1
+expect ring5 0
+# SEL held alone: nothing
+press SEL
+wait 1000
+expect help 0
+expect mask 0xFFF
+expect pool 0xAD5
+expect view 0
+# with SEL held the keys' lights are the scale's: nothing off yet (keys 1 3 4 6 8 9 11: F# G# A B C# D E, and the same an octave up)
+expect keyslit 0x2B5AB5A
+listen
+tapkey 1
+said NO CHORDS ON F#
+expect mask 0xFEF
+expect pool 0xAD5
+# the light goes while SEL is held
+expect keyslit 0xB58B58
+wait 100
+shot ring_held.png
+release SEL
+wait 100
+expect ring6 2
+# the light is back without SEL: F# is still in the scale
+expect keyslit 0x2B5AB5A
+expect view 0
+wait 100
+shot ring_off.png
+# back on
+press SEL
+tapkey 1
+said CHORDS ON F#
+release SEL
+expect mask 0xFFF
+expect ring6 1
+# a note outside the scale (G, key 2): refused, nothing kept
+press SEL
+tapkey 2
+said NOT IN THE SCALE
+release SEL
+expect mask 0xFFF
+# the key alone still changes the scale
+tapkey 1
+said REMOVED F#
+expect pool 0xAC5
+expect ring6 0
+tapkey 1
+said ADDED F#
+expect pool 0xAD5
+expect mask 0xFFF
+# a mark waits for its note: off, the note out of the scale, a look, the note back: still off
+press SEL
+tapkey 1
+release SEL
+expect mask 0xFEF
+tapkey 1
+expect pool 0xAC5
+expect mask 0xFEF
+expect ring6 0
+tapkey 1
+expect pool 0xAD5
+expect ring6 2
+# MIDI in: the scale, not the mask; SEL held makes no difference to it
+press SEL
+midi 90 37 64
+wait 20
+expect pool 0xAF5
+expect mask 0xFEF
+release SEL
+wait 20
+midi 90 37 64
+wait 20
+expect pool 0xAD5
+midi 90 42 64
+wait 20
+expect pool 0xAC5
+expect mask 0xFEF
+midi 90 42 64
+wait 20
+expect pool 0xAD5
+expect mask 0xFEF
+# it goes with the key: relative to the root
+tap GLO
+spin K1 2
+expect par24 4
+expect mask 0xFEF
+expect ring8 2
+expect ring6 1
+spin K1 -2
+expect par24 2
+expect ring6 2
+expect ring8 1
+tap HOME
+# the screen reader says which, after the scale
+where
+said No chords on F#
+# down to two, and no further: E B C# off leaves G# and A, the tonic not counting
+press SEL
+# E (key 11) is 2 above D, G# (key 3) 6, B (key 6) 9, C# (key 8) 11
+tapkey 11
+expect mask 0xFEB
+tapkey 6
+expect mask 0xDEB
+tapkey 8
+expect mask 0x5EB
+# G# and A left: neither may go
+tapkey 3
+said 2 DEGREES AT LEAST
+expect mask 0x5EB
+tapkey 4
+said 2 DEGREES AT LEAST
+expect mask 0x5EB
+# the tonic is free to go: it was never one of the two
+tapkey 9
+said NO CHORDS ON D
+expect mask 0x5EA
+release SEL
+expect ring2 2
+wait 100
+shot ring_two.png
+# a scale that leaves too few: all of the scale's degrees are in use, and shown so. The mark waits
+# (A out of the scale, G# alone remains: its one root is not two)
+tapkey 4
+expect pool 0xA55
+expect ring8 1
+expect ring11 1
+tapkey 4
+expect pool 0xAD5
+expect ring11 2
+# it keeps with the piece, is saved, and SAVE held gives the recipe's all on
+tap SAVE
+expect dirty 0
+turn PRESET 1
+expect mask 0xFFF
+turn PRESET -1
+expect mask 0x5EA
+reboot
+wait 300
+expect mask 0x5EA
+expect piece 0
+press SAVE
+wait 1700
+release SAVE
+expect mask 0xFFF
+# help: HOME's card says it, and fits
+press HOME
+wait 1000
+expect help 7
+shot help_home.png
+release HOME
+expect unfit 0

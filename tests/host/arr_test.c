@@ -280,7 +280,7 @@ static void harmony_checks(void)
                             lastpass = a.pass;
                             passes++;
                         }
-                        en_gen_next(&g, POOLS[p], 2, sd, 50, pt.character, &c);
+                        en_gen_next(&g, POOLS[p], 2, sd, 50, pt.character, EN_MASK_ALL, &c);
                         if (!i)
                             first_root = c.ch.root;
                         CHECK(c.ch.bass != 0, "%s: the tonic in the bass", EN_STYLE_NAME[st]);

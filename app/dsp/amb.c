@@ -226,7 +226,7 @@ static float knob_curve(int v, int mid, float lo, float base, float hi)
 }
 
 /* ------------------------------------------------------------ commands --- */
-enum { C_SET, C_POOL, C_PLAY, C_NEXT, C_FREEZE, C_SEED, C_PANIC, C_CLOCK, C_REGROW };
+enum { C_SET, C_POOL, C_MASK, C_PLAY, C_NEXT, C_FREEZE, C_SEED, C_PANIC, C_CLOCK, C_REGROW };
 #define QN 64u
 static uint32_t q[QN];
 static volatile uint32_t q_w, q_r;
@@ -241,6 +241,7 @@ static void post(uint32_t c, int a, int b)
 }
 void en_set(int p, int v) { post(C_SET, p, v); }
 void en_pool(uint32_t pool) { post(C_POOL, 0, (int)(pool & 0xFFFu)); }
+void en_mask(uint32_t m) { post(C_MASK, 0, (int)(m & 0xFFFu)); }
 void en_play(int on) { post(C_PLAY, on, 0); }
 void en_next(void) { post(C_NEXT, 0, 0); }
 void en_freeze(int on) { post(C_FREEZE, on, 0); }
@@ -268,6 +269,7 @@ volatile float en_pad_amp[EN_NPAD];
 
 static int16_t par[P_NPARAMS];
 static uint32_t pool = 0xAB5u;                  /* Ionian until told: what the harmony is made of, from the next chord */
+static uint32_t degrees = EN_MASK_ALL;          /* the notes chords may stand on (en_mask), likewise */
 static float tunefac = 1.0f;
 #define RNG_START 0x9E3779B9u
 static uint32_t rng = RNG_START;
@@ -768,6 +770,13 @@ static void lead_to(const int8_t *ch, uint32_t tones, const int *from, int root,
  * How long. A phrase's rhythm comes first (TMPL, by character): a whole phrase is 8 or 16 bars of 2 to 4 chords, so every 8th
  * bar is a change, a chord is 4 bars or 2, and 1-bar chords only come in pairs late in a half. Calm is slow, the peak quicker.
  *
+ * Which degrees. A mask says which notes a chord may stand on and have in its bass. It is one input more: a root it leaves out
+ * weighs nothing, a colour over a bass it leaves out is not one. A note it leaves out stays in the pool, for the voices and
+ * the extensions. The tonic has its own rule, and the two add up: it is never in the bass, so it never counts towards the two
+ * roots a mask must leave; with its bit off there are no glimpses of it, with its third and fifth off neither. Fewer than two
+ * roots left, and the mask is not used at all: every degree of the pool. When the mask changes, the chords on what it left
+ * out go from the memory (EN_GEN_GONE), and those places are composed again as the phrase reaches them.
+ *
  * What it remembers. The last phrase. Evolve 0: it plays again for ever, note for note. In between it plays again a few times
  * (at 50 once or twice), most of those with one chord recoloured or changed, then a new one. Evolve 100: never again, and no
  * three chords in a row that have come within the last EN_GEN_WINDOW. A rise to the peak does not wait: new phrase, Evolve 0
@@ -926,9 +935,9 @@ static int chord_fit(const en_hchord_t *c, int sh, int strict)
     return 1;
 }
 
-/* the roots a chord may stand on in this pool: those with a real chord; if fewer than two have one, those with less, never
- * one with nothing over it. The tonic is not among them unless nothing else is */
-uint32_t en_gen_roots(uint32_t p)
+/* the roots a chord may stand on in this pool, of those the mask leaves: those with a real chord; if fewer than two have one,
+ * those with less, never one with nothing over it. Not the tonic */
+uint32_t en_gen_roots_in(uint32_t p, uint32_t mask)
 {
     const int fam = en_pool_family(p);
     uint32_t m = 0u;
@@ -937,11 +946,21 @@ uint32_t en_gen_roots(uint32_t p)
     for (tier = 0; tier < 3 && pop12(m) < 2; tier++) {
         m = 0u;
         for (r = 1; r < 12; r++)
-            if (p >> r & 1u && (tier == 0 ? root_stands(p, r, fam) : root_tones(p, r) >= 3 - (tier - 1)))
+            if (p >> r & mask >> r & 1u && (tier == 0 ? root_stands(p, r, fam) : root_tones(p, r) >= 3 - (tier - 1)))
                 m |= 1u << r;
     }
+    return m;
+}
+
+/* ... and the tonic if nothing else */
+uint32_t en_gen_roots(uint32_t p)
+{
+    const uint32_t m = en_gen_roots_in(p, EN_MASK_ALL);
     return m ? m : 1u;
 }
+
+int en_mask_usable(uint32_t p, uint32_t mask) { return pop12(en_gen_roots_in(p, mask)) >= 2; }
+uint32_t en_mask_effective(uint32_t p, uint32_t mask) { return en_mask_usable(p, mask) ? mask & 0xFFFu : EN_MASK_ALL; }
 
 void en_gen_start(en_gen_t *st)
 {
@@ -952,6 +971,7 @@ void en_gen_start(en_gen_t *st)
     st->prev_root = st->prev2 = st->prev3 = 0xFFu;
     st->since_t = 0u;                            /* it does not open on it, nor near it */
     st->since_b = BORROW_GAP / 2u;
+    st->mask = EN_MASK_ALL;
 }
 
 typedef struct {
@@ -959,7 +979,7 @@ typedef struct {
     int fam, key, evolve, character, up, pos;    /* pos: 0 mid-phrase, 1 first, 2 last */
     int avoid_root, avoid_bass;                  /* the chord after this one, when it is already known */
     int from_k[4], from_p[4];
-    uint32_t usable;
+    uint32_t usable, mask;                       /* mask: the degrees in force */
     int window;                                  /* how far back three chords may not come again */
 } gen_ctx_t;
 
@@ -1042,6 +1062,8 @@ static int gen_colour(const en_gen_t *st, const gen_ctx_t *x, int r, int not_sh,
             en_chord_make(x->p, r, sh, &c);
             if (sh == not_sh || !chord_fit(&c, sh, strict) || (st->n && c.bass == st->prev_bass) || (int)c.bass == x->avoid_bass)
                 continue;
+            if (!(x->mask >> c.bass & 1u))       /* no bass on a degree that is off */
+                continue;
             if (r && c.bass != r && pop12(x->usable) < 3)   /* two roots only: an inversion would leave no way on */
                 continue;
             mask = 0u;
@@ -1101,7 +1123,7 @@ static int gen_root(const en_gen_t *st, const gen_ctx_t *x, uint32_t off, uint32
         int fn, bass = r;
         en_hchord_t c;
         w[r] = 0u;
-        if (!(x->p >> r & 1u) || off >> r & 1u || !(r ? x->usable >> r & 1u : (st->since_t >= TONIC_GAP && x->evolve > 0) || x->usable == 1u))
+        if (!(x->p >> r & 1u) || off >> r & 1u || !(r ? x->usable >> r & 1u : (x->mask & 1u && st->since_t >= TONIC_GAP && x->evolve > 0) || x->usable == 1u))
             continue;
         if (r == st->prev_root || r == x->avoid_root)
             continue;
@@ -1242,7 +1264,21 @@ static void gen_turn(en_gen_t *st, const gen_ctx_t *x)
     }
 }
 
-void en_gen_next(en_gen_t *st, uint32_t p, int key, uint32_t seed, int evolve, int character, en_gchord_t *out)
+/* the mask moved: what the phrase has on a degree now off goes from the memory */
+static void gen_forget(en_gen_t *st, uint32_t p, uint32_t mask)
+{
+    int i;
+    for (i = 0; i < 4; i++) {
+        en_hchord_t c;
+        if (st->phrase[i].root == EN_GEN_GONE)
+            continue;
+        en_chord_make(p, st->phrase[i].root, st->phrase[i].shape, &c);
+        if (!(mask >> st->phrase[i].root & 1u) || !(mask >> c.bass & 1u))
+            st->phrase[i].root = EN_GEN_GONE;
+    }
+}
+
+void en_gen_next(en_gen_t *st, uint32_t p, int key, uint32_t seed, int evolve, int character, uint32_t mask, en_gchord_t *out)
 {
     gen_ctx_t x;
     en_gid_t id;
@@ -1256,7 +1292,8 @@ void en_gen_next(en_gen_t *st, uint32_t p, int key, uint32_t seed, int evolve, i
     x.evolve = evolve < 0 ? 0 : evolve > 100 ? 100 : evolve;
     x.character = (unsigned)character < 4u ? character : 0;
     x.up = x.character == 3 ? SEC_UP : 0;
-    x.usable = en_gen_roots(p);
+    x.mask = en_mask_effective(p, mask);
+    x.usable = x.mask == EN_MASK_ALL ? en_gen_roots(p) : en_gen_roots_in(p, x.mask);
     x.window = x.evolve > 50 ? (x.evolve - 50) * EN_GEN_WINDOW / 50 : 0;
     x.avoid_root = x.avoid_bass = -1;
     if (st->n) {
@@ -1286,6 +1323,9 @@ void en_gen_next(en_gen_t *st, uint32_t p, int key, uint32_t seed, int evolve, i
             x.from_p[v] = 49 + key + 4 * v;
         }
     }
+    if (st->n && x.mask != st->mask)
+        gen_forget(st, p, x.mask);
+    st->mask = (uint16_t)x.mask;
     st->pool = p;
     if (x.character < st->was_char && st->away < 200u)
         st->away = (uint8_t)(st->away + 1u);     /* falling: a little nearer home */
@@ -1296,7 +1336,7 @@ void en_gen_next(en_gen_t *st, uint32_t p, int key, uint32_t seed, int evolve, i
     n = TMPL[st->tmpl].n;
     x.pos = i == 0 ? 1 : i == n - 1 ? 2 : 0;
     if (st->composing) {
-        if (i == n - 1 && st->valid && i > 0) {  /* it may come again: its end must lead to its start */
+        if (i == n - 1 && st->valid && i > 0 && st->phrase[0].root != EN_GEN_GONE) {   /* it may come again: its end must lead to its start */
             en_hchord_t f;
             en_chord_make(p, st->phrase[0].root, st->phrase[0].shape, &f);
             x.avoid_root = f.root;
@@ -1307,7 +1347,7 @@ void en_gen_next(en_gen_t *st, uint32_t p, int key, uint32_t seed, int evolve, i
         if (st->since_b >= BORROW_GAP && x.evolve > 0 && x.fam != FAM_SPARSE && x.pos == 0 && !(hhash(seed, st->n, 63u) & 15u)) {
             en_hchord_t b;
             if (en_chord_make(p, 0, SH_BORROW, &b) && b.root != st->prev_root && b.bass != st->prev_bass &&
-                (int)b.root != x.avoid_root && (int)b.bass != x.avoid_bass && !tri_seen(st, &x, b.root << 5 | SH_BORROW)) {
+                x.mask >> b.root & 1u && (int)b.root != x.avoid_root && (int)b.bass != x.avoid_bass && !tri_seen(st, &x, b.root << 5 | SH_BORROW)) {
                 id.root = b.root;
                 id.shape = SH_BORROW;
             }
@@ -1320,12 +1360,18 @@ void en_gen_next(en_gen_t *st, uint32_t p, int key, uint32_t seed, int evolve, i
         const en_gid_t *mem = &st->phrase[i], *after = &st->phrase[(i + 1) % n];
         int redo, sh = -1;
         id = *mem;
-        en_chord_make(p, after->root, after->shape == SH_BORROW ? SH_7 : after->shape, &nx);
-        en_chord_make(p, id.root, id.shape, &c);
-        x.avoid_root = nx.root;
-        x.avoid_bass = nx.bass;
-        redo = id.shape == SH_BORROW || id.root == st->prev_root || (st->n && c.bass == st->prev_bass) ||
-               (!id.root && st->since_t < TONIC_GAP);   /* a glimpse of the tonic is not kept: it goes when the phrase returns */
+        if (after->root != EN_GEN_GONE) {
+            en_chord_make(p, after->root, after->shape == SH_BORROW ? SH_7 : after->shape, &nx);
+            x.avoid_root = nx.root;
+            x.avoid_bass = nx.bass;
+        }
+        if (id.root == EN_GEN_GONE) {
+            redo = 1;                            /* the mask took it: a new one here */
+        } else {
+            en_chord_make(p, id.root, id.shape, &c);
+            redo = id.shape == SH_BORROW || id.root == st->prev_root || (st->n && c.bass == st->prev_bass) ||
+                   (!id.root && st->since_t < TONIC_GAP);   /* a glimpse of the tonic is not kept: it goes when the phrase returns */
+        }
         if (st->var_kind == 1u && st->var_slot == i && !redo) {
             sh = gen_colour(st, &x, id.root, id.shape, 0, hhash(seed, st->n, 64u));
             if (sh >= 0)
@@ -2038,15 +2084,17 @@ static void arr_bar(uint32_t s)                  /* on the bar */
 static uint32_t motif_base;                      /* the bar that pass began at */
 
 /* the next chord, a little ahead of it, from the pool and the key as they are now */
-static uint32_t prep_pool;
+static uint32_t prep_pool, prep_degrees;
 static int prep_root;
+#define PREP_STALE() (prep_pool != pool || prep_degrees != degrees || prep_root != par[P_ROOT])
 static void chord_prepare(uint32_t at)
 {
     en_part_t p;
     part_at(at, &p);
     gen_nxt = gen_now;
-    en_gen_next(&gen_nxt, pool, par[P_ROOT], song_seed, par[P_EVOLVE], p.character, &ch_nxt);
+    en_gen_next(&gen_nxt, pool, par[P_ROOT], song_seed, par[P_EVOLVE], p.character, degrees, &ch_nxt);
     prep_pool = pool;
+    prep_degrees = degrees;
     prep_root = par[P_ROOT];
 }
 
@@ -2132,7 +2180,7 @@ static void song_step(uint32_t s)
         en_part_t p;
         const uint32_t pass = pass_at(s);
         part_at(s, &p);
-        if (prep_pool != pool || prep_root != par[P_ROOT])   /* changed in the very last step */
+        if (PREP_STALE())                        /* changed in the very last step */
             chord_prepare(s);
         if (pass != h_pass) {                    /* a new pass: the motifs' table from its top */
             h_pass = pass;
@@ -2145,7 +2193,7 @@ static void song_step(uint32_t s)
     cs = ch_steps - ch_left;
     if (ch_left == 8u)
         chord_prepare(s + ch_left);
-    else if (ch_left < 8u && (prep_pool != pool || prep_root != par[P_ROOT]))
+    else if (ch_left < 8u && PREP_STALE())
         chord_prepare(s + ch_left);              /* changed since: this change takes it */
     if (!(s & 15u)) {                            /* on the bar: what the arranger wants of it */
         const uint32_t bar = s / 16u;
@@ -2628,6 +2676,7 @@ void en_init(void)
     ep_trem = pulse_left = 0.0f;
     pulse = 0;
     sixteenth = 0u;
+    en_bars = 0u;
     en_playing = en_frozen = en_ext = 0u;
     hat_ph[0] = hat_ph[1] = hat_ph[2] = hat_ph[3] = 0u;
     hat[0].lp1 = hat[0].lp2 = hat[1].lp1 = hat[1].lp2 = 0.0f;
@@ -2696,6 +2745,7 @@ void en_init(void)
             apply(i, PARAMS[i].def);
     apply(P_TEMPO, PARAMS[P_TEMPO].def);
     pool = EN_MODE_POOL[par[P_MODE]];
+    degrees = EN_MASK_ALL;
     fresh = 0u;
     ep_lone = 0u;
     harmony();
@@ -2768,6 +2818,12 @@ static void drain(void)
             harmony();
             break;
         }
+        case C_MASK:
+            if ((uint32_t)b != degrees) {        /* (a piece taken up says it, mostly unchanged) */
+                degrees = (uint32_t)b & 0xFFFu;
+                harmony();
+            }
+            break;
         case C_PLAY:
             if (a && !en_playing)
                 play_start(1);

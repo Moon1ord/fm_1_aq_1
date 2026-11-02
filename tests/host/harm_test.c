@@ -181,7 +181,7 @@ static void engine_checks(void)
         CHECK(nch > 30, "only %d chords in 8000 steps", nch);
         for (i = 0; i < nch; i++) {
             en_gchord_t want;
-            en_gen_next(&st, lyd, 2, 1001u + (uint32_t)evo, e, chs[i].character, &want);
+            en_gen_next(&st, lyd, 2, 1001u + (uint32_t)evo, e, chs[i].character, EN_MASK_ALL, &want);
             CHECK(!memcmp(&want.ch.tones, &chs[i].g.ch.tones, sizeof want.ch.tones) && want.shape == chs[i].g.shape && want.ch.root == chs[i].g.ch.root,
                   "evolve %d chord %d: plays another chord than the generator says", e, i);
             CHECK(!memcmp(want.keys_v, chs[i].g.keys_v, 4) && !memcmp(want.pad_v, chs[i].g.pad_v, 4), "evolve %d chord %d: other voices", e, i);
@@ -354,11 +354,11 @@ static void bass_checks(void)
                 en_gchord_t cur, nx;
                 uint32_t n;
                 en_gen_start(&st);
-                en_gen_next(&st, POOLS[pi], 2, sd, 50, (int)(sd & 3u), &cur);
+                en_gen_next(&st, POOLS[pi], 2, sd, 50, (int)(sd & 3u), EN_MASK_ALL, &cur);
                 for (n = 0u; n < 200u; n++) {
                     const uint32_t steps = 16u * cur.bars;
                     uint32_t cs, filled = 0u, next_at = 0u;
-                    en_gen_next(&st, POOLS[pi], 2, sd, 50, (int)(sd & 3u), &nx);
+                    en_gen_next(&st, POOLS[pi], 2, sd, 50, (int)(sd & 3u), EN_MASK_ALL, &nx);
                     for (cs = 0u; cs < steps; cs++) {
                         int len = 0;
                         const int off = en_bass_ch(&cur.ch, &nx.ch, POOLS[pi], n, cs, steps, level, sd, &len);
@@ -425,7 +425,7 @@ static void motif_checks(void)
                 continue;
             en_gen_start(&st);
             for (i = 0; i < 12; i++) {
-                en_gen_next(&st, mask, 0, 3u, 50, i & 3, &g);
+                en_gen_next(&st, mask, 0, 3u, 50, i & 3, EN_MASK_ALL, &g);
                 for (m = 0; m < 2; m++)
                     for (n = 0; n < 4; n++)
                         CHECK(g.ch.tones >> ((en_motif_note_ch(m, n, &g.ch) + 120) % 12) & 1u, "pool %03x: motif out of its chord", mask);

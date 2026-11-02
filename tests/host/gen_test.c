@@ -91,7 +91,7 @@ static void pool_checks(void)
             uint32_t i;
             en_gen_start(&st);
             for (i = 0u; i < 20u; i++)
-                en_gen_next(&st, mask, 2, 1u, EVOLVE_MID, 1, &g);
+                en_gen_next(&st, mask, 2, 1u, EVOLVE_MID, 1, EN_MASK_ALL, &g);
             continue;
         }
         valid++;
@@ -101,7 +101,7 @@ static void pool_checks(void)
             en_gen_start(&st);
             for (i = 0u; i < 24u; i++) {
                 const int prev_root = st.prev_root, prev_bass = st.prev_bass;
-                en_gen_next(&st, p, key, 100u + (uint32_t)key, i % 3u == 0u ? 100 : EVOLVE_MID, (int)(i / 4u) & 3, &g);
+                en_gen_next(&st, p, key, 100u + (uint32_t)key, i % 3u == 0u ? 100 : EVOLVE_MID, (int)(i / 4u) & 3, EN_MASK_ALL, &g);
                 chord_valid(p, &g);
                 voices_valid(p, key, &g);
                 if (i && pop(en_gen_roots(p)) >= 2) {   /* (only one root has anything over it: the pool forces it) */
@@ -135,7 +135,7 @@ static void long_run(const mode_t_ *m, uint32_t seed, int evolve, en_gchord_t *o
     uint32_t i, bar = 0u;
     en_gen_start(&st);
     for (i = 0u; i < n; i++) {
-        en_gen_next(&st, m->pool, m->key, seed, evolve, song_character(bar), &out[i]);
+        en_gen_next(&st, m->pool, m->key, seed, evolve, song_character(bar), EN_MASK_ALL, &out[i]);
         bar += out[i].bars;
     }
 }
@@ -371,11 +371,11 @@ static void seed_checks(void)
         int i;
         en_gen_start(&st);
         for (i = 0; i < 9 + (int)(sd % 7u); i++)
-            en_gen_next(&st, lyd, 2, sd, sd % 2u ? 0 : EVOLVE_MID, 1, &g);
-        en_gen_next(&st, aeo, 2, sd, sd % 2u ? 0 : EVOLVE_MID, 1, &g);
+            en_gen_next(&st, lyd, 2, sd, sd % 2u ? 0 : EVOLVE_MID, 1, EN_MASK_ALL, &g);
+        en_gen_next(&st, aeo, 2, sd, sd % 2u ? 0 : EVOLVE_MID, 1, EN_MASK_ALL, &g);
         CHECK(!((uint32_t)g.ch.tones & ~aeo) || g.ch.borrowed, "seed %u: the next chord still in the old pool", sd);
         for (i = 0; i < 12; i++) {
-            en_gen_next(&st, aeo, 2, sd, sd % 2u ? 0 : EVOLVE_MID, 1, &g);
+            en_gen_next(&st, aeo, 2, sd, sd % 2u ? 0 : EVOLVE_MID, 1, EN_MASK_ALL, &g);
             CHECK(!((uint32_t)g.ch.tones & ~aeo) || g.ch.borrowed, "seed %u: the memory brought back the old pool", sd);
         }
     }
@@ -387,8 +387,8 @@ static void seed_checks(void)
         en_gen_start(&s1);
         en_gen_start(&s2);
         for (i = 0; i < 40; i++) {
-            en_gen_next(&s1, lyd, 2, 9u, 0, 1, &g1);
-            en_gen_next(&s2, lyd, i < 20 ? 2 : 7, 9u, 0, 1, &g2);
+            en_gen_next(&s1, lyd, 2, 9u, 0, 1, EN_MASK_ALL, &g1);
+            en_gen_next(&s2, lyd, i < 20 ? 2 : 7, 9u, 0, 1, EN_MASK_ALL, &g2);
             CHECK(g1.ch.root == g2.ch.root && g1.shape == g2.shape, "a new key: chord %d differs", i);
             voices_valid(lyd, i < 20 ? 2 : 7, &g2);
         }
@@ -436,7 +436,7 @@ static void character_checks(void)
             uint32_t i;
             en_gen_start(&st);
             for (i = 0u; i < 400u; i++) {
-                en_gen_next(&st, MODES[0].pool, 2, sd * 13u + 5u, EVOLVE_MID, (int)c, &g);
+                en_gen_next(&st, MODES[0].pool, 2, sd * 13u + 5u, EVOLVE_MID, (int)c, EN_MASK_ALL, &g);
                 n++;
                 b += g.bars;
                 nine += g.shape == 1u || g.shape == 3u;
@@ -530,8 +530,264 @@ static void family_checks(void)
     CHECK(en_pool_family(1u | 1u << 4 | 1u << 7) == EN_FAM_SPARSE, "three notes");
 }
 
+/* ---- the degrees: which notes may carry a chord (en_gen_next's mask) */
+#define GOLDEN_ALL_ON 0x8993b33du                /* the generator before it had a mask, 0772c0a: all on must be that, to the note */
+static void all_on_checks(void)
+{
+    static const int E[3] = {0, 50, 100}, K[2] = {0, 5};
+    uint32_t h = 2166136261u;
+    int m, k, s, e;
+#define H(x) h = (h ^ (uint32_t)(x)) * 16777619u
+    for (m = 0; m < EN_NMODES; m++)
+        for (k = 0; k < 2; k++)
+            for (s = 0; s < 3; s++)
+                for (e = 0; e < 3; e++) {
+                    en_gen_t st;
+                    en_gchord_t g;
+                    int i, v;
+                    en_gen_start(&st);
+                    for (i = 0; i < 300; i++) {
+                        en_gen_next(&st, EN_MODE_POOL[m], K[k], (uint32_t)(11 + s * 97), E[e], (i / 5) & 3, EN_MASK_ALL, &g);
+                        H(g.ch.root);
+                        H(g.ch.bass);
+                        H(g.shape);
+                        H(g.bars);
+                        H(g.ch.tones);
+                        for (v = 0; v < 4; v++) {
+                            H(g.keys_v[v]);
+                            H(g.pad_v[v]);
+                        }
+                    }
+                }
+#undef H
+    CHECK(h == GOLDEN_ALL_ON, "all degrees on: %08x, not what it was before there was a mask (%08x)", h, GOLDEN_ALL_ON);
+}
+
+/* a pool and a mask: every chord on an allowed root over an allowed bass, the tonic out of the bass, no chord twice; too few
+ * roots left, and it is what all on is, note for note */
+static void mask_one(uint32_t p, uint32_t m, int key, uint32_t seed, int evolve, uint32_t chords, uint32_t *seen_out)
+{
+    en_gen_t st, all;
+    uint32_t i, seen = 0u;
+    const int usable = en_mask_usable(p, m);
+    const uint32_t eff = en_mask_effective(p, m);
+    CHECK(usable ? eff == (m & 0xFFFu) : eff == EN_MASK_ALL, "pool %03x mask %03x: it uses %03x", p, m, eff);
+    CHECK(usable == (pop(en_gen_roots_in(p, m)) >= 2), "pool %03x mask %03x: usable says %d", p, m, usable);
+    en_gen_start(&st);
+    en_gen_start(&all);
+    for (i = 0u; i < chords; i++) {
+        en_gchord_t g, a;
+        const int prev_root = st.prev_root;
+        const int ch = (int)(i / 4u) & 3;
+        en_gen_next(&st, p, key, seed, evolve, ch, m, &g);
+        chord_valid(p, &g);
+        CHECK(eff >> g.ch.root & 1u, "pool %03x mask %03x key %d: a chord on %d", p, m, key, g.ch.root);
+        CHECK(eff >> g.ch.bass & 1u, "pool %03x mask %03x key %d: root %d over a bass on %d", p, m, key, g.ch.root, g.ch.bass);
+        if (i && pop(en_gen_roots_in(p, eff)) >= 2)
+            CHECK(g.ch.root != prev_root, "pool %03x mask %03x key %d: the same root twice", p, m, key);
+        seen |= 1u << g.ch.root;
+        if (!usable) {
+            en_gen_next(&all, p, key, seed, evolve, ch, EN_MASK_ALL, &a);
+            CHECK(a.ch.root == g.ch.root && a.shape == g.shape && a.bars == g.bars, "pool %03x mask %03x: too few, and yet not all on", p, m);
+        }
+    }
+    if (usable)
+        CHECK(pop(seen & ~1u) >= 2 || chords < 16u, "pool %03x mask %03x: only roots %03x came", p, m, seen);
+    if (seen_out)
+        *seen_out = seen;
+}
+
+static void mask_checks(void)
+{
+    uint32_t refused = 0u, tried = 0u;
+    int mo;
+    /* every subset of every mode's notes, in every key */
+    for (mo = 0; mo < EN_NMODES; mo++) {
+        const uint32_t p = EN_MODE_POOL[mo];
+        uint32_t m = p;
+        for (;;) {                               /* (the subsets of p) */
+            int key;
+            for (key = 0; key < 12; key += 5) {
+                mask_one(p, m, key, 40u + (uint32_t)key, (key % 3) * 50, 40u, 0);
+                tried++;
+            }
+            refused += !en_mask_usable(p, m);
+            if (!m)
+                break;
+            m = (m - 1u) & p;
+        }
+    }
+    /* custom pools, all sorts of masks over them, with bits outside the pool as well: those do not count */
+    {
+        uint32_t x = 99u, i;
+        for (i = 0u; i < 1500u; i++) {
+            uint32_t p, m;
+            x = x * 1664525u + 1013904223u;
+            p = (x >> 8 | 1u) & 0xFFFu;
+            x = x * 1664525u + 1013904223u;
+            m = (x >> 8) & 0xFFFu;
+            if (pop(p) < 3)
+                continue;
+            mask_one(p, m, (int)(x >> 28) % 12, x >> 4, (int)(i % 3u) * 50, 30u, 0);
+            CHECK(en_mask_usable(p, m) == en_mask_usable(p, m | ~p), "pool %03x mask %03x: a bit outside the pool counted", p, m);
+        }
+    }
+    printf("  degrees: %u mode, key and mask cases right, %u masks of the modes leave too few\n", tried, refused);
+
+    /* the tonic: turned off, no glimpses of it; on, they come, over an allowed bass only */
+    {
+        const uint32_t p = EN_MODE_POOL[MODE_IONIAN];
+        uint32_t seen;
+        mask_one(p, EN_MASK_ALL, 2, 7u, 100, 600u, &seen);
+        CHECK(seen & 1u, "Ionian, all on: no glimpse of the tonic in 600 chords");
+        mask_one(p, EN_MASK_ALL & ~1u, 2, 7u, 100, 600u, &seen);
+        CHECK(!(seen & 1u), "the tonic off, and a chord on it");
+        /* the tonic's chords stand over its third or its fifth: with those off it is the tonic that has to wait */
+        mask_one(p, EN_MASK_ALL & ~(1u << 4 | 1u << 7), 2, 7u, 100, 600u, &seen);
+        CHECK(!(seen & 1u), "the tonic's third and fifth off, and a chord on the tonic");
+        /* the tonic does not count towards the two: the tonic and one more is too few */
+        CHECK(!en_mask_usable(p, 1u | 1u << 7), "the tonic and one more counted as two");
+        CHECK(en_mask_usable(p, 1u << 5 | 1u << 7), "two without the tonic did not");
+    }
+    /* a note off stays in the scale: the chords may still have it, only not stand on it */
+    {
+        const uint32_t p = EN_MODE_POOL[MODE_LYDIAN], m = EN_MASK_ALL & ~(1u << 9);
+        en_gen_t st;
+        en_gchord_t g;
+        uint32_t i, had = 0u;
+        en_gen_start(&st);
+        for (i = 0u; i < 200u; i++) {
+            en_gen_next(&st, p, 2, 5u, 100, 1, m, &g);
+            had += g.ch.tones >> 9 & 1u;
+        }
+        CHECK(had > 10u, "the sixth off: only %u chords of 200 have it as a tone", had);
+    }
+    /* what it remembers: at Evolve 0 the phrase plays for ever; a note off leaves the memory at the next chord, the rest of
+     * the phrase stays, and it does not come back by itself */
+    {
+        int sd;
+        for (sd = 0; sd < 40; sd++) {
+            const uint32_t p = EN_MODE_POOL[MODE_LYDIAN];
+            en_gen_t st;
+            en_gchord_t g;
+            uint32_t i, m;
+            int n = 0, off, kept_before = 0, kept_after = 0;
+            en_gen_start(&st);
+            for (i = 0u; i < 16u; i++)
+                en_gen_next(&st, p, 2, 500u + (uint32_t)sd, 0, 1, EN_MASK_ALL, &g);
+            n = st.ph_i;
+            off = st.phrase[0].root;                 /* a chord the phrase has */
+            for (i = 1u; i < 4u; i++)
+                kept_before += st.phrase[i].root != off;
+            m = EN_MASK_ALL & ~(1u << off);
+            en_gen_next(&st, p, 2, 500u + (uint32_t)sd, 0, 1, m, &g);
+            CHECK(m >> g.ch.root & 1u, "seed %d: a chord on %d at once after it went off", sd, off);
+            for (i = 0u; i < 4u; i++) {
+                CHECK(st.phrase[i].root == EN_GEN_GONE || st.phrase[i].root != off, "seed %d: %d still in the memory", sd, off);
+                kept_after += st.phrase[i].root != EN_GEN_GONE;
+            }
+            CHECK(kept_after >= 1, "seed %d: the whole memory went for one note (%d before, %d phrase places)", sd, kept_before, n);
+            for (i = 0u; i < 60u; i++) {
+                en_gen_next(&st, p, 2, 500u + (uint32_t)sd, 0, 1, m, &g);
+                CHECK(g.ch.root != off, "seed %d: %d came back", sd, off);
+            }
+            /* on again: free to come, nothing forced */
+            en_gen_next(&st, p, 2, 500u + (uint32_t)sd, 0, 1, EN_MASK_ALL, &g);
+            CHECK(st.mask == EN_MASK_ALL, "seed %d: the mask did not come back on", sd);
+        }
+    }
+    /* a new key: the same degrees (relative, so it survives), a removed note's mark stays for its return */
+    {
+        const uint32_t ion = EN_MODE_POOL[MODE_IONIAN], m = EN_MASK_ALL & ~(1u << 5);
+        en_gen_t st;
+        en_gchord_t g;
+        int key;
+        en_gen_start(&st);
+        for (key = 0; key < 120; key++) {
+            en_gen_next(&st, ion, key % 12, 3u, 50, 1, m, &g);
+            CHECK(g.ch.root != 5 && g.ch.tonic == key % 12, "key %d: a chord on the off degree, or in the wrong key", key % 12);
+        }
+        /* the fourth out of the scale: then back; the mark still says off */
+        for (key = 0; key < 40; key++)
+            en_gen_next(&st, ion & ~(1u << 5), 2, 3u, 50, 1, m, &g);
+        for (key = 0; key < 60; key++) {
+            en_gen_next(&st, ion, 2, 3u, 50, 1, m, &g);
+            CHECK(g.ch.root != 5, "the fourth came back to the scale, and with it a chord on it");
+        }
+    }
+    /* two roots: they take turns, each chord in its own right */
+    {
+        const uint32_t p = EN_MODE_POOL[MODE_DORIAN], m = 1u << 5 | 1u << 10;
+        uint32_t seen;
+        mask_one(p, m, 7, 9u, 50, 200u, &seen);
+        CHECK(seen == m, "two roots on: %03x came", seen);
+    }
+}
+
+/* the engine: the mask changes at the very last moment before a chord, and that chord obeys; none before it moves */
+static uint32_t step_at[64];
+static int root_at[64], n_at;
+static void note_chord(uint32_t step, const en_gchord_t *g, int character)
+{
+    (void)character;
+    if (n_at < 64) {
+        step_at[n_at] = step;
+        root_at[n_at++] = g->ch.root;
+    }
+}
+static void render_to(uint32_t bars)
+{
+    static int32_t b[64];
+    while (en_bars < bars)
+        en_render(b, 8, 1024);
+}
+static void engine_checks(void)
+{
+    static const uint32_t BACK[5] = {8u, 4u, 2u, 1u, 0u};  /* 0: the last step has run, the chord's has not */
+    static const int K[3] = {5, 9, 14};
+    int b, k;
+    for (k = 0; k < 3; k++)
+        for (b = 0; b < 5; b++) {
+            int was_n, off, c;
+            static uint32_t first_step[64];
+            static int first_root[64];
+            en_trace_chord = 0;
+            en_init();
+            en_seed(700u + (uint32_t)k);
+            en_trace_chord = note_chord;
+            n_at = 0;
+            en_play(1);
+            render_to(2600u);
+            was_n = n_at;
+            CHECK(was_n > K[k] + 1, "only %d chords", was_n);
+            for (c = 0; c < was_n; c++) {
+                first_step[c] = step_at[c];
+                first_root[c] = root_at[c];
+            }
+            en_trace_chord = 0;
+            en_init();
+            en_seed(700u + (uint32_t)k);
+            en_trace_chord = note_chord;
+            n_at = 0;
+            en_play(1);
+            off = first_root[K[k]];
+            render_to(first_step[K[k]] - BACK[b]);
+            CHECK(n_at == K[k], "the chords before: %d, not %d", n_at, K[k]);
+            en_mask(EN_MASK_ALL & ~(1u << off));
+            render_to(first_step[K[k]] + 2u);
+            for (c = 0; c < K[k]; c++)
+                CHECK(root_at[c] == first_root[c] && step_at[c] == first_step[c], "chord %d moved, before the change", c);
+            CHECK(n_at == K[k] + 1 && step_at[K[k]] == first_step[K[k]], "the change's chord did not come on time");
+            CHECK(root_at[K[k]] != off, "the next chord is on %d, which went off %u steps before it", off, BACK[b]);
+            en_trace_chord = 0;
+        }
+}
+
 int main(void)
 {
+    all_on_checks();
+    mask_checks();
+    engine_checks();
     family_checks();
     pool_checks();
     tonic_gap_checks();

@@ -1,0 +1,43 @@
+# Seven minutes of Liquid with the knobs walked from one end to the other, a minute a pair. Not one of the tests.
+# 1:30 Bloom 0, 2:00 Bloom 100, 2:30 Bright 0, 3:00 Bright 100, 3:30 Rate 100 Tone 100, 4:00 Tone 0, 4:30 Move 0, 5:00 Move 100,
+# 5:30 Hats 100 Kit Moss, 6:00 Notes 0. The piece's parameters by number: amb.h.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/knobs.amb app/build/listen
+master 2430
+tap PLAY
+wait 200
+seed 1001
+style liquid
+wait 200
+wav knobs.wav
+tap PLAY
+wait 90000
+setpar 5 0
+wait 30000
+setpar 5 100
+wait 30000
+setpar 5 50
+setpar 6 0
+wait 30000
+setpar 6 100
+wait 30000
+setpar 6 50
+setpar 9 100
+setpar 10 100
+wait 30000
+setpar 10 0
+wait 30000
+setpar 9 50
+setpar 10 50
+setpar 13 0
+wait 30000
+setpar 13 100
+wait 30000
+setpar 13 50
+setpar 18 100
+setpar 19 1
+wait 30000
+setpar 18 50
+setpar 19 0
+setpar 7 0
+wait 60000
+wavstop

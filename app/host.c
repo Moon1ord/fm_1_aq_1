@@ -4,7 +4,7 @@
  * "expect", its command, a reboot and the screen reader's dump.
  *
  * AMB-1's checks: playing frozen view piece pool dirty sixteenths ext pad_level bass_level chordroot chordN loopnotes
- * parN battery section style level (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
+ * parN battery section style level mask keyslit help ringN (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
  * values, help lines and messages wider than their places. Its commands:
  * storeamb (what AMB-1 leaves in the store: its magic and format, nothing of ours); storeold (the project as it is, whole, but
  * for the format before this one); battery N (the battery read as N,
@@ -78,6 +78,15 @@ int app_expect(const char *what, int *got)
         for (l = 0; l < EN_NLOOP; l++)
             for (i = 0; i < EN_LOOP_MAX; i++)
                 g += en_loop_note[l][i] >= 0;
+    } else if (!strcmp(what, "mask")) {           /* the degrees, relative to the root (hex ok) */
+        g = proj.mask;
+    } else if (!strcmp(what, "keyslit")) {        /* the keys' lights */
+        g = (int)keys_lit();
+    } else if (!strcmp(what, "help")) {           /* a help card is up: its button + 1 */
+        g = ui.help;
+    } else if (!strncmp(what, "ring", 4)) {       /* pitch class N on the ring: 0 out of the scale, 1 in it, 2 in it and no chords on it */
+        const int pc = atoi(what + 4);
+        g = pool_abs() >> pc & 1u ? 1 + degree_off(pc) : 0;
     } else if (!strcmp(what, "unfit")) {          /* what does not fit its place on the screen */
         g = ui_unfit();
     } else if (!strncmp(what, "par", 3))          /* parN: parameter N (amb.h P_*) */

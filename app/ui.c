@@ -4,6 +4,7 @@
  * simulator includes it too.
  *
  *   keys           the scale: each key adds or removes its note from the pool (the root stays)
+ *   SEL + a key    whether chords may stand on that note; it stays in the scale either way (two roots stay, besides the tonic)
  *   PLAY           it plays / rests                ARP   the next chord, now
  *   REC            FREEZE: the chord holds, the reverb rings on    OCT- / OCT+   the motifs' octave
  *   HOME + SELECT  tempo   ALGORITHM mode (loads a pool)   PRESETS the piece (Root is on the Setup page)
@@ -268,6 +269,32 @@ static void toggle_note(int pc)                 /* a key: its note in or out of 
     mark_dirty();
 }
 
+/* SEL + a key: chords on this note, or not. The mask's rule is the generator's: what it would not use, it is not offered */
+static void toggle_degree(int pc)
+{
+    const int rel = (pc - proj.par[P_ROOT] + 12) % 12;
+    const uint32_t m = (uint32_t)proj.mask ^ 1u << rel;
+    if (!(proj.pool >> rel & 1u)) {
+        warn("NOT IN", "THE SCALE");
+        return;
+    }
+    if (!(m >> rel & 1u) && !en_mask_usable(proj.pool, m)) {
+        warn("2 DEGREES", "AT LEAST");
+        return;
+    }
+    proj.mask = (uint16_t)m;
+    en_mask(m);
+    say(m >> rel & 1u ? "CHORDS ON" : "NO CHORDS ON", EN_NOTE_NAME[pc]);
+    mark_dirty();
+}
+/* what the eye and the ear get: the degrees in force. A pool that leaves too few has them all, until the note comes back */
+static uint32_t degrees_shown(void) { return en_mask_effective(proj.pool, proj.mask); }
+static int degree_off(int pc)                   /* a note of the scale that chords may not stand on (pc: absolute) */
+{
+    const int rel = (pc - proj.par[P_ROOT] + 12) % 12;
+    return (int)(proj.pool >> rel & 1u) && !(degrees_shown() >> rel & 1u);
+}
+
 static void set_mode(int m)
 {
     m = (m % EN_NMODES + EN_NMODES) % EN_NMODES;
@@ -424,8 +451,14 @@ static void input(void)
     ch = keys ^ ui.keys;
     ui.keys = keys;
     for (i = 0; i < NKEYS; i++)
-        if ((ch & keys) >> i & 1u)
-            toggle_note((int)((5u + i) % 12u));  /* key 0 is F3 */
+        if ((ch & keys) >> i & 1u) {             /* key 0 is F3 */
+            if (btn >> B_SEL & 1u) {
+                toggle_degree((int)((5u + i) % 12u));
+                ui.btn_used |= 1u << B_SEL;
+            } else {
+                toggle_note((int)((5u + i) % 12u));
+            }
+        }
     if (btn || keys || ch)
         ui.act_t = plat_ms();
     midi_in();
@@ -816,6 +849,8 @@ static void draw_ring(void)
             cv_disc(x, y, 3, mix(K_PAD_T, K_PAD, 7));
         else
             cv_disc(x, y, 1, K_LINE);
+        if (degree_off(i))                       /* in the scale, no chords on it: hollow */
+            cv_disc(x, y, 2, K_BG);
     }
     {   /* the chord's name, in the middle */
         char nm[16];
@@ -856,7 +891,7 @@ static int help_lines(int b, const char *l[HELP_LINES])
     int n = 0;
 #define L(t) (l[n++] = (t))
     switch (b) {
-    case B_HOME: L("HOME"); L("TEMPO, ENERGY, EVOLVE, STYLE"); L("+ SELECT: TEMPO"); break;
+    case B_HOME: L("HOME"); L("TEMPO, ENERGY, EVOLVE, STYLE"); L("+ SELECT: TEMPO"); L("SEL + KEY: CHORDS ON IT, OR NOT"); break;
     case B_ENV: L("THE KEYS"); L("LEVEL, BLOOM, BRIGHT, NOTES"); break;
     case B_ARP: L("THE MOTIFS"); L("LEVEL, RATE, TONE, OCTAVE"); break;
     case B_LFO: L("THE BASS"); L("LEVEL, MOVE, GLIDE, OCTAVE"); break;
@@ -890,6 +925,7 @@ static void draw_main(void)
 {
     uint32_t h = hash(2166136261u, pool_abs() | (uint32_t)proj.par[P_ROOT] << 12 | (uint32_t)en_frozen << 16 | proj.piece << 24 |
                                         (uint32_t)en_playing << 17 | (uint32_t)proj.par[P_MODE] << 20), i;
+    h = hash(h, degrees_shown());
     if (ui.frame % 3u)                           /* the garden moves slowly: 20 frames a second is plenty */
         return;
     if (ui.help) {
@@ -984,18 +1020,29 @@ static void draw_knobs(void)
     cv_blit(0, KNB_Y);
 }
 
+/* the keys' lights: the scale; with SEL held, those of it that chords may stand on */
+static uint32_t keys_lit(void)
+{
+    const uint32_t ap = pool_abs();
+    const int sel = (int)(ui.btn >> B_SEL & 1u);
+    uint32_t k = 0, i;
+    if (proj.leds)
+        for (i = 0; i < NKEYS; i++) {
+            const int pc = (int)((5u + i) % 12u);
+            if (ap >> pc & 1u && !(sel && degree_off(pc)))
+                k |= 1u << i;
+        }
+    return k;
+}
+
 static void leds(void)
 {
-    uint32_t b = 0, k = 0, i, ap = pool_abs();
+    uint32_t b = 0, k = keys_lit();
     b |= 1u << VIEW_BTN[ui.view];
     if (en_playing)
         b |= 1u << B_PLAY;
     if (en_frozen)
         b |= 1u << B_REC;
-    if (proj.leds)
-        for (i = 0; i < NKEYS; i++)
-            if (ap >> ((5u + i) % 12u) & 1u)
-                k |= 1u << i;
     plat_glow(proj.leds == 1);
     plat_leds(b, k);
 }
@@ -1154,6 +1201,15 @@ static void sp_garden(void)
         int pc = (proj.par[P_ROOT] + i) % 12;
         if (ap >> pc & 1u) {
             sp_cat(last < 0 ? " " : EN_NOTE_NAME[last][0] == EN_NOTE_NAME[pc][0] ? " and " : ", ");
+            sp_cat(EN_NOTE_NAME[pc]);
+            last = pc;
+        }
+    }
+    last = -1;
+    for (i = 0; i < 12; i++) {                   /* and those of it that chords do not stand on */
+        const int pc = (proj.par[P_ROOT] + i) % 12;
+        if (degree_off(pc)) {
+            sp_cat(last < 0 ? ". No chords on " : ", ");
             sp_cat(EN_NOTE_NAME[pc]);
             last = pc;
         }
@@ -1364,6 +1420,10 @@ static int ui_unfit(void)                             /* the host's "unfit": wha
     }
     n += unfit_msg("THE ROOT STAYS", "(SETUP)");
     n += unfit_msg("3 NOTES", "AT LEAST");
+    n += unfit_msg("2 DEGREES", "AT LEAST");
+    n += unfit_msg("NOT IN", "THE SCALE");
+    for (x = 0; x < 12; x++)
+        n += unfit_msg("NO CHORDS ON", EN_NOTE_NAME[x]);
     return n;
 }
 static void speak_dump(void)
@@ -1372,7 +1432,7 @@ static void speak_dump(void)
                                          {"NEXT CHORD", "ON THE BAR"}, {"NEXT CHORD", 0}, {"RESTING", 0},
                                          {"GROWING", 0}, {"FREEZE", "ON"}, {"FREEZE", "OFF"}, {"SAVED", 0}};
     static const char *const WARN[][2] = {{"THE ROOT STAYS", "(SETUP)"}, {"3 NOTES", "AT LEAST"},
-                                          {"NOT SAVED", "FLASH ERROR"}};
+                                          {"NOT SAVED", "FLASH ERROR"}, {"2 DEGREES", "AT LEAST"}, {"NOT IN", "THE SCALE"}};
     project_t keep = proj;
     uint8_t keep_view = ui.view, keep_help = ui.help, keep_dirty = ui.dirty, keep_play = sp_tp.playing;
     uint8_t keep_ext = en_ext, keep_frozen = en_frozen;
@@ -1404,6 +1464,7 @@ static void speak_dump(void)
         en_ext = (uint8_t)(x == 3);
         en_frozen = (uint8_t)(x == 5);
         proj.pool = x == 6 ? 0xFFFu : x == 7 ? 0x91u : keep.pool;
+        proj.mask = x == 4 ? (uint16_t)(EN_MASK_ALL & ~(1u << 4 | 1u << 9)) : (uint16_t)EN_MASK_ALL;
         proj.par[P_ROOT] = (int16_t)(x * 5 % 12);
         sp_page(1);
         sp_print("WHERE", sp_buf);
@@ -1444,6 +1505,10 @@ static void speak_dump(void)
         msg_text("ADDED", EN_NOTE_NAME[x], t);
         sp_print("MSG", t);
         msg_text("REMOVED", EN_NOTE_NAME[x], t);
+        sp_print("MSG", t);
+        msg_text("CHORDS ON", EN_NOTE_NAME[x], t);
+        sp_print("MSG", t);
+        msg_text("NO CHORDS ON", EN_NOTE_NAME[x], t);
         sp_print("MSG", t);
     }
     for (x = 0; x < EN_NMODES; x++) {

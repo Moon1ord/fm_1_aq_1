@@ -20,18 +20,20 @@
 enum { OBJ_PROJ, OBJ_PANEL, OBJ_NOBJ };
 #define APP_STORE_MAP {0xFC000u, 0xDC000u}
 #define PROJ_MAGIC 0x31555141u           /* "AQU1" */
-#define PROJ_FORMAT 3u                   /* 3: the seven pages' knobs (AMB-1's and older saves are not read: the recipes) */
+#define PROJ_FORMAT 4u                   /* 4: the seven pages' knobs, the degrees (AMB-1's and older saves are not read: the recipes) */
 #define NPIECES EN_NPIECES
 
 typedef struct {
     int16_t par[P_NPARAMS];
     uint16_t pool;
+    uint16_t mask;                       /* the notes chords may stand on, relative to the root */
 } slot_t;
 
 typedef struct {
     uint32_t magic, format;
     int16_t par[P_NPARAMS];              /* the piece playing, as it is now (amb.h P_*) */
     uint16_t pool;                       /* its scale, relative to the root (bit 0 = the root) */
+    uint16_t mask;                       /* the notes chords may stand on, likewise (SELECT + a key); a note out of the scale keeps its bit */
     uint8_t leds;                        /* lights: 0 off, 1 keys and the buttons' glow, 2 keys only */
     uint8_t piece;                       /* which piece */
     uint8_t rsv0[2];

@@ -47,6 +47,7 @@ void en_param_text(int i, int v, char *buf);   /* the value as the screen shows 
 void en_init(void);
 void en_set(int param, int value);
 void en_pool(uint32_t pool);                   /* the scale, relative to the root (bit 0 always set) */
+void en_mask(uint32_t mask);                   /* the notes chords may stand on, relative to the root: from the next chord */
 void en_play(int on);                          /* the garden grows / rests (the tails ring on) */
 void en_next(void);                            /* the next chord: on the next bar (now while resting) */
 void en_freeze(int on);
@@ -141,7 +142,7 @@ typedef struct {                               /* a chord in a pool: pitch class
     int8_t keys[4], pad[4];
 } en_hchord_t;
 /* The harmony: chords composed one at a time, on any degree of the pool. See "the chords, one at a time" in amb.c.
- * en_gen_next is pure: state, pool, key, seed, Evolve and the arranger's character in; the state and the next chord out. Every
+ * en_gen_next is pure: state, pool, key, seed, Evolve, the arranger's character and the degrees in; the state and the next chord out. Every
  * choice hangs on the seed and the state, so calling it again from a copy of the state with another pool gives the chord
  * that pool would have had: how a prepared chord is remade. */
 #define EN_GEN_WINDOW 96                       /* chords: at Evolve 100 no three chords in a row come again within this */
@@ -150,6 +151,7 @@ typedef struct {
 } en_gid_t;
 typedef struct {
     uint32_t n, pool;                          /* chords so far; the pool of the last */
+    uint16_t mask;                             /* the degrees in force for the last */
     en_gid_t phrase[4];                        /* the memory: the phrase being played */
     uint8_t tmpl, ph_i, composing, valid, repeats, ph_char, was_char, var_kind, var_slot;
     uint8_t prev_root, prev2, prev3, prev_bass, away, since_t, since_b, key, seen_i;
@@ -170,7 +172,15 @@ extern void (*en_trace_chord)(uint32_t step, const en_gchord_t *chord, int chara
 int en_pool_family(uint32_t pool);
 void en_gen_start(en_gen_t *st);
 uint32_t en_gen_roots(uint32_t pool);          /* the roots it may use, bit i: i above the tonic; the tonic only if nothing else */
-void en_gen_next(en_gen_t *st, uint32_t pool, int key, uint32_t seed, int evolve, int character, en_gchord_t *out);
+/* The degrees. mask: which notes a chord may stand on or have in its bass, bit i: i above the tonic, whatever the key; a note
+ * not in the pool has no say, its bit waits for it. Fewer than two roots left by pool and mask together (the tonic, which is
+ * never in the bass, does not count): the mask is not used at all, every degree of the pool is */
+#define EN_MASK_ALL 0xFFFu
+#define EN_GEN_GONE 0xFFu                      /* a place in the phrase's memory whose chord went with the mask */
+uint32_t en_gen_roots_in(uint32_t pool, uint32_t mask);   /* of the roots, those it leaves: 0 for none */
+int en_mask_usable(uint32_t pool, uint32_t mask);         /* does it leave two? */
+uint32_t en_mask_effective(uint32_t pool, uint32_t mask); /* what is in force: mask, or all */
+void en_gen_next(en_gen_t *st, uint32_t pool, int key, uint32_t seed, int evolve, int character, uint32_t mask, en_gchord_t *out);
 int en_chord_make(uint32_t pool, int root, int shape, en_hchord_t *out);   /* a colour on a root; 0 none. What a shape can be */
 const char *en_gchord_name(const en_gchord_t *g, char *buf);   /* as a score: with its bass, if that is not its root */
 const char *en_hchord_name(const en_hchord_t *c, char *buf);   /* as the screen names it */

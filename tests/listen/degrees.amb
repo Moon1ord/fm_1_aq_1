@@ -1,0 +1,35 @@
+# Five minutes of Liquid, D Lydian: all on for a minute, then the chords kept off A and B, then only on E, F# and A, then
+# all on again. Not one of the tests. The chords in the trace: never on a note that is off.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/degrees.amb app/build/listen
+master 2430
+tap PLAY
+wait 200
+seed 1001
+style liquid
+wait 200
+trace app/build/listen/degrees.trace
+wav degrees.wav
+tap PLAY
+wait 60000
+# no chords on A (key 4), on B (key 6)
+press SEL
+tapkey 4
+tapkey 6
+release SEL
+wait 90000
+# and none on G# (key 3), C# (key 8), A on again (key 4): E, F#, A and the tonic's glimpses
+press SEL
+tapkey 3
+tapkey 8
+tapkey 4
+release SEL
+wait 90000
+# back on
+press SEL
+tapkey 3
+tapkey 8
+tapkey 6
+release SEL
+wait 60000
+wavstop
+trace off

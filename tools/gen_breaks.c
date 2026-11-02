@@ -121,33 +121,38 @@ static const int INDEX[16] = {-1, -1, -1, -1, 2, 4, 6, 8, -1, -1, -1, -1, 2, 4, 
 static uint8_t enc[NS / 2];
 static int at_pred[NSTEP], at_idx[NSTEP];
 
+/* the loop is encoded twice and the second pass kept: it starts from the state the first one ended in, which is the
+ * state a player has when it wraps (or jumps) to slice 0, so the head of the loop is not lost to a cold start */
 static uint32_t encode(void)
 {
     double peak = 1e-9;
-    int pred = 0, idx = 0, i;
+    int pred = 0, idx = 0, i, pass;
     uint32_t h = 2166136261u;
     for (i = 0; i < NS; i++)
         peak = fabs(buf[i]) > peak ? fabs(buf[i]) : peak;
-    memset(enc, 0, sizeof enc);
-    for (i = 0; i < NS; i++) {
-        int x = (int)(buf[i] / peak * 0.72 * 32767.0), diff = x - pred, st = STEP[idx], code = 0, dq = st >> 3;
-        if (i % SLICE == 0) {
-            at_pred[i / SLICE] = pred;
-            at_idx[i / SLICE] = idx;
+    for (pass = 0; pass < 2; pass++) {
+        memset(enc, 0, sizeof enc);
+        h = 2166136261u;
+        for (i = 0; i < NS; i++) {
+            int x = (int)(buf[i] / peak * 0.72 * 32767.0), diff = x - pred, st = STEP[idx], code = 0, dq = st >> 3;
+            if (i % SLICE == 0) {
+                at_pred[i / SLICE] = pred;
+                at_idx[i / SLICE] = idx;
+            }
+            if (diff < 0) {
+                code = 8;
+                diff = -diff;
+            }
+            if (diff >= st) { code |= 4; diff -= st; dq += st; }
+            if (diff >= st >> 1) { code |= 2; diff -= st >> 1; dq += st >> 1; }
+            if (diff >= st >> 2) { code |= 1; dq += st >> 2; }
+            pred += code & 8 ? -dq : dq;
+            pred = pred > 32767 ? 32767 : pred < -32768 ? -32768 : pred;
+            idx += INDEX[code];
+            idx = idx < 0 ? 0 : idx > 88 ? 88 : idx;
+            enc[i >> 1] |= (uint8_t)(code << ((i & 1) * 4));
+            h = (h ^ (uint32_t)(uint16_t)pred) * 16777619u;
         }
-        if (diff < 0) {
-            code = 8;
-            diff = -diff;
-        }
-        if (diff >= st) { code |= 4; diff -= st; dq += st; }
-        if (diff >= st >> 1) { code |= 2; diff -= st >> 1; dq += st >> 1; }
-        if (diff >= st >> 2) { code |= 1; dq += st >> 2; }
-        pred += code & 8 ? -dq : dq;
-        pred = pred > 32767 ? 32767 : pred < -32768 ? -32768 : pred;
-        idx += INDEX[code];
-        idx = idx < 0 ? 0 : idx > 88 ? 88 : idx;
-        enc[i >> 1] |= (uint8_t)(code << ((i & 1) * 4));
-        h = (h ^ (uint32_t)(uint16_t)pred) * 16777619u;
     }
     return h;
 }

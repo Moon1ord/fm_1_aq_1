@@ -8,7 +8,7 @@
  * storeamb (what AMB-1 leaves in the store: its magic and format, nothing of ours); battery N (the battery read as N,
  * plat.h's plat_battery: -1..4; "battery off" the simulator's own, full); seed N (the musical seed, from the next choice on;
  * until told it is EN_HARM_SEED); setpar P V (parameter P to V, as a knob would); style NAME; energy N; breaks N; trace FILE
- * (a line for each bar: step section level character break's bars; a line for each chord: "chord" step name bars character)
+ * (a line for each bar: step section level character break's bars; a line for each chord: "chord" step name bars character key tones bass, the last two above the key)
  * and trace off. */
 #include <stdio.h>
 #include <strings.h>
@@ -22,7 +22,7 @@ static void trace_chord(uint32_t step, const en_gchord_t *g, int character)
 {
     if (trace_f) {
         char nm[24];
-        fprintf(trace_f, "chord %u %s %d %d\n", step, en_gchord_name(g, nm), g->bars, character);
+        fprintf(trace_f, "chord %u %s %d %d %d %03x %d\n", step, en_gchord_name(g, nm), g->bars, character, g->ch.tonic, g->ch.tones, g->ch.bass);
     }
 }
 static void host_par(int p, int v)

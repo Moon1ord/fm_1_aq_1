@@ -1272,7 +1272,9 @@ static void gen_forget(en_gen_t *st, uint32_t p, uint32_t mask)
         en_hchord_t c;
         if (st->phrase[i].root == EN_GEN_GONE)
             continue;
-        en_chord_make(p, st->phrase[i].root, st->phrase[i].shape, &c);
+        c.bass = st->phrase[i].root;             /* (a borrowed chord: on its root, and it may have no chord in this pool) */
+        if (st->phrase[i].shape != SH_BORROW)
+            en_chord_make(p, st->phrase[i].root, st->phrase[i].shape, &c);
         if (!(mask >> st->phrase[i].root & 1u) || !(mask >> c.bass & 1u))
             st->phrase[i].root = EN_GEN_GONE;
     }

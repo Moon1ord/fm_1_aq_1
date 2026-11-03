@@ -151,7 +151,7 @@ int en_test_pad_sent(void);
 int en_test_keys_down(void);
 int en_test_keys_on(void);                      /* voices sounding or still fading */
 int en_test_keys_limit(void);                   /* how many it may have */
-int en_test_keys_down_past(int from);           /* keys down on voices from this one on, sounding */
+int en_test_keys_down_past(int from);           /* lone notes' keys down on voices from this one on, sounding */
 float en_test_keys_low(void);                   /* the quietest key held */
 extern uint32_t en_test_gens;                   /* chords composed for the engine */
 float en_test_bass_pitch(void);                 /* the bass, cycles a sample: where it is and where it is going */

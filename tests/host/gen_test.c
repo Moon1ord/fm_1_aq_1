@@ -533,7 +533,7 @@ static void family_checks(void)
 }
 
 /* ---- the degrees: which notes may carry a chord (en_gen_next's mask) */
-#define GOLDEN_ALL_ON 0xb6409fedu                /* the generator before it had a mask, 0772c0a: all on must be that, to the note */
+#define GOLDEN_ALL_ON 0xb6409fedu                /* the generator with no mask, the hand under the melody: all on must be that, to the note */
 static void all_on_checks(void)
 {
     static const int E[3] = {0, 50, 100}, K[2] = {0, 5};
@@ -562,7 +562,7 @@ static void all_on_checks(void)
                     }
                 }
 #undef H
-    CHECK(h == GOLDEN_ALL_ON, "all degrees on: %08x, not what it was before there was a mask (%08x)", h, GOLDEN_ALL_ON);
+    CHECK(h == GOLDEN_ALL_ON, "all degrees on: %08x, not the generator with no mask (%08x)", h, GOLDEN_ALL_ON);
 }
 
 /* a pool and a mask: every chord on an allowed root over an allowed bass, the tonic out of the bass, no chord twice; too few

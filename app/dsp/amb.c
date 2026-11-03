@@ -2252,7 +2252,7 @@ void en_mel_next(en_mel_t *st, const en_mel_in_t *in, en_phrase_t *out)
         total += in->chord[i].steps;
 
     /* which motif, and what this phrase does with it */
-    if (st->role >= st->roles) {
+    if (st->role >= st->roles || st->role >= MEL_SEC[section].roles_hi) {   /* (a section calmer than the period's: it ends here) */
         uint32_t span = (uint32_t)(MEL_SEC[section].roles_hi - MEL_SEC[section].roles_lo + 1);
         st->role = 0u;
         st->roles = (uint8_t)(MEL_SEC[section].roles_lo + (NH() >> 8) % span);
@@ -3928,6 +3928,7 @@ static void drain(void)
             rng = RNG_START ^ song_seed * 2654435761u;   /* the small errors of time and touch follow it too */
             if (!rng)
                 rng = 1u;
+            en_mel_start(&mel);                  /* a new piece has its own themes */
             break;
         case C_CLOCK:
             en_ext = 1;

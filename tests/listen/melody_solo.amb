@@ -4,7 +4,7 @@
 master 2430
 tap PLAY
 wait 200
-seed 1001
+seed 58
 style liquid
 setpar 4 0
 setpar 12 0

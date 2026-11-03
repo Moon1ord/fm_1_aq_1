@@ -191,12 +191,14 @@ static void t_all_pools(void)
             uint32_t pool_abs = (mask << key | mask >> (12 - key)) & 0xFFFu;
             en_gen_start(&gs);
             en_mel_start(&st);
+            memset(&st, 0, sizeof st);
             for (k = 0; k < EN_MEL_CHORDS + 12; k++)
                 en_gen_next(&gs, mask, key, seed, 50, k & 3, EN_MASK_ALL, &g[k]);
             for (r = 0; r < 6; r++) {
                 en_mel_in_t in;
                 en_phrase_t p;
                 char w[64];
+                memset(&in, 0, sizeof in);
                 int i, total = 0;
                 uint32_t ops0;
                 in.pool = mask;
@@ -217,7 +219,15 @@ static void t_all_pools(void)
                 }
                 c = (c + 1) % (EN_MEL_CHORDS + 12);
                 ops0 = en_mel_ops;
-                en_mel_next(&st, &in, &p);
+                {
+                    /* pure: from a copy of the state, the same phrase and the same state */
+                    en_mel_t again = st;
+                    en_phrase_t q;
+                    en_mel_next(&again, &in, &q);
+                    en_mel_ops = ops0;
+                    en_mel_next(&st, &in, &p);
+                    CHECK(!memcmp(&p, &q, sizeof p) && !memcmp(&again, &st, sizeof st), "pool %03x key %d: not a pure function", mask, key);
+                }
                 ops_most = en_mel_ops - ops0 > ops_most ? en_mel_ops - ops0 : ops_most;
                 if (!p.n)
                     continue;                    /* (no room: nothing to judge) */
@@ -664,6 +674,21 @@ static void t_memory(void)
             CHECK(st_ret_ok * 100 >= statement_return * 90, "%d of %d returns with their rhythm", st_ret_ok, statement_return);
             CHECK(st_ret_c * 100 >= statement_return * 50, "%d of %d returns with their contour", st_ret_c, statement_return);
         }
+    }
+    /* a new seed, a new piece: its own motif, Evolve 0 or not */
+    {
+        static int32_t b[512];
+        uint32_t first;
+        engine(EN_MODE_POOL[MODE_LYDIAN], 2, 123u, EN_ST_LIQUID);
+        set_now(P_EVOLVE, 0);
+        play_bars(200);
+        CHECK(nph > 0, "no phrases");
+        first = ph[0].p.sig;
+        en_seed(321u);
+        en_render(b, 16, 1024);
+        nph = 0;
+        play_bars(200);
+        CHECK(nph > 0 && ph[nph - 1].p.sig != first, "a new piece with the old one's motif");
     }
     engine_off();
 }

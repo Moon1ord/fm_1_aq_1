@@ -239,6 +239,7 @@ static void mode_checks(void)
         CHECK(moved <= n_all * 11u, "%s: the hand moves %.1f", m->name, (double)moved / n_all);
         CHECK(len[2] + len[4] >= len[1] * 5u, "%s: too many short chords", m->name);
         CHECK(len[1] > 0u, "%s: no 1-bar chords", m->name);
+        /* 20 chords: under two minutes, with no arranger to help: less than the shortest pass (3:12), see arr_test */
         CHECK(area_gap <= 20u, "%s: %u chords away from the tonic area", m->name, area_gap);
     }
 }
@@ -325,6 +326,7 @@ static void evolve_checks(void)
             }
         }
         printf("  %-10s longest stretch that returns, in chords: Evolve 0 %u (all of it); 50 %u; 100 %u within %d chords, %u at any distance. Distinct chords in an hour: Evolve 50 up to %u, Evolve 100 up to %u\n", m->name, rep0, rep_mid, rep_100, EN_GEN_WINDOW, rep_any, dist_mid, dist100);
+        /* (not from what it comes to: the rule itself. Evolve 100 is no three chords in a row again within the window, so two at the most) */
         CHECK(rep_100 <= 2u, "%s: at 100 %u chords came again", m->name, rep_100);
     }
 }

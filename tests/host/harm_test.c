@@ -294,8 +294,8 @@ static void flow_run(const char *name, uint32_t p, int root, int live)
     (void)exempt;
     CHECK(leads > 0u, "%s: no leading tones", name);
     CHECK(motifs > 0u, "%s: no motif notes", name);
+    /* (the voices' number is their array's and could not fail: what is asked is that nothing sounding has to give up its voice) */
     CHECK(en_ep_steals == 0u, "%s: %u voices stolen while sounding", name, en_ep_steals);
-    CHECK(en_ep_peak <= 12, "%s: peak %d voices", name, en_ep_peak);
 }
 
 static void flow_checks(void)
@@ -683,7 +683,6 @@ static void hour_checks(void)
         }
     }
     CHECK(!bad_out, "an hour at the knobs: %u bad samples or NaN", bad_out);
-    CHECK(en_ep_peak <= 12, "%d voices", en_ep_peak);
     printf("  an hour at the knobs: %u steps, last chord at %u, no bad sample\n", en_bars, last);
     en_set(P_TEMPO, 170);
 }

@@ -38,7 +38,8 @@ static const int ENERGIES[4] = {10, 35, 70, 100};
 /* the limits, written out here on purpose rather than asked of the generator: at any energy. {level 2, 3, 4} */
 static const uint8_t MAX_KICKS[EN_NSTYLES][3] = {{2, 3, 3}, {3, 4, 3}, {4, 4, 3}, {3, 3, 2}, {2, 3, 2}, {2, 2, 3}};
 static const uint8_t MAX_SNG[EN_NSTYLES][3] = {{4, 4, 3}, {5, 6, 3}, {4, 5, 3}, {3, 3, 3}, {1, 1, 1}, {3, 4, 3}};
-/* a break's bar: the most hits, the longest run */
+/* a break's bar: the most hits, the longest run. The hits grow with a style's density and syncopation as 6 + d/25 + s/25, what the numbers
+ * promise, written out; independently, below: never over two steps in three of a bar, or a bar is a roll and not a break */
 static const uint8_t MAX_BRK[EN_NSTYLES] = {8, 10, 11, 6, 6, 7};
 static const uint8_t MAX_RUN[EN_NSTYLES] = {3, 4, 4, 3, 3, 3};
 
@@ -214,6 +215,7 @@ static void check_break(const brk_bar_t *o, int st, uint32_t bar, int len, uint3
         }
     }
     CHECK(hits <= MAX_BRK[st], "%s: %d hits in a break's bar", nm, hits);
+    CHECK(hits * 3 <= 16 * 2, "%s: %d hits of 16 steps in a break's bar", nm, hits);
     CHECK(mrun <= MAX_RUN[st], "%s: %d hits in a row, no machine guns", nm, mrun);
     CHECK(hits >= 2, "%s: %d hits in a break's bar", nm, hits);
     if (o->rest) {

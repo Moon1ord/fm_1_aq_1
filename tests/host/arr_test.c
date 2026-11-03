@@ -310,6 +310,7 @@ static void harmony_checks(void)
                     }
                     (void)bar;
                 }
+                /* 24 chords of 2 to 4 bars: about two minutes at most, under the shortest pass (3:12): the key is clear at least once each pass */
                 CHECK(worst <= 24, "%s energy %d: %d chords away from the tonic area", EN_STYLE_NAME[st], ENERGY[e], worst);
                 if (!p) {
                     printf("  %-8s energy %3d: of 60 seeds, %u start their second pass on another root; at most %d chords from the tonic area\n", EN_STYLE_NAME[st], ENERGY[e], elsewhere, worst);
@@ -587,7 +588,6 @@ static void hours_checks(void)
         CHECK(sects > 100u, "%s: only %u sections in two hours", EN_STYLE_NAME[st], sects);
         CHECK(moves > 1000u, "%s: only %u chord moves", EN_STYLE_NAME[st], moves);
         CHECK(en_pad_level > 0.1f, "%s: the pad has gone (%f)", EN_STYLE_NAME[st], (double)en_pad_level);
-        CHECK(en_ep_peak <= 12, "%s: %d voices", EN_STYLE_NAME[st], en_ep_peak);
         CHECK(!bad_out, "%s: hours: %u bad samples", EN_STYLE_NAME[st], bad_out);
     }
     /* the counter itself, past its end: twelve years of steps come round to the top of the song */

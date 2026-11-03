@@ -334,6 +334,7 @@ int main(void)
             }
         printf("  generated bars: %u jumps, the largest step after one %f\n", jumps, (double)worst);
         CHECK(jumps > 10000u, "only %u jumps", jumps);
+        /* (CLICK: a third of the largest step the sounds themselves have, see "natural" above: under what they do by themselves) */
         CHECK(worst < CLICK, "a generated bar's jump clicks: %f", (double)worst);
     }
 

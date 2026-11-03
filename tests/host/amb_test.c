@@ -127,7 +127,7 @@ int main(void)
     peak = sum2 = 0.0f;
     run(20.0f);
     CHECK(!bad, "NaN in the output");
-    CHECK(peak > 0.05f && peak < 0.99f, "peak %f", (double)peak);
+    CHECK(peak > 0.05f && peak < 0.99f, "peak %f", (double)peak);   /* (no reason for the numbers but -26 dB is hardly a sound, and full scale is the limiter's) */
     printf("  20 s playing: peak %.3f, rms %.4f, bars %u\n", (double)peak,
            (double)sqrtf(sum2 / (20.0f * 44100.0f * 2.0f)), en_bars / 16u);
     CHECK(en_bars / 16u >= 5u, "the grid ran (%u sixteenths)", en_bars);

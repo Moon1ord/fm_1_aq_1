@@ -2847,6 +2847,14 @@ int en_test_bells_on(void)
         n += bell[i].on;
     return n;
 }
+int en_test_keys_limit(void) { return ep_lim; }
+int en_test_keys_down_past(int from)            /* keys down on voices from this one on */
+{
+    int i, n = 0;
+    for (i = from; i < NKEYS; i++)
+        n += ep[i].on && (ep[i].held || ep[i].hold > 0) && ep[i].wait <= 0;
+    return n;
+}
 int en_test_keys_on(void)
 {
     int i, n = 0;

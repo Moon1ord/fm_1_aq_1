@@ -668,14 +668,16 @@ static void t_rest_sound(void)
     start(620u, EN_ST_LIQUID, "bass back");
     go();
     to_level(3);
-    secs(1.0f);
-    en_play(0);
-    secs(2.0f);
-    {
-        const uint32_t on = led.ons[CH_BASS];
-        en_play(1);
-        secs(0.25f);
-        CHECK(led.ons[CH_BASS] > on, "the bass stays out after a rest");
+    for (k = 0; k < 24; k++) {
+        secs(0.61f + 0.137f * (float)k);
+        en_play(0);
+        secs(0.3f);
+        {
+            const uint32_t on = led.ons[CH_BASS];
+            en_play(1);
+            secs(0.1f);                          /* (within its step) */
+            CHECK(led.ons[CH_BASS] > on, "time %d: the bass stays out after a rest", k);
+        }
     }
 }
 
@@ -1000,6 +1002,12 @@ static void break_case(int style, int level, uint32_t pos, int held, int breaks,
         CHECK(tr_b[k].sixteenth % 16u == bar_of, "the next phrase is off the bars");
         CHECK(brk_bar.core[0] == 'K', "the next phrase starts on '%c'", brk_bar.core[0]);
         CHECK(!brk_bar.is_break, "the next phrase is a break");
+        if (!held) {
+            int c, found = 0;
+            for (c = 0; c < ntr_c; c++)
+                found |= tr_c[c].step == end;
+            CHECK(found, "style %d bar %u: no new chord where the next phrase starts: a chord has outlasted its phrase", style, pos);
+        }
     }
 }
 
@@ -1286,6 +1294,10 @@ static void t_panic(void)
         }
         CHECK(en_test_song() >= song0 && en_test_song() < song0 + 200u, "restored: step %u from %u", en_test_song(), song0);
         CHECK(led.n[CH_PAD] >= 3, "restored: the pad's notes %d", led.n[CH_PAD]);
+        secs(0.2f);
+        CHECK(led.n[CH_KEYS] >= 3, "restored: no hand on the first step: %d keys", led.n[CH_KEYS]);
+        secs(0.3f);
+        CHECK(en_pad_level > 0.0f && en_pad_level < 0.4f, "restored: half a second on the pad is at %f: not from silence", (double)en_pad_level);
         secs(8.0f);
         CHECK(en_pad_level > 0.5f, "restored: the pad %f", (double)en_pad_level);
         CHECK(en_test_keys_on() >= 3 && led.n[CH_KEYS] >= 3, "restored: the hand: %d %d", en_test_keys_on(), led.n[CH_KEYS]);
@@ -1313,9 +1325,7 @@ static void t_panic(void)
         en_set(P_DRUMS, 0);
         en_panic();
         block();
-        for (i = 0; i < 200; i++)
-            block();
-        en_restore();
+        en_restore();                            /* at once: the room is cleared first all the same */
         for (i = 0; i < 400; i++) {
             const float p = block_peak();
             quiet_p = p > quiet_p ? p : quiet_p;
@@ -1347,10 +1357,14 @@ static void t_shed(void)
                 most = en_test_keys_on();
             }
         }
+        for (i = 0; i < 20; i++)                 /* (what is yet to start has started) */
+            block();
         before = en_test_keys_on();
         was_l = (float)buf[2 * block_len - 2] * (1.0f / 8388608.0f);
         en_shed();
         led_check("just shed");
+        CHECK(en_test_keys_limit() == 6, "a shed: the limit is %d", en_test_keys_limit());
+        CHECK(en_test_keys_on() == before, "a shed cut voices dead: %d of %d", en_test_keys_on(), before);
         for (i = 0; i < 16; i++) {
             int j;
             block();
@@ -1381,10 +1395,30 @@ static void t_shed(void)
             const int on = en_test_keys_on();
             en_regrow();
             block();
+            CHECK(en_test_keys_limit() == 12, "a new piece: the limit is %d", en_test_keys_limit());
             CHECK(en_test_keys_on() <= on, "a new piece brought voices back: %d from %d", en_test_keys_on(), on);
             CHECK(led.n[CH_KEYS] == en_test_keys_down(), "a new piece: MIDI %d, voices %d", led.n[CH_KEYS], en_test_keys_down());
         }
         secs(20.0f);
+    }
+    /* a lone note's key down past the limit: it comes up, MIDI told, and its voice lets go */
+    {
+        int sd2, found = 0;
+        for (sd2 = 0; sd2 < 12 && !found; sd2++) {
+            int i;
+            start(1800u + (uint32_t)sd2, EN_ST_LIQUID, "shed, a lone note");
+            en_set(P_MRATE, 0);
+            go();
+            for (i = 0; i < 40000 && !en_test_keys_down_past(6); i++)
+                block();
+            if (en_test_keys_down_past(6)) {
+                found = 1;
+                en_shed();
+                led_check("a lone note shed");
+                CHECK(en_test_keys_down_past(6) == 0, "shed: a key still down past the limit");
+            }
+        }
+        CHECK(found, "never a key down past six voices");
     }
     /* many voices at once, for sure: a shed lets the ones past six go, with their note-offs */
     {

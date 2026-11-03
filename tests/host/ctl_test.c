@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <unistd.h>
 #include "amb.h"
 #include "midi_gate.h"
 
@@ -1771,6 +1772,7 @@ int main(int ac, char **av)
 {
     const int quick = ac > 1 && !strcmp(av[1], "quick");      /* ctl_test quick: no long holds. ctl_test long M: only those, M minutes each */
     const float long_min = ac > 2 ? (float)atof(av[2]) : 12.0f;
+    alarm(ac > 1 && !strcmp(av[1], "long") ? 3600u : 900u);   /* a grid that stops must not hang the suite: that is a failure too */
     if (ac > 1 && !strcmp(av[1], "long")) {
         hold_long(0, long_min);
         hold_long(1, long_min);

@@ -736,8 +736,8 @@ static void voices_apart(int *n, uint32_t tones, int root, int lo, int hi, int b
             dup |= n[w] == n[v];
         if (!dup)
             continue;
-        for (pass = 0; pass < 2 && dup; pass++) {
-            const int bot = pass ? base : lo, top = pass ? base + 23 : hi;
+        for (pass = 0; pass < 3 && dup; pass++) {
+            const int bot = pass ? base : lo, top = pass > 1 ? base + 23 : hi;   /* (over the top only if nothing else: the melody's) */
             for (d = 1; d < 24 && dup; d++) {
                 int side;
                 for (side = 0; side < 2 && dup; side++) {
@@ -1039,7 +1039,7 @@ static int hand_ugly(const uint8_t *n)
 }
 static void gen_hand(const gen_ctx_t *x, const en_hchord_t *c, uint8_t *out)
 {
-    const int r = x->key, lo = KEYS_LO(r) + x->up, hi = KEYS_HI(r) + x->up;
+    const int r = x->key, lo = KEYS_LO(r) + x->up, hi = KEYS_HI(r);   /* the peak lifts it from below: over its top is the melody's */
     lead_to(c->keys, c->tones, x->from_k, r, lo, hi, KEYS_LO(r), out);
     if (hand_ugly(out)) {
         int from[4], v;
@@ -1776,6 +1776,13 @@ static uint32_t ep_lone;                         /* this chord's so far */
 static uint8_t keys_back;                        /* after silence: the hand comes back on the next step */
 static uint8_t fresh;                            /* a note a key just added to the pool, + 1: it speaks on the next eighth */
 
+/* while a phrase is out, its register is its own: a lone note that would land there sounds an octave down */
+static uint8_t mel_on;
+static int keys_room(int n)
+{
+    return mel_on && n >= EN_MEL_LO(par[P_ROOT]) ? n - 12 : n;
+}
+
 static void ep_inner(const inner_t *g)
 {
     const float vel = (float)g->vel * 0.01f * (0.94f + 0.12f * frand());
@@ -1787,7 +1794,7 @@ static void ep_inner(const inner_t *g)
     } else {
         n = v0 + 12;
     }
-    n = live_note(n);
+    n = keys_room(live_note(n));
     for (i = 0; i < ep_lim; i++)
         if (ep[i].on && ep[i].note == n && ep[i].held)
             return;                              /* the hand has it already: leave it */
@@ -1815,6 +1822,7 @@ static void ep_fresh(void)
     fresh = 0u;
     if (n == top)
         n += 12;
+    n = keys_room(n);
     for (i = 0; i < ep_lim; i++)
         if (ep[i].on && ep[i].note == n && ep[i].held)
             return;
@@ -1947,105 +1955,646 @@ static void bass_note(int off, uint32_t len)
     en_bass_notes++;
 }
 
-/* ------------------------------------------------------------- the motifs --- */
-/* Two short phrases, a call and its answer: up, up, a step back. A soft muted vibraphone: harmonic ratios only, a low
- * index, a soft attack. Each phrase lies inside one chord, early in it, and each note is moved to a tone of that chord, so
- * the note and its echoes all sit in what sounds; of a chord of two bars the last note is left out, and on a chord of one bar
- * the phrase waits for the next. Every 16 bars a turn of the table: the call at the first chord of the turn, the answer in its
- * second half, where it stops on a tone that wants to fall and doesn't. Rests much longer than the phrases; the last call goes
- * unanswered. */
+/* ------------------------------------------------------------- the melody --- */
+/* A melody someone could hum back. Phrases are composed one at a time, none written down; en_mel_next is pure.
+ *
+ * The unit is a motif: two to four notes, a rhythm and a contour in scale steps, so that it can be moved, turned over or cut short and
+ * stay itself. Phrases come in a period: a statement (the motif and a long note, sometimes the motif again a step away before it), an
+ * answer (the same rhythm, its pitches moved, turned over, or cut short; it ends open, on a tone that is not the chord's root), the
+ * return (the statement again, the same places in the scale) and, in full sections, a close. Then a long rest. A piece remembers a few
+ * motifs, and mem[0], the theme, longest: a period may bring one back, minutes later, with the form it had. Evolve sets how often: at 0
+ * there is one motif for good, at 100 a new one for every phrase and none again within EN_MEL_SEEN.
+ *
+ * Pitch: a note on a strong beat (steps 0, 8 of a bar), held over one, long, or last is a tone of its chord; the short ones between are
+ * notes of the scale, one step from their neighbours for the most part. A leap turns back. One highest note. Everything in EN_MEL_RANGE
+ * semitones over the hand. A note may stay over a chord change if both chords have it, otherwise it ends with its chord. A note whose
+ * two echoes would not land in their chords stays out of the echo.
+ *
+ * Time: at 170 BPM it thinks in half time. Note lengths from an eighth to two bars, cells of half a bar; sometimes a pickup across the
+ * bar line. Rests are part of it: the section sets how long, the Rate knob scales them. Rare and low in the calm sections, leading in
+ * the full one. Every loop here has a fixed bound, and the cost is counted (en_mel_ops): it runs in the audio interrupt.
+ *
+ * The voices: two operators, whole-number ratios, nothing that rings: a warm digital palette, softest to brightest. A timbre lasts
+ * several phrases; an answer may take its near relation; Tone sets which part of the palette may be used, and how much index. */
+const char *const EN_TIMBRE_NAME[EN_NTIMBRES] = {"Flute", "Vocal", "Vibes", "Marimba", "Music box", "Glass"};
+static const en_mel_voice_t TIMBRE[EN_NTIMBRES] = {
+    /*             ratio index floor idec   att     t60    rel   vib      level */
+    /* Flute */   {1.0f, 0.55f, 0.28f, 0.18f, 0.045f, 7.0f, 0.16f, 0.0028f, 0.74f},
+    /* Vocal */   {2.0f, 0.34f, 0.26f, 0.25f, 0.070f, 6.0f, 0.24f, 0.0034f, 0.82f},
+    /* Vibes */   {3.0f, 0.62f, 0.05f, 0.14f, 0.004f, 3.0f, 0.70f, 0.0f, 0.95f},
+    /* Marimba */ {1.0f, 1.30f, 0.05f, 0.03f, 0.002f, 1.1f, 0.30f, 0.0f, 1.10f},
+    /* Box */     {3.0f, 1.15f, 0.14f, 0.04f, 0.002f, 1.8f, 0.60f, 0.0f, 0.85f},
+    /* Glass */   {3.0f, 0.60f, 0.20f, 0.40f, 0.012f, 3.4f, 0.80f, 0.0f, 0.74f},
+};
+static const uint8_t TIMBRE_KIN[EN_NTIMBRES] = {EN_TB_VOCAL, EN_TB_FLUTE, EN_TB_BOX, EN_TB_VIBES, EN_TB_GLASS, EN_TB_BOX};
+
+void en_mel_voice(int timbre, int tone, en_mel_voice_t *v)
+{
+    const float k = knob_curve(tone, 50, 0.55f, 1.0f, 1.45f);
+    *v = TIMBRE[(unsigned)timbre < EN_NTIMBRES ? timbre : 0];
+    v->index *= k;
+    v->floor_idx *= k;
+}
+
+/* what each section asks: bars of rest after a period, phrases in a period, where it sits over its lowest note, how firmly, how busy (of 10) */
+static const struct {
+    uint8_t gap_lo, gap_hi, roles_lo, roles_hi, center, vel, busy;
+} MEL_SEC[EN_NSECTIONS] = {
+    /* Intro */     {24, 48, 1, 2, 3, 52, 2},
+    /* Hats */      {12, 24, 1, 2, 4, 56, 3},
+    /* Light */     {4, 10, 2, 3, 6, 64, 5},
+    /* Breakdown */ {24, 48, 1, 1, 3, 54, 3},
+    /* Full */      {1, 3, 3, 4, 8, 72, 8},
+    /* Out */       {32, 64, 1, 1, 3, 50, 2},
+};
+/* half a bar of rhythm: a calm weight, a full one */
+static const struct {
+    uint8_t n, on[2], len[2], calm, full;
+} CELL[] = {
+    {1, {0, 0}, {8, 0}, 10, 3},  /* a long note */
+    {2, {0, 4}, {4, 4}, 4, 8},   /* two even */
+    {2, {0, 6}, {6, 2}, 3, 7},   /* long, and a push into the next */
+    {2, {0, 3}, {3, 5}, 2, 6},   /* syncopated */
+    {1, {2, 0}, {6, 0}, 3, 4},   /* late */
+    {2, {0, 2}, {2, 6}, 2, 5},   /* short, long */
+    {1, {4, 0}, {4, 0}, 5, 3},   /* on the upbeat */
+    {1, {0, 0}, {4, 0}, 6, 2},   /* and a breath */
+    {1, {3, 0}, {5, 0}, 2, 4},
+};
+#define NCELL ((int)(sizeof CELL / sizeof CELL[0]))
+#define MEL_MAX_SPAN 72                          /* steps from the call: a phrase is over in about four bars and a half */
+#if defined EN_HOST || defined PLAT_HOST
+uint32_t en_mel_ops;
+#define MEL_OP() (en_mel_ops++)
+#else
+#define MEL_OP() ((void)0)
+#endif
+
+static uint32_t rot12(uint32_t tones, int by)    /* relative pitch classes to absolute */
+{
+    by = (by % 12 + 12) % 12;
+    return (tones << by | tones >> (12 - by)) & 0xFFFu;
+}
+static int pc_in(uint32_t tones, int note) { return (int)(tones >> (note % 12) & 1u); }
+
+/* the note in lo..hi of these pitch classes nearest n; dir decides between two as near. None: n */
+static int mel_snap(int n, uint32_t tones, int lo, int hi, int dir)
+{
+    int d;
+    for (d = 0; d <= 24; d++) {
+        const int a = dir >= 0 ? n + d : n - d, b = dir >= 0 ? n - d : n + d;
+        MEL_OP();
+        if (a >= lo && a <= hi && pc_in(tones, a))
+            return a;
+        if (b >= lo && b <= hi && pc_in(tones, b))
+            return b;
+    }
+    return n;
+}
+/* the next one of them from n, going dir: n if there is none */
+static int mel_next_in(int n, uint32_t tones, int lo, int hi, int dir)
+{
+    int d;
+    for (d = 1; d <= 12; d++) {
+        const int a = n + d * dir;
+        MEL_OP();
+        if (a >= lo && a <= hi && pc_in(tones, a))
+            return a;
+    }
+    return n;
+}
+
+/* a place in the scale, as a note; and the place nearest a note */
+static int scale_note(const int *sc, int ns, int key, int idx)
+{
+    return key + sc[idx % ns] + 12 * (idx / ns);
+}
+static int scale_place(const int *sc, int ns, int key, int note)
+{
+    int oct = (note - key) / 12, i, best = 0, bd = 99;
+    if (oct < 0)
+        oct = 0;
+    for (i = 0; i < ns * 3; i++) {
+        const int idx = (oct > 0 ? oct - 1 : 0) * ns + i, m = scale_note(sc, ns, key, idx), dd = m > note ? m - note : note - m;
+        MEL_OP();
+        if (dd < bd) {
+            bd = dd;
+            best = idx;
+        }
+    }
+    return best;
+}
+
+static uint32_t mel_pick(uint32_t h, const uint8_t *w, int n, int stride)   /* by weights */
+{
+    uint32_t sum = 0u, r;
+    int i;
+    for (i = 0; i < n; i++)
+        sum += w[i * stride];
+    r = (h >> 8) % (sum ? sum : 1u);
+    for (i = 0; i < n; i++) {
+        MEL_OP();
+        if (r < w[i * stride])
+            return (uint32_t)i;
+        r -= w[i * stride];
+    }
+    return 0u;
+}
+
+/* a new motif: its rhythm from cells, its contour by steps. ns: the scale's notes */
+static void motif_compose(uint32_t seed, uint32_t c, int busy, int ns, en_motif_t *m)
+{
+    uint8_t weight[NCELL];
+    int t, i, cells, want, k = 0, shape, peak, leapt = 0, top;
+    uint32_t sig = 2166136261u;
+#define MH() hhash(seed, c, 400u + (uint32_t)(k++))
+    for (i = 0; i < NCELL; i++)
+        weight[i] = (uint8_t)(((10 - busy) * CELL[i].calm + busy * CELL[i].full + 5) / 10 + 1);
+    *m = (en_motif_t){0};
+    want = 2 + (int)(MH() >> 8) % 3;             /* 2, 3, 4 */
+    if (busy >= 5 && want == 2)
+        want = 3;
+    cells = 2 + (int)(MH() >> 8) % 2;            /* one bar, or a bar and a half */
+    if (MH() % 100u < 34u) {                     /* a pickup; half of them held across the bar line */
+        static const uint8_t PICK[3] = {2, 3, 4};
+        m->pick = PICK[(MH() >> 8) % 3u];
+        m->on[0] = 0u;
+        m->len[0] = (uint8_t)(m->pick + (MH() % 2u ? 2u : 0u));
+        m->n = 1u;
+    }
+    t = m->pick;
+    for (i = 0; i < cells && m->n < want; i++) {
+        uint32_t ci = mel_pick(MH(), weight, NCELL, 1);
+        int j;
+        if (!i && !m->pick && CELL[ci].on[0])
+            ci = 0u;                                 /* it starts on its bar line, if it has no pickup */
+        for (j = 0; j < CELL[ci].n && m->n < want; j++) {
+            const int on = t + CELL[ci].on[j];
+            if (m->n && on < m->on[m->n - 1] + m->len[m->n - 1])
+                continue;                            /* (the pickup held over it) */
+            m->on[m->n] = (uint8_t)on;
+            m->len[m->n] = CELL[ci].len[j];
+            m->n++;
+        }
+        t += 8;
+    }
+    if (m->n < 2u) {                                 /* never one note */
+        m->on[m->n] = (uint8_t)t;
+        m->len[m->n] = 8u;
+        m->n++;
+        t += 8;
+    }
+    m->span = (uint8_t)(t - m->pick);
+    /* contour: an arch, a rise, a fall, a wave */
+    shape = (int)(MH() >> 8) % 4;
+    peak = shape == 0 ? (int)m->n / 2 : shape == 1 ? (int)m->n - 1 : shape == 2 ? 0 : 1;
+    top = ns / 2 + 1;
+    for (i = 1; i < m->n; i++) {
+        const uint32_t r = MH() % 100u;
+        int dir = i <= peak ? 1 : -1, size;
+        if (shape == 3 && i >= 2)
+            dir = i % 2 ? 1 : -1;
+        if (m->pick && i == 1 && shape != 2)
+            dir = 1;                                 /* a pickup rises into its bar */
+        if (leapt) {                                 /* a leap turns back, by a step */
+            dir = leapt > 0 ? -1 : 1;
+            size = 1;
+            leapt = 0;
+        } else if (r < 66u) {
+            size = 1;
+        } else if (r < 90u || i == (int)m->n - 1) {
+            size = 2;
+        } else {
+            size = 3 + (int)(MH() % 2u);             /* a fourth or a fifth, in seven notes */
+            size = size > top ? top : size;
+            leapt = dir;
+        }
+        m->deg[i] = (int8_t)(m->deg[i - 1] + dir * size);
+    }
+    for (i = 0; i < m->n; i++) {                     /* its rhythm and which way it goes: what a listener would call the same */
+        sig = (sig ^ m->on[i]) * 16777619u;
+        sig = (sig ^ m->len[i]) * 16777619u;
+        sig = (sig ^ (uint32_t)(i && m->deg[i] > m->deg[i - 1])) * 16777619u;
+    }
+    m->sig = (uint16_t)(sig ^ sig >> 16);
+#undef MH
+}
+
+static int mel_seen(const en_mel_t *st, uint16_t sig)
+{
+    int i;
+    for (i = 0; i < st->seen_n; i++) {
+        MEL_OP();
+        if (st->seen[i] == sig)
+            return 1;
+    }
+    return 0;
+}
+
+static void motif_new(en_mel_t *st, const en_mel_in_t *in, int busy, int ns)
+{
+    int tries;
+    for (tries = 0; tries < 8; tries++) {        /* (a bound: 16 bits of motifs against 64 that were had) */
+        motif_compose(in->seed, st->n * 8u + (uint32_t)tries, busy, ns, &st->now);
+        if (!mel_seen(st, st->now.sig))
+            break;
+    }
+    st->seen[st->seen_i] = st->now.sig;
+    st->seen_i = (uint8_t)((st->seen_i + 1u) % EN_MEL_SEEN);
+    if (st->seen_n < EN_MEL_SEEN)
+        st->seen_n++;
+    if (st->mem_n < EN_MEL_MEM) {
+        st->mem[st->mem_n++] = st->now;
+    } else if (hhash(in->seed, st->n, 390u) % 400u < (uint32_t)in->evolve) {
+        st->mem[0] = st->now;                    /* a new theme: at the default one in eight of the new motifs */
+    } else {
+        st->mem[1u + st->mem_i % (EN_MEL_MEM - 1u)] = st->now;
+        st->mem_i++;
+    }
+    st->recalled = 0u;
+}
+
+void en_mel_start(en_mel_t *st)
+{
+    *st = (en_mel_t){0};
+}
+
+static int chord_index(const en_mel_in_t *in, int t, int *end)   /* the chord sounding at a step from the call, and where it ends. Past what is known: -1 */
+{
+    int i, e = 0;
+    for (i = 0; i < in->nchords; i++) {
+        e += in->chord[i].steps;
+        if (t < e) {
+            *end = e;
+            return i;
+        }
+    }
+    *end = e;
+    return -1;
+}
+
+void en_mel_next(en_mel_t *st, const en_mel_in_t *in, en_phrase_t *out)
+{
+    const int section = (unsigned)in->section < EN_NSECTIONS ? in->section : 0;
+    const int busy = MEL_SEC[section].busy, lo = EN_MEL_LO(in->key);
+    const int hi = lo + EN_MEL_RANGE > EN_MEL_TOP ? EN_MEL_TOP : lo + EN_MEL_RANGE;
+    int sc[12], ns, n = 0, i, role, anchor, dmin, dmax, seq, cad, pn = 0, back = 0, total = 0;
+    int16_t t[EN_MEL_NOTES + 1];
+    uint8_t len[EN_MEL_NOTES + 1], fixed[EN_MEL_NOTES + 1];
+    int8_t deg[EN_MEL_NOTES + 1];
+    uint32_t form, key_pool;
+    int k = 0;
+#define NH() hhash(in->seed, st->n, 300u + (uint32_t)(k++))
+    *out = (en_phrase_t){0};
+    ns = en_scale(in->pool, sc);
+    key_pool = rot12(in->pool, in->key);
+    for (i = 0; i < in->nchords; i++)
+        total += in->chord[i].steps;
+
+    /* which motif, and what this phrase does with it */
+    if (st->role >= st->roles) {
+        uint32_t span = (uint32_t)(MEL_SEC[section].roles_hi - MEL_SEC[section].roles_lo + 1);
+        st->role = 0u;
+        st->roles = (uint8_t)(MEL_SEC[section].roles_lo + (NH() >> 8) % span);
+        st->periods++;
+        st->dev = (int8_t)((NH() >> 8) % 4u);
+        if (!st->mem_n || in->evolve >= 100) {
+            motif_new(st, in, busy, ns);
+        } else if (in->evolve <= 0) {
+            st->now = st->mem[0];
+            st->recalled = 1u;
+        } else if ((NH() >> 8) % 100u < (uint32_t)(100 - in->evolve) * 7u / 10u) {
+            const uint32_t r = (NH() >> 8) % 10u;      /* the theme, more often than the others */
+            st->now = st->mem[r < 6u || st->mem_n < 2u ? 0u : 1u + (r - 6u) % (uint32_t)(st->mem_n - 1u)];
+            st->recalled = 1u;
+        } else {
+            motif_new(st, in, busy, ns);
+        }
+    } else if (in->evolve >= 100) {
+        motif_new(st, in, busy, ns);             /* nothing comes again, not even within a period */
+    }
+    role = st->role;
+    {
+        /* the form goes with the motif: a motif comes back as it was */
+        const en_motif_t *m = &st->now;
+        static const uint8_t CAD[6] = {8, 12, 16, 16, 24, 32};
+        int c, r;
+        form = hhash(in->seed, m->sig, 380u);
+        seq = form % 100u < 40u ? (form >> 8) % 3u == 0u ? -1 : (int)((form >> 8) % 3u) : 0;
+        if (m->n > 3u || m->span > 16u)
+            seq = 0;                             /* the second time would make it too long */
+        cad = CAD[(form >> 16) % 6u];
+        if (busy >= 5 && cad > 16)
+            cad = 16;
+        out->sig = m->sig;
+        out->recalled = st->recalled;
+        for (r = 0; r < (seq ? 2 : 1); r++)
+            for (c = 0; c < m->n; c++) {
+                const int on = (int)m->on[c] - (int)m->pick + r * (int)m->span;
+                if (n && (on < t[n - 1] + 2 || (n > 1 && on - t[n - 2] <= 6)))
+                    continue;                    /* (a line, and no busy run: its second time starts when the first has room) */
+                if (n && t[n - 1] + (int)len[n - 1] > on)
+                    len[n - 1] = (uint8_t)(on - t[n - 1]);
+                t[n] = (int16_t)on;
+                len[n] = m->len[c];
+                deg[n] = (int8_t)(m->deg[c] + r * seq);
+                n++;
+            }
+    }
+    /* the answer's and the close's changes: the rhythm stays, unless it is cut short */
+    if ((role == EN_MEL_ANSWER || role == EN_MEL_CLOSE) && in->evolve < 100) {
+        const int op = (st->dev + role) & 3;
+        if (op == 0) {
+            const int by = (NH() >> 8) % 3u ? 1 : -1;
+            for (i = 0; i < n; i++)
+                deg[i] = (int8_t)(deg[i] + by);
+        } else if (op == 1) {
+            for (i = 1; i < n; i++)
+                deg[i] = (int8_t)(-deg[i]);
+        } else if (op == 2 && n > 2) {
+            n--;
+        } else if (n > 2) {
+            deg[n - 1] = (int8_t)(deg[n - 1] + ((NH() >> 8) % 2u ? 2 : -2));
+        }
+    }
+    /* and the long note it comes to rest on */
+    {
+        const int e = t[n - 1] + (int)len[n - 1], at0 = (e + 7) / 8 * 8, at = n > 1 && at0 - t[n - 2] <= 6 ? at0 + 8 : at0;
+        const int to = role == EN_MEL_ANSWER ? 1 : -1;
+        t[n] = (int16_t)at;
+        len[n] = (uint8_t)cad;
+        deg[n] = (int8_t)(deg[n - 1] + to * (1 + (int)(form >> 24) % 2));
+        n++;
+    }
+    /* what is known of the chords, and the phrase's whole length, say how much of it there is */
+    while (n > 0 && ((int)EN_MEL_LEAD + t[n - 1] >= total || (int)EN_MEL_LEAD + t[n - 1] >= MEL_MAX_SPAN))
+        n--;
+    if (n > EN_MEL_NOTES) {                      /* (its last note stays the last) */
+        t[EN_MEL_NOTES - 1] = t[n - 1];
+        len[EN_MEL_NOTES - 1] = len[n - 1];
+        deg[EN_MEL_NOTES - 1] = deg[n - 1];
+        n = EN_MEL_NOTES;
+    }
+    if (n < 2) {                                 /* no room for it here: the next chance */
+        out->rest = 2u;
+        st->n++;
+        return;
+    }
+
+    /* where it lies: the statement near the section's place, the answer from where the last phrase ended, the return where the statement was */
+    dmin = dmax = 0;
+    for (i = 0; i < n; i++) {
+        dmin = deg[i] < dmin ? deg[i] : dmin;
+        dmax = deg[i] > dmax ? deg[i] : dmax;
+    }
+    if (role == EN_MEL_RETURN && st->anchor) {
+        anchor = st->anchor;
+    } else {
+        int want = lo + MEL_SEC[section].center;
+        if (role != EN_MEL_STATEMENT && st->last)
+            want = st->last;
+        else
+            want += (int)(NH() >> 8) % 5 - 2;
+        anchor = scale_place(sc, ns, in->key, want);
+    }
+    for (i = 0; i < 2 * ns && anchor + dmax > scale_place(sc, ns, in->key, hi); i++)
+        anchor--;
+    for (i = 0; i < 2 * ns && anchor + dmin < scale_place(sc, ns, in->key, lo); i++)
+        anchor++;
+    if (role == EN_MEL_STATEMENT)
+        st->anchor = (uint8_t)anchor;
+
+    /* the notes: scale places to pitches, then the chords' say */
+    for (i = 0; i < n; i++) {
+        const int ta = (int)EN_MEL_LEAD + t[i], idx = anchor + deg[i] < 0 ? 0 : anchor + deg[i];
+        int end, ci = chord_index(in, ta, &end), want = scale_note(sc, ns, in->key, idx), e = ta + len[i], note, l = len[i];
+        const int dir = i ? (deg[i] > deg[i - 1] ? 1 : deg[i] < deg[i - 1] ? -1 : 0) : 0;
+        const int last = i == n - 1;
+        uint32_t tones, set;
+        if (ci < 0)
+            ci = in->nchords - 1;
+        tones = in->chord[ci].tones;
+        set = tones;
+        fixed[i] = (uint8_t)(!(ta & 7) || (ta & ~7) + 8 < e || l >= 6 || last);
+        if (e > end) {                           /* over a change: only a tone both chords have, or it ends with its chord */
+            const uint32_t both = ci + 1 < in->nchords ? tones & in->chord[ci + 1].tones : 0u;
+            if (both && e <= total) {
+                set = both;
+                fixed[i] = 1u;
+            } else {
+                l = end - ta;
+                fixed[i] = (uint8_t)(!(ta & 7) || l >= 6 || last);
+            }
+        }
+        /* the ends: stable, or open in an answer */
+        if (last) {
+            const int r = in->chord[ci].root;
+            const uint32_t st_tones = 1u << r | 1u << (r + 3) % 12 | 1u << (r + 4) % 12 | 1u << (r + 7) % 12;
+            const uint32_t open = set & ~(1u << r) & ~(1u << in->key);
+            const uint32_t want_set = role == EN_MEL_ANSWER && in->evolve < 100 ? open : set & st_tones;
+            if (want_set)
+                set = want_set;
+        }
+        while (want > hi)
+            want -= 12;
+        while (want < lo)
+            want += 12;
+        if (back) {                              /* the last one leapt: this one turns back */
+            want = pn - back * 2;
+            want = want < lo ? lo : want > hi ? hi : want;
+        }
+        note = fixed[i] ? mel_snap(want, set, lo, hi, back ? -back : dir) : mel_snap(want, key_pool, lo, hi, dir);
+        if (i && dir && !back && (note - pn) * dir <= 0) {   /* a contour is what is remembered: it goes the way the motif goes */
+            const int to = mel_next_in(pn, fixed[i] ? set : key_pool, lo, hi, dir);
+            if (to != pn && (to > pn ? to - pn : pn - to) <= 9)
+                note = to;
+        }
+        if (i && dir && !back && fixed[i]) {     /* of the chord's tones near where it should go, the nearest to the last note: a line, not arpeggios */
+            const int to = mel_next_in(pn, set, lo, hi, dir);
+            if (to != pn && (to > want ? to - want : want - to) <= 3)
+                note = to;
+        }
+        if (back && (note - pn) * back > 0) {    /* it would go on the same way: the other way, if it can */
+            const int to = mel_next_in(pn, fixed[i] ? set : key_pool, lo, hi, -back);
+            if (to != pn)
+                note = to;
+        }
+        if (i && (note > pn ? note - pn : pn - note) > 9) {   /* wider than a sixth: the same tone nearer */
+            const int other = note > pn ? note - 12 : note + 12;
+            if (other >= lo && other <= hi)
+                note = other;
+        }
+        back = i && (note > pn ? note - pn : pn - note) >= 7 ? (note > pn ? 1 : -1) : 0;
+        out->note[i].step = (uint16_t)ta;
+        out->note[i].len = (uint16_t)l;
+        out->note[i].note = (uint8_t)note;
+        pn = note;
+    }
+    out->n = (uint8_t)n;
+
+    /* one highest note: the others under it come down a step; if the last note is the highest and something else can be, it gives way */
+    {
+        int top = 0, first = -1;
+        for (i = 0; i < n; i++)
+            top = out->note[i].note > top ? out->note[i].note : top;
+        for (i = 0; i < n; i++) {
+            if (out->note[i].note != top)
+                continue;
+            if (first < 0) {
+                first = i;
+                continue;
+            }
+            {
+                const int ta = out->note[i].step;
+                int end, ci = chord_index(in, ta, &end);
+                uint32_t set;
+                if (ci < 0)
+                    ci = in->nchords - 1;
+                set = fixed[i] ? in->chord[ci].tones : key_pool;
+                if (ta + out->note[i].len > end && ci + 1 < in->nchords)
+                    set &= in->chord[ci + 1].tones;
+                out->note[i].note = (uint8_t)mel_next_in(top, set, lo, hi, -1);
+            }
+        }
+    }
+
+    /* the echoes, the velocities */
+    for (i = 0; i < n; i++) {
+        en_mnote_t *o = &out->note[i];
+        const int ta = o->step, end_i = ta + o->len;
+        int e, ci, v, echo = 1, r;
+        ci = chord_index(in, ta, &e);
+        echo = ci >= 0 && pc_in(in->chord[ci].tones, o->note);
+        for (r = 1; r <= 2 && echo; r++) {
+            const int c2 = chord_index(in, ta + r * in->echo_steps, &e);
+            if (c2 >= 0 ? !pc_in(in->chord[c2].tones, o->note) : in->echo_steps <= 16)
+                echo = 0;                        /* (past what is known it is taken as wrong, unless the echo is so long that nobody could know) */
+        }
+        o->echo = (uint8_t)echo;
+        v = MEL_SEC[section].vel + (ta & 15 ? ta & 7 ? -4 : 2 : 6) + (int)(NH() >> 8) % 7 - 3;
+        if (i == n - 1)
+            v -= 4;
+        {
+            int top = 1, j;
+            for (j = 0; j < n; j++)
+                top &= out->note[j].note <= o->note;
+            v += top ? 8 : 0;
+        }
+        o->vel = (uint8_t)(v < 20 ? 20 : v > 100 ? 100 : v);
+        out->end = (uint16_t)(end_i > out->end ? end_i : out->end);
+    }
+
+    /* the timbre */
+    {
+        const int w_lo = in->tone > 50 ? (in->tone - 50) * 3 / 50 : 0, w_hi = in->tone < 50 ? 2 + in->tone * 3 / 50 : EN_NTIMBRES - 1;
+        if ((!st->timbre_left && role == EN_MEL_STATEMENT) || st->timbre < w_lo || st->timbre > w_hi) {   /* (a period keeps its voice) */
+            const int span = w_hi - w_lo + 1;
+            int tb = w_lo + (int)(NH() >> 8) % span;
+            if (tb == st->timbre && span > 1)
+                tb = w_lo + (tb - w_lo + 1) % span;
+            st->timbre = (uint8_t)tb;
+            st->timbre_left = (uint8_t)(4u + (NH() >> 8) % 6u);
+        }
+        if (st->timbre_left)
+            st->timbre_left--;
+        out->timbre = st->timbre;
+        if (role == EN_MEL_ANSWER && (NH() >> 8) % 100u < 30u) {
+            const int kin = TIMBRE_KIN[st->timbre];
+            if (kin >= w_lo && kin <= w_hi)
+                out->timbre = (uint8_t)kin;
+        }
+    }
+
+    /* the rest after it */
+    out->role = (uint8_t)role;
+    st->role++;
+    st->last = out->note[n - 1].note;
+    if (st->role < st->roles) {
+        out->rest = (uint8_t)(1u + (NH() >> 8) % 2u);
+    } else {
+        const uint32_t span = (uint32_t)(MEL_SEC[section].gap_hi - MEL_SEC[section].gap_lo + 1);
+        float g = (float)(MEL_SEC[section].gap_lo + (NH() >> 8) % span);
+        if ((NH() >> 8) % 100u < 15u)
+            g *= 2.5f;                           /* now and then a long silence */
+        g *= knob_curve(in->rate, 50, 6.0f, 1.0f, 0.3f);
+        out->rest = (uint8_t)(g < 1.0f ? 1.0f : g > 250.0f ? 250.0f : g);
+    }
+    st->n++;
+#undef NH
+}
+
+/* the voices */
 #define NBELL 4
 typedef struct {
-    float cph, mph, cinc, minc, amp, adec, idx, idec, ifl, att, arate, gl, gr;
-    int32_t wait;
-    uint8_t on, note, kind;
+    float cph, mph, cinc, minc, amp, adec, rdec, idx, idec, ifl, att, arate, gl, gr, esg, edec, vph, vinc, vib, vramp, ratio;
+    int32_t wait, left;                          /* left: samples until its key lets go */
+    uint8_t on, down, note;                      /* down: MIDI has been told it is */
 } bell_t;
 static bell_t bell[NBELL];
 static float bell_vol;
-typedef struct {
-    uint8_t step;                                /* in the chord */
-    int8_t note;                                 /* above the tonic, an octave over middle C */
-    uint8_t vel;
-} mnote_t;
-static const mnote_t MOTIF[2][4] = {
-    {{8, 0, 44}, {11, 4, 46}, {14, 9, 54}, {20, 7, 50}},             /* 1 3 6, 5 */
-    {{8, 4, 40}, {11, 7, 44}, {14, 11, 50}, {22, 9, 52}},            /* 3 5 7, 6 */
-};
-static int8_t motif_now[4];                      /* this chord's phrase, each note moved to the chord */
-static int8_t motif_on;                          /* which phrase this chord has, -1 none */
-/* each turn: bit 0 the call, bit 1 the answer */
-#define MOTIF_TURN 16u                           /* bars */
-#define MOTIF_MIN_BARS 2u                        /* a phrase needs a chord this long */
-static const uint8_t MOTIF_WHEN[12] = {0, 2, 0, 3, 0, 1, 3, 0, 1, 0, 1, 0};
-static uint8_t motif_due;                        /* what this turn still has to play */
-static uint32_t h_pass;                          /* the pass the motifs' turns count from */
-static uint32_t motif_turn;
+#define BELL_GAIN 1.40f
+#if defined EN_HOST || defined PLAT_HOST
+static float bell_stolen;
+#endif
 
-int en_motif_due(int due, int rate, uint32_t h)
+static void bell_up(bell_t *v)                   /* its key lets go: it rings out */
 {
-    if (rate < 50) {                             /* each of its phrases kept, by the rate: a fifth of them at 0 */
-        const uint32_t keep = 20u + (uint32_t)rate * 8u / 5u;
-        if ((h & 0xFFFFu) % 100u >= keep)
-            due &= ~1;
-        if ((h >> 16) % 100u >= keep)
-            due &= ~2;
-    } else if (rate > 50) {                      /* a place with none may have one: half of them at 100, twice the table's phrases */
-        const uint32_t add = (uint32_t)(rate - 50);
-        if ((h & 0xFFFFu) % 100u < add)
-            due |= 1;
-        if ((h >> 16) % 100u < add)
-            due |= 2;
+    if (v->down) {
+        v->down = 0u;
+        midi(0x81, v->note, 0);
     }
-    return due;
+    v->left = 0;
+    v->adec = v->rdec;
 }
 
-void en_motif_voice(int tone, int kind, float vel, float *ratio, float *index, float *idec_s, float *floor_idx)
+static void bell_strike(int timbre, int n, float vel, int echo, int32_t gate, float pan, int32_t wait)
 {
-    /* one family: the fundamental and a little of its neighbours, gone quickly. The answer: its second harmonic's ratio,
-     * a lighter index. Tone moves the index, how long it stays and how much of it stays for good, never the ratio: a warm plain
-     * voice at both ends, nearly a sine at 0, round and a little reedy at 100 */
-    *ratio = kind == 0 ? 1.0f : 2.0f;
-    *index = (kind == 0 ? 0.30f + 0.25f * vel : 0.14f + 0.14f * vel) * knob_curve(tone, 50, 0.22f, 1.0f, 2.2f);
-    *idec_s = 0.13f * knob_curve(tone, 50, 0.45f, 1.0f, 2.8f);
-    *floor_idx = (kind == 0 ? 1.0f : 0.6f) * knob_curve(tone, 50, 0.0f, 0.0f, 0.40f);
-}
-
-static void bell_strike(int kind, int n, float vel, int32_t wait)
-{
-    float ratio, index, idec, keep;
+    en_mel_voice_t tv;
     int i, best = 0;
     float lo = 9.0f, p;
     bell_t *v;
     for (i = 0; i < NBELL; i++) {
-        float a = bell[i].on ? bell[i].amp : -1.0f;
+        float a = bell[i].on ? bell[i].amp * bell[i].att : -1.0f;
+        if (bell[i].down)                        /* one key at a time: the line is a line */
+            bell_up(&bell[i]);
         if (a < lo) {
             lo = a;
             best = i;
         }
     }
     v = &bell[best];
-    if (v->on)
-        midi(0x81, v->note, 0);
-    v->on = 1;
-    v->kind = (uint8_t)kind;
+#if defined EN_HOST || defined PLAT_HOST
+    if (v->on && lo > bell_stolen)
+        bell_stolen = lo;
+#endif
+    en_mel_voice(timbre, par[P_MTONE], &tv);
+    v->on = 1u;
+    v->down = 1u;
     v->note = (uint8_t)n;
     v->cph = v->mph = 0.0f;
     v->cinc = mtof((float)n) * (1.0f / EN_SR);
-    v->amp = vel;
+    v->ratio = tv.ratio;
+    v->minc = v->cinc * tv.ratio;
+    v->amp = vel * tv.level;
     v->att = 0.0f;
-    en_motif_voice(par[P_MTONE], kind, vel, &ratio, &index, &idec, &keep);
-    v->minc = v->cinc * ratio;
-    v->idx = index * (1.0f / FM_TWO_PI);
-    v->ifl = keep * (1.0f / FM_TWO_PI);
-    v->idec = fm_expf(-1.0f / (idec * EN_SR));
-    v->adec = fm_expf(-6.9f / ((kind == 0 ? 2.4f : 2.2f) * EN_SR));
-    v->arate = 1.0f / (0.0040f * EN_SR);         /* about 10 ms to its top */
-    p = ((kind == 0 ? -0.30f : 0.30f) + 1.0f) * (FM_PI / 4.0f);
+    v->arate = 1.0f / (tv.att_s * EN_SR);
+    v->idx = tv.index * (1.0f / FM_TWO_PI);
+    v->ifl = tv.floor_idx * (1.0f / FM_TWO_PI);
+    v->idec = fm_expf(-1.0f / (tv.idec_s * EN_SR));
+    v->adec = fm_expf(-6.9f / (tv.t60_s * EN_SR));
+    v->rdec = fm_expf(-6.9f / (tv.rel_s * EN_SR));
+    v->esg = echo ? 0.15f : 0.0f;                /* only the note's start goes to the echo: its repeats are of that */
+    v->edec = fm_expf(-1.0f / (0.14f * EN_SR));
+    v->vib = tv.vib;
+    v->vph = 0.0f;
+    v->vinc = 5.1f / EN_SR;
+    v->vramp = 0.0f;
+    p = (pan + 1.0f) * (FM_PI / 4.0f);
     v->gl = fm_cosf(p);
     v->gr = fm_sinf(p);
     v->wait = wait;
-    en_loop_glow[kind] = 1.0f;
-    midi(0x91, (uint32_t)n, (uint32_t)(vel * 110.0f));
+    v->left = gate;
+    midi(0x91, (uint32_t)n, (uint32_t)(vel * 120.0f));
 }
 
 /* ------------------------------------------------------------- the drums' levels --- */
@@ -2220,11 +2769,6 @@ static void part_at(uint32_t s, en_part_t *o)
         en_arr_part(&arr_nxt, in - arr_cur.bars, arr_style, par[P_ENERGY], o);
 }
 
-static uint32_t pass_at(uint32_t s)
-{
-    return bars_in(s) < arr_cur.bars ? arr_cur.pass : arr_nxt.pass;
-}
-
 static void arr_follow(void)                     /* what comes after this section, as things stand */
 {
     arr_nxt = arr_cur;
@@ -2254,8 +2798,6 @@ static void arr_bar(uint32_t s)                  /* on the bar */
 }
 
 /* the harmony's end of it: it hears the arranger's character at each chord */
-static uint32_t motif_base;                      /* the bar that pass began at */
-
 /* the next chord, a little ahead of it, from the pool and the key as they are now */
 static uint32_t prep_pool, prep_degrees;
 static int prep_root;
@@ -2276,33 +2818,138 @@ static void chord_prepare(uint32_t at)
     prep_root = par[P_ROOT];
 }
 
-static int motif_fits(int m, int n, uint32_t steps)   /* a note and its first two echoes inside the chord */
+/* ------- the melody in the song */
+static en_mel_t mel;
+static en_phrase_t phr;
+static uint32_t phr_at, mel_due;                 /* the step of its call; the bar the next may be called on */
+static uint8_t phr_i;                            /* its next note */
+static uint16_t phr_tones[EN_MEL_CHORDS], phr_change[EN_MEL_CHORDS];   /* the chords it was made for: from the call, where each starts */
+static uint8_t phr_chords;
+static int8_t mel_force = -1;
+#if defined EN_HOST || defined PLAT_HOST
+void (*en_trace_mel)(uint32_t step, const en_phrase_t *p);
+uint32_t en_test_mel_refits;
+void en_test_mel_hear(int timbre)
 {
-    return (uint32_t)MOTIF[m & 1][n & 3].step + 2u * EN_ECHO_STEPS < steps;
+    mel_force = (int8_t)timbre;
+    mel_due = 0u;
+}
+#endif
+
+static uint32_t chord_abs(const en_hchord_t *c) { return rot12(c->tones, c->tonic); }
+
+/* the next chords as they will be: the generator's own, from a copy of its state. What it says is a forecast, a knob may still move */
+static void mel_plan(uint32_t s)
+{
+    static en_gen_t look;                        /* (not on the interrupt's stack) */
+    static en_mel_in_t in;
+    int k;
+    const int t = par[P_ETIME];
+    in.pool = h_pool;
+    in.key = h_root;
+    in.seed = song_seed;
+    in.section = part_now.section;
+    in.evolve = par[P_EVOLVE];
+    in.rate = par[P_MRATE];
+    in.tone = par[P_MTONE];
+    in.echo_steps = (int)(ETIME_BEATS[t] * 4.0f);
+    in.chord[0].tones = (uint16_t)chord_abs(&ch_now.ch);
+    in.chord[0].root = (uint8_t)((ch_now.ch.tonic + ch_now.ch.root) % 12);
+    in.chord[0].steps = (uint16_t)ch_left;
+    in.nchords = 1;
+    phr_change[0] = 0u;
+    if (en_held) {
+        in.chord[0].steps = 128u;                /* it stays */
+    } else {
+        uint32_t at = s + ch_left;
+        look = gen_now;
+        for (k = 1; k < EN_MEL_CHORDS; k++) {
+            en_part_t p;
+            en_gchord_t g;
+            uint32_t grid, st;
+            part_at(at, &p);
+            en_gen_next(&look, pool, par[P_ROOT], song_seed, par[P_EVOLVE], p.character, degrees, &g);
+            grid = 8u - at / 16u % 8u;
+            st = (g.bars < grid ? g.bars : grid) * 16u;
+            in.chord[k].tones = (uint16_t)chord_abs(&g.ch);
+            in.chord[k].root = (uint8_t)((g.ch.tonic + g.ch.root) % 12);
+            in.chord[k].steps = (uint16_t)st;
+            phr_change[k] = (uint16_t)(at - s);
+            at += st;
+            in.nchords++;
+        }
+    }
+    if (mel_force >= 0) {                        /* (an audition: a statement) */
+        mel.role = mel.roles = 0u;
+    }
+    en_mel_next(&mel, &in, &phr);
+    if (mel_force >= 0)
+        phr.timbre = (uint8_t)mel_force;
+    for (k = 0; k < in.nchords; k++)
+        phr_tones[k] = in.chord[k].tones;
+    phr_chords = (uint8_t)in.nchords;
+    phr_at = s;
+    phr_i = 0u;
+    mel_on = phr.n > 0u;
+    mel_due = (s + phr.end + 15u) / 16u + phr.rest;
+    {                                            /* the screen's two rings: this phrase's notes on the one of its part */
+        const int l = phr.role & 1;
+        int i;
+        for (i = 0; i < EN_LOOP_MAX; i++)
+            en_loop_note[l][i] = i < phr.n ? (int8_t)((int)phr.note[i].note - EN_MEL_LO(h_root)) : -1;
+    }
+#if defined EN_HOST || defined PLAT_HOST
+    if (en_trace_mel && phr.n)
+        en_trace_mel(s, &phr);
+#endif
 }
 
-/* this chord's phrase, if the turn has one due and it has the room */
-static void motif_choose(uint32_t bar)
+/* a chord that was not the one foreseen (a knob, a key, EDIT, a hold): what is left of the phrase moves onto it, out of the echo */
+static void mel_chord(uint32_t s)
 {
-    const uint32_t in = bar - motif_base, turn = in / MOTIF_TURN;
-    int n;
-    if (turn != motif_turn) {
-        motif_turn = turn;
-        motif_due = (uint8_t)en_motif_due(MOTIF_WHEN[turn % 12u], par[P_MRATE], hhash(song_seed, turn + (h_pass << 8), 45u));
+    const uint32_t tones = chord_abs(&ch_now.ch);
+    const int lo = EN_MEL_LO(par[P_ROOT]), hi = lo + EN_MEL_RANGE > EN_MEL_TOP ? EN_MEL_TOP : lo + EN_MEL_RANGE;
+    int k;
+    if (!mel_on)
+        return;
+    for (k = 0; k < phr_chords; k++)
+        if ((uint32_t)phr_change[k] + phr_at == s && phr_tones[k] == tones)
+            return;
+#if defined EN_HOST || defined PLAT_HOST
+    en_test_mel_refits++;
+#endif
+    for (k = phr_i; k < phr.n; k++) {
+        phr.note[k].note = (uint8_t)mel_snap(phr.note[k].note, tones, lo, hi, 0);
+        phr.note[k].echo = 0u;
     }
-    motif_on = -1;
-    if (ch_now.bars < MOTIF_MIN_BARS)
-        return;                                  /* it waits */
-    if (motif_due & 1u) {
-        motif_on = 0;
-        motif_due &= (uint8_t)~1u;
-    } else if (motif_due & 2u && in % MOTIF_TURN >= MOTIF_TURN / 2u) {
-        motif_on = 1;
-        motif_due &= (uint8_t)~2u;
+    for (k = 0; k < NBELL; k++)                  /* and a note down that is not in it lets go */
+        if (bell[k].down && !pc_in(tones, bell[k].note))
+            bell_up(&bell[k]);
+}
+
+static void mel_step(uint32_t s)
+{
+    const uint32_t bar = s / 16u;
+    if (mel_on && (s < phr_at || s >= phr_at + phr.end))
+        mel_on = 0u;                             /* over, or the song has jumped from under it */
+    if (!mel_on && !(s & 15u)) {                 /* a calm section's long rest does not run on into a full one */
+        const uint32_t most = (uint32_t)((float)MEL_SEC[part_now.section].gap_hi * 2.5f * knob_curve(par[P_MRATE], 50, 6.0f, 1.0f, 0.3f));
+        if (mel_due > bar + most)
+            mel_due = bar + most;
     }
-    if (motif_on >= 0)
-        for (n = 0; n < 4; n++)                  /* a note that clashes moves to the nearest tone of its chord */
-            motif_now[n] = (int8_t)nearest_tone(ch_now.ch.tones, MOTIF[motif_on][n].note);
+    if (!mel_on && !(s & 15u) && bar >= mel_due && (bar + 1u) % ((mel.role >= mel.roles) && mel_force < 0 ? 4u : 2u) == 0u)
+        mel_plan(s);
+    while (mel_on && phr_i < phr.n && (uint32_t)phr.note[phr_i].step + phr_at < s)
+        phr_i++;                                 /* (what a jump passed over) */
+    while (mel_on && phr_i < phr.n && (uint32_t)phr.note[phr_i].step + phr_at == s) {
+        const en_mnote_t *o = &phr.note[phr_i];
+        const int note = live_note(o->note) + 12 * par[P_MOCT];
+        const float pan = phr.role & 1u ? 0.10f : -0.10f;
+        bell_strike(phr.timbre, note, (float)o->vel * 0.01f, o->echo, (int32_t)(((float)o->len - 0.15f) * step_len), pan, (int32_t)(hhash(song_seed, s, 46u) % 120u));
+        en_loop_pos[phr.role & 1u] = phr_i;
+        en_loop_glow[phr.role & 1u] = 1.0f;
+        phr_i++;
+    }
 }
 
 static void chord_time(uint32_t bar)              /* this chord's length from this bar: whatever is asked, it ends with the phrase */
@@ -2321,7 +2968,7 @@ static void chord_commit(uint32_t s, int character)   /* at the change, and only
     h_root = prep_root;
     chord_time(bar);
     ch_count++;
-    motif_choose(bar);
+    mel_chord(s);
     (void)character;
 #if defined EN_HOST || defined PLAT_HOST
     if (en_trace_chord)
@@ -2329,19 +2976,12 @@ static void chord_commit(uint32_t s, int character)   /* at the change, and only
 #endif
 }
 
-/* for the tests: a motif's note, and whether it plays on a chord of this length */
-int en_motif_fits(int m, int n, uint32_t steps) { return motif_fits(m, n, steps); }
-int en_motif_note_ch(int m, int n, const en_hchord_t *ch) { return nearest_tone(ch->tones, MOTIF[m & 1][n & 3].note); }
-
 static void harmony_restart(void)                /* the top of the song */
 {
     en_part_t p;
     part_at(0u, &p);
     en_gen_start(&gen_now);
     ch_count = 0u;
-    motif_base = 0u;
-    motif_turn = 0xFFFFFFFFu;
-    motif_due = 0u;
     chord_prepare(0u);
     chord_commit(0u, p.character);
 }
@@ -2356,27 +2996,20 @@ static void song_step(uint32_t s)
         arr_bar(s);
     if (s == 0u) {
         inner_set = 0;
-        h_pass = pass_at(0u);
         harmony_restart();
         fresh_chord = 1;
     } else if (!ch_left && en_held) {            /* held: the chord's time comes round, the same chord, nothing struck */
         chord_time(s / 16u);
         ch_count++;                              /* (each time round its own figures) */
         ep_lone = 0u;
-        motif_choose(s / 16u);
+        mel_chord(s);
         pad_swell_t = 1.0f;
         round = 1;
     } else if (!ch_left) {
         en_part_t p;
-        const uint32_t pass = pass_at(s);
         part_at(s, &p);
         if (PREP_STALE())                        /* changed in the very last step */
             chord_prepare(s);
-        if (pass != h_pass) {                    /* a new pass: the motifs' table from its top */
-            h_pass = pass;
-            motif_base = s / 16u;
-            motif_turn = 0xFFFFFFFFu;
-        }
         chord_commit(s, p.character);
         fresh_chord = 1;
     }
@@ -2511,16 +3144,7 @@ static void song_step(uint32_t s)
         }
     }
 
-    /* the motifs */
-    if (motif_on >= 0) {
-        int n;
-        for (n = 0; n < 4; n++)
-            if (MOTIF[motif_on][n].step == cs && motif_fits(motif_on, n, ch_steps)) {
-                const int note = live_note(72 + h_root + motif_now[n]) + 12 * par[P_MOCT];
-                bell_strike(motif_on, note, (float)MOTIF[motif_on][n].vel * 0.01f, irand(180));
-                en_loop_pos[motif_on] = (uint8_t)n;
-            }
-    }
+    mel_step(s);
     en_drift = (float)cs * (1.0f / (float)ch_steps);
     ch_left--;
 }
@@ -2840,13 +3464,22 @@ int en_test_pad_sent(void)
         n += pad_sent[i] != 0u;
     return n;
 }
+void en_test_bell_note(int timbre, int note, float vel) { bell_strike(timbre, note, vel, 0, (int32_t)(8.0f * step_len), 0.0f, 0); }
 int en_test_bells_on(void)
+{
+    int i, n = 0;
+    for (i = 0; i < NBELL; i++)
+        n += bell[i].down;
+    return n;
+}
+int en_test_bell_voices(void)
 {
     int i, n = 0;
     for (i = 0; i < NBELL; i++)
         n += bell[i].on;
     return n;
 }
+float en_test_bell_stolen(void) { return bell_stolen; }
 int en_test_keys_limit(void) { return ep_lim; }
 int en_test_keys_down_past(int from)            /* lone notes' keys down on voices from this one on */
 {
@@ -2912,7 +3545,7 @@ static void notes_off(void)                      /* every note down let go, by n
         if (ep[i].on && (ep[i].held || ep[i].hold > 0))
             midi(0x80, ep[i].note, 0);
     for (i = 0; i < NBELL; i++)
-        if (bell[i].on)
+        if (bell[i].down)
             midi(0x81, bell[i].note, 0);
     if (bass.hold > 0)
         midi(0x82, bass.midi_note, 0);
@@ -2984,7 +3617,7 @@ static void quiet(void)
     int i;
     notes_off();
     for (i = 0; i < NBELL; i++)
-        bell[i].on = 0;
+        bell[i].on = bell[i].down = 0u;
     for (i = 0; i < NKEYS; i++)
         ep[i].on = 0;
     ep_gone[0] = ep_gone[1] = 0.0f;
@@ -3075,7 +3708,7 @@ void en_init(void)
     for (i = 0; i < NKEYS; i++)
         ep[i].on = 0;
     for (i = 0; i < NBELL; i++)
-        bell[i].on = 0;
+        bell[i].on = bell[i].down = 0u;
     for (i = 0; i < EN_NPAD; i++)
         pad_sent[i] = 0u;
     for (i = 0; i < NDRUMNOTES; i++)
@@ -3112,8 +3745,10 @@ void en_init(void)
     arr_start = 0u;
     arr_style = 0;
     part_now.level = part_nxt.level = 0u;
-    h_pass = motif_base = 0u;
-    motif_on = -1;
+    en_mel_start(&mel);
+    mel_on = 0u;
+    mel_due = 8u;                                /* the first phrase: some way into the intro */
+    mel_force = -1;
     en_section = en_drum_level = en_break_bars = en_drum_next = 0u;
     brk_init();                                  /* before apply: it resets what apply sets */
     for (i = 0; i < P_NPARAMS; i++)              /* the tempo last: until it is set, what needs all of them waits (echo_time, harmony) */
@@ -3126,9 +3761,9 @@ void en_init(void)
     ep_lone = 0u;
     harmony();
     harm_due = 0u;
-    for (l = 0; l < EN_NLOOP; l++)               /* the screen's loops show the motifs' notes, nothing moves in them */
+    for (l = 0; l < EN_NLOOP; l++)               /* the screen's loops show the phrases' notes */
         for (i = 0; i < EN_LOOP_MAX; i++)
-            en_loop_note[l][i] = l < 2 && i < 4 ? MOTIF[l][i].note : -1;
+            en_loop_note[l][i] = -1;
     pl_decay = pl_decay_t;
 }
 
@@ -3555,11 +4190,11 @@ static void render_bass(uint32_t n)
 static void render_bells(uint32_t n)
 {
     int i;
-    const float g = bell_vol * 0.62f;
+    const float g = bell_vol * BELL_GAIN;
     for (i = 0; i < NBELL; i++) {
         bell_t *v = &bell[i];
-        float cph = v->cph, mph = v->mph, amp = v->amp, idx = v->idx, att = v->att;
-        const float keep = v->ifl;
+        float cph = v->cph, mph = v->mph, amp = v->amp, idx = v->idx, att = v->att, esg = v->esg, cinc = v->cinc, minc = v->minc;
+        const float keep = v->ifl, adec = v->adec;
         uint32_t j = 0;
         if (!v->on)
             continue;
@@ -3571,21 +4206,30 @@ static void render_bells(uint32_t n)
             j = (uint32_t)v->wait;
             v->wait = 0;
         }
+        if (v->vib > 0.0f) {                     /* a slow vibrato that comes in late: both operators, so the ratio stays whole */
+            const float d = 1.0f + v->vib * v->vramp * (sine(v->vph) * 2.0f - 0.0f);
+            v->vph += v->vinc * (float)n;
+            if (v->vph >= 1.0f)
+                v->vph -= 1.0f;
+            v->vramp = fm_minf(v->vramp + (float)n * (1.0f / (0.5f * EN_SR)), 1.0f);
+            cinc *= d;
+            minc *= d;
+        }
         for (; j < n; j++) {
-            float m = sine(mph) * (idx + keep), x;
-            x = sine(cph + m + 4.0f) * amp * att * g;
-            mixl[j] += x * v->gl * 0.85f;        /* more of the note itself, less of the room */
-            mixr[j] += x * v->gr * 0.85f;
-            rsend[j] += x * 0.55f;
-            esend[j] += x * 0.16f;
-            cph += v->cinc;
-            mph += v->minc;
+            const float m = sine(mph) * (idx + keep), x = sine(cph + m + 4.0f) * amp * att * g;
+            mixl[j] += x * v->gl;
+            mixr[j] += x * v->gr;
+            rsend[j] += x * 0.30f;
+            esend[j] += x * esg;
+            cph += cinc;
+            mph += minc;
             if (cph >= 1.0f)
                 cph -= 1.0f;
             if (mph >= 1.0f)
                 mph -= 1.0f;
-            amp *= v->adec;
+            amp *= adec;
             idx *= v->idec;
+            esg *= v->edec;
             att += (1.0f - att) * v->arate;
         }
         v->cph = cph;
@@ -3593,9 +4237,15 @@ static void render_bells(uint32_t n)
         v->amp = amp;
         v->idx = idx;
         v->att = att;
+        v->esg = fm_flush(esg);
+        if (v->left > 0) {
+            v->left -= (int32_t)n;
+            if (v->left <= 0)
+                bell_up(v);
+        }
         if (amp < 0.0006f) {
-            v->on = 0;
-            midi(0x81, v->note, 0);
+            bell_up(v);
+            v->on = 0u;
         }
     }
 }

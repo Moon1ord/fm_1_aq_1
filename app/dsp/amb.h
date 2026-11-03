@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (C) 2026 Charles Vestal */
-/* AQ-1: an arranger (en_arr_*) and chords composed one at a time (en_gen_*) play an electric piano over a dark pad, two motifs,
+/* AQ-1: an arranger (en_arr_*) and chords composed one at a time (en_gen_*) play an electric piano over a dark pad, a melody (en_mel_*),
  * a sub and drum patterns, through AMB-1's space: an Echoplex and a tape loop after Discreet Music's chain, then Dattorro's
  * plate.
  *
@@ -146,7 +146,12 @@ uint32_t en_test_section_bar(void);             /* this section's bar; how many 
 uint32_t en_test_section_bars(void);
 int en_test_silent(void);                       /* since en_panic */
 int en_test_bass_down(void);                    /* notes the engine thinks are down, by layer: what MIDI should say */
-int en_test_bells_on(void);
+int en_test_bells_on(void);                     /* the melody's notes MIDI has been told are down: one at most */
+int en_test_bell_voices(void);                  /* its voices sounding, tails too */
+float en_test_bell_stolen(void);                /* the loudest a sounding voice was when it was taken: its level, 0..1 */
+void en_test_bell_note(int timbre, int note, float vel);   /* one note in a timbre, at once, out of the echo: to measure it */
+void en_test_mel_hear(int timbre);              /* a statement at the next chance in this timbre, -1 back to its own: to audition them */
+extern uint32_t en_mel_ops;                     /* the generator's steps of work, all of them: what bounds its cost */
 int en_test_pad_sent(void);
 int en_test_keys_down(void);
 int en_test_keys_on(void);                      /* voices sounding or still fading */
@@ -212,14 +217,69 @@ const char *en_hchord_name(const en_hchord_t *c, char *buf);   /* as the screen 
 int en_pool_nearest(uint32_t pool, int root, int note);        /* the pool's note nearest a MIDI note */
 int en_bass_ch(const en_hchord_t *ch, const en_hchord_t *nx, uint32_t pool, uint32_t count, uint32_t cs, uint32_t steps, int level,
                uint32_t seed, int *len);
-int en_motif_note_ch(int m, int n, const en_hchord_t *ch);
-/* what a turn of the table plays: bit 0 the call, bit 1 the answer. rate: the Rate knob, 50 the table as it is, under it fewer, over it
- * more; h: a hash of the turn */
-int en_motif_due(int due, int rate, uint32_t h);
-/* a motif note's voice at this Tone: the modulator's ratio to the carrier (whole numbers only: no bells), its index in
- * radians, how long that index takes to fall, s, and the index it falls to */
-void en_motif_voice(int tone, int kind, float vel, float *ratio, float *index, float *idec_s, float *floor_idx);
-int en_motif_fits(int m, int n, uint32_t steps);   /* it plays on a chord of so many steps, with its first two echoes inside */
+/* The melody: phrases composed one at a time. See "the melody" in amb.c. en_mel_next is pure: state, pool, key, the chords it can
+ * see (the one sounding, what is left of it, and those coming), the section, the knobs and the seed in; the state and one phrase of
+ * notes, lengths, velocities and a timbre out. Called on a bar, one bar before the phrase's first strong beat. */
+#define EN_MEL_NOTES 7                         /* a phrase's most */
+#define EN_MEL_CHORDS 3                        /* chords it looks at: the one sounding and two to come */
+#define EN_MEL_MEM 4                           /* motifs remembered */
+#define EN_MEL_SEEN 128                        /* motifs it knows it has had: at Evolve 100 none comes again within these */
+#define EN_MEL_LEAD 16u                        /* steps from the call to the phrase's first bar line; a pickup starts in them */
+#define EN_MOTIF_NOTES 4
+#define EN_MEL_RANGE 19                        /* semitones, its whole register: an octave and a half */
+#define EN_MEL_LO(key) (72 + (key))            /* the key's tonic an octave over middle C: the hand stays under it */
+#define EN_MEL_TOP 98                          /* the highest, however high the key */
+enum { EN_TB_FLUTE, EN_TB_VOCAL, EN_TB_VIBES, EN_TB_MARIMBA, EN_TB_BOX, EN_TB_GLASS, EN_NTIMBRES };   /* softest to brightest */
+extern const char *const EN_TIMBRE_NAME[EN_NTIMBRES];
+enum { EN_MEL_STATEMENT, EN_MEL_ANSWER, EN_MEL_RETURN, EN_MEL_CLOSE };
+typedef struct {
+    uint8_t n, pick, span;                     /* pick: steps before its bar line; span: its length from the bar line */
+    uint8_t on[EN_MOTIF_NOTES], len[EN_MOTIF_NOTES];   /* from the pickup */
+    int8_t deg[EN_MOTIF_NOTES];                /* its contour: scale steps from the first note */
+    uint16_t sig;
+} en_motif_t;
+typedef struct {
+    uint32_t n, periods;                       /* phrases so far; periods so far */
+    en_motif_t mem[EN_MEL_MEM];                /* mem[0] the theme: it stays longest */
+    en_motif_t now;                            /* this period's */
+    uint16_t seen[EN_MEL_SEEN];
+    uint8_t mem_n, mem_i, seen_i, seen_n, role, roles, recalled;
+    uint8_t timbre, timbre_left, last;         /* last: the last note played, 0 none */
+    uint8_t anchor, seq, cad;                  /* the statement's first note (a place in the scale) and its form */
+    int8_t dev;
+} en_mel_t;
+typedef struct {
+    uint16_t tones;                            /* absolute pitch classes, bit i */
+    uint8_t root;                              /* absolute */
+    uint16_t steps;                            /* the first: steps left from the call; the others: their lengths */
+} en_mel_chord_t;
+typedef struct {
+    uint32_t pool, seed;                       /* pool relative to the key */
+    int key, section, evolve, rate, tone, echo_steps, nchords;
+    en_mel_chord_t chord[EN_MEL_CHORDS];
+} en_mel_in_t;
+typedef struct {
+    uint16_t step, len;                        /* from the call */
+    uint8_t note, vel;                         /* MIDI, without the Octave knob; 1..100 */
+    uint8_t echo;                              /* its first two echoes sit in the chords they land on: only then it goes to the echo */
+} en_mnote_t;
+typedef struct {
+    uint8_t n, timbre, role, recalled, rest;   /* rest: bars of silence after it, at least */
+    uint16_t end, sig;                         /* end: the step it has all ended by; sig: the motif it is made of */
+    en_mnote_t note[EN_MEL_NOTES];
+} en_phrase_t;
+void en_mel_start(en_mel_t *st);
+void en_mel_next(en_mel_t *st, const en_mel_in_t *in, en_phrase_t *out);
+/* a timbre at a Tone: two operators, the modulator's ratio to the carrier (whole numbers: 1, 2, 3); its index in radians falling to a
+ * floor, how long it takes; attack, the decay's 60 dB, the release after the key, s; vibrato (of the pitch, the same for both operators); level */
+typedef struct {
+    float ratio, index, floor_idx, idec_s, att_s, t60_s, rel_s, vib, level;
+} en_mel_voice_t;
+void en_mel_voice(int timbre, int tone, en_mel_voice_t *v);
+#if defined EN_HOST || defined PLAT_HOST
+extern void (*en_trace_mel)(uint32_t step, const en_phrase_t *p);   /* each phrase as it is planned */
+extern uint32_t en_test_mel_refits;             /* phrases that had to be moved: a chord that was not the one foreseen */
+#endif
 #define EN_ECHO_STEPS 6                        /* the echo's default place, in sixteenths */
 extern volatile uint32_t en_ep_notes, en_ep_chords, en_ep_singles, en_ep_steals;
 extern volatile uint8_t en_ep_peak;

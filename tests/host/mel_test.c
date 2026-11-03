@@ -8,6 +8,7 @@
 #include <math.h>
 #include <time.h>
 #include "amb.h"
+#include "brk.h"
 
 static int fails;
 #define CHECK(c, ...)                                                                                                  \
@@ -315,7 +316,7 @@ static void t_cost(void)
 /* ------------------------------------------------------------------ what makes it a melody, in the engine */
 typedef struct {
     uint32_t notes, phrases, steps1, steps2, leaps, leaps_back, unique_top, top_first, end_stable, ends_s, open_a, ends_a;
-    uint32_t chord_strong, strong, held_over, held_ok, longs, pick, rests, phrase_steps, silent_steps;
+    uint32_t same, chord_strong, strong, held_over, held_ok, longs, pick, rests, phrase_steps, silent_steps;
 } melstat_t;
 
 static int scale_dist(uint32_t pool_abs, int a, int b)
@@ -356,6 +357,7 @@ static void melody_stats(uint32_t pool, int root, melstat_t *s, const char *w)
                 s->longs++;
             if (j) {
                 const int d = scale_dist(pool_abs, p->note[j - 1].note, o->note);
+                s->same += d == 0;
                 s->steps1 += d <= 1;
                 s->steps2 += d <= 2;
                 if (abs((int)o->note - (int)p->note[j - 1].note) >= 7) {
@@ -416,13 +418,14 @@ static void melody_stats(uint32_t pool, int root, melstat_t *s, const char *w)
 static void stat_checks(const melstat_t *s, const char *w)
 {
     const double intervals = (double)(s->notes - s->phrases);
-    printf("  %-9s %u phrases, %.2f notes each; strong beats on the chord %.1f%%; intervals: a step %.0f%%, a third or less %.0f%%; %u leaps, turned back %.0f%%; one high point %.0f%% (first note %.0f%%); ends stable %.0f%%, answers open %.0f%%; held over a change %u; long notes %.0f%%\n",
-           w, s->phrases, (double)s->notes / s->phrases, 100.0 * s->chord_strong / (s->strong ? s->strong : 1u), 100.0 * s->steps1 / intervals, 100.0 * s->steps2 / intervals, s->leaps, 100.0 * s->leaps_back / (s->leaps ? s->leaps : 1u),
+    printf("  %-9s %u phrases, %.2f notes each; strong beats on the chord %.1f%%; intervals: a step %.0f%%, a third or less %.0f%%; %u leaps, turned back %.0f%%; the same note again %.0f%%; one high point %.0f%% (first note %.0f%%); ends stable %.0f%%, answers open %.0f%%; held over a change %u; long notes %.0f%%\n",
+           w, s->phrases, (double)s->notes / s->phrases, 100.0 * s->chord_strong / (s->strong ? s->strong : 1u), 100.0 * s->steps1 / intervals, 100.0 * s->steps2 / intervals, s->leaps, 100.0 * s->leaps_back / (s->leaps ? s->leaps : 1u), 100.0 * s->same / intervals,
            100.0 * s->unique_top / s->phrases, 100.0 * s->top_first / s->phrases, 100.0 * s->end_stable / (s->ends_s ? s->ends_s : 1u), 100.0 * s->open_a / (s->ends_a ? s->ends_a : 1u), s->held_over, 100.0 * s->longs / s->notes);
     CHECK(s->chord_strong == s->strong, "%s: %u of %u strong beats on the chord", w, s->chord_strong, s->strong);
     /* mostly stepwise: chord tones on the strong beats make thirds of many of the steps, so both are asked */
     CHECK((double)s->steps1 / intervals > 0.40, "%s: steps %.2f", w, (double)s->steps1 / intervals);
     CHECK((double)s->steps2 / intervals > 0.80, "%s: a third or less %.2f", w, (double)s->steps2 / intervals);
+    CHECK((double)s->same / intervals < 0.10, "%s: the same note again in %.0f%% of the intervals: drones", w, 100.0 * s->same / intervals);
     CHECK(s->leaps_back * 100u >= s->leaps * 80u, "%s: %u of %u leaps turned back", w, s->leaps_back, s->leaps);
     CHECK(s->unique_top * 100u >= s->phrases * 85u, "%s: one high point in %u of %u", w, s->unique_top, s->phrases);
     CHECK(s->top_first * 100u <= s->phrases * 45u, "%s: the high point first in %u of %u", w, s->top_first, s->phrases);
@@ -740,13 +743,14 @@ static void t_engine(void)
 {
     static int32_t b[512];
     int i, most_voices = 0;
-    uint32_t r0;
+    uint32_t r0, e0, flagged = 0u, played = 0u;
     en_test_mel_refits = 0u;
     en_midi_out(0x7Fu, 0u, 0u);
     ledger_reset();
     engine(EN_MODE_POOL[MODE_LYDIAN], 2, 1001u, EN_ST_LIQUID);
     en_set(P_MRATE, 100);
     r0 = en_test_mel_refits;
+    e0 = en_test_bell_echoes;
     for (i = 0; i < (int)(44100.0f * 600.0f / 256.0f); i++) {
         en_render(b, 256, 1024);
         CHECK(mel_down == en_test_bells_on(), "MIDI says %d melody notes down, the engine %d", mel_down, en_test_bells_on());
@@ -755,6 +759,17 @@ static void t_engine(void)
     }
     printf("  10 min, Rate 100: %u melody notes; at most %d key down, %d voices; a voice taken at level %.3f at the loudest; %u off a chord foreseen\n", mel_ons, mel_most, most_voices, (double)en_test_bell_stolen(), en_test_mel_refits - r0);
     CHECK(mel_ons > 100u, "%u melody notes", mel_ons);
+    /* the notes that go to the echo are those the phrase says may: the sound follows the flag. (The last phrase may be under way) */
+    for (i = 0; i < nph; i++) {
+        int j;
+        for (j = 0; j < ph[i].p.n; j++) {
+            played++;
+            flagged += ph[i].p.note[j].echo;
+        }
+    }
+    printf("  of %u notes planned, %u for the echo; %u went to it\n", played, flagged, en_test_bell_echoes - e0);
+    CHECK(flagged > 0u && flagged < played, "%u of %u notes for the echo: some are passing tones", flagged, played);
+    CHECK(en_test_bell_echoes - e0 <= flagged && en_test_bell_echoes - e0 + 7u >= flagged, "%u went to the echo, %u should", en_test_bell_echoes - e0, flagged);
     CHECK(mel_bad_off == 0, "%d note-offs for notes not down", mel_bad_off);
     CHECK(most_voices <= 4, "%d voices", most_voices);
     CHECK(en_test_mel_refits == r0, "the chords were not as foreseen %u times, with nothing changed", en_test_mel_refits - r0);
@@ -1060,8 +1075,19 @@ static void t_level(void)
     engine_off();
 }
 
+/* the styles' numbers: Jungle calmer than it was, no other touched, its chopped character kept */
+static void t_styles(void)
+{
+    static const brk_rhythm_t R[EN_NSTYLES] = {{50, 20, 80, 50, 30}, {80, 30, 110, 50, 80}, {54, 75, 140, 62, 50}, {20, 20, 72, 20, 30}, {10, 10, 32, 10, 0}, {38, 20, 40, 20, 10}};
+    int st;
+    for (st = 0; st < EN_NSTYLES; st++)
+        CHECK(!memcmp(en_style_rhythm(st), &R[st], sizeof R[st]), "%s: its rhythm's numbers", EN_STYLE_NAME[st]);
+    CHECK(R[EN_ST_JUNGLE].synco > R[EN_ST_ROLLER].synco && R[EN_ST_JUNGLE].break_rate > R[EN_ST_ROLLER].break_rate, "Jungle no longer the choppiest");
+}
+
 int main(void)
 {
+    t_styles();
     t_all_pools();
     t_cost();
     t_hour();

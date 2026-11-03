@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: MPL-2.0 */
 /* The engine under the chords: that it plays what en_gen_next composes, and that the piano, the pad, the bass, the motifs and
- * the screen follow a chord of any length. The pure generator is gen_test.c's, the arranger arr_test.c's. And the drums, pure
+ * the screen follow a chord of any length (the melody's own: mel_test.c). The pure generator is gen_test.c's, the arranger arr_test.c's. And the drums, pure
  * functions of a seed too. */
 #include <stdio.h>
 #include <string.h>
@@ -21,13 +21,6 @@ static int fails;
         }                                                                                                              \
     } while (0)
 
-static int popcount(uint32_t m)
-{
-    int n = 0;
-    for (; m; m &= m - 1u)
-        n++;
-    return n;
-}
 
 /* what the engine really plays, from its MIDI: step, kind, note */
 #define NEV 40000
@@ -189,8 +182,8 @@ static void engine_checks(void)
     }
 }
 
-/* the piano: one soft chord a change, its lone notes under the limit for its length; no voice stolen; the motifs inside one
- * chord; the bass on its chord, leading to the chord that really comes */
+/* the piano: one soft chord a change, its lone notes under the limit for its length; no voice stolen; the melody on the chord's
+ * tones on the strong beats; the bass on its chord, leading to the chord that really comes */
 #define LONE_LIMIT(bars) ((bars) >= 4u ? 3u : (uint32_t)(bars))
 static void flow_run(const char *name, uint32_t p, int root, int live)
 {
@@ -260,11 +253,14 @@ static void flow_run(const char *name, uint32_t p, int root, int live)
             continue;                            /* (live_checks looks at what happens around a change) */
         if (e->kind == 2) {
             const uint32_t in = e->step - c->step, steps = 16u * c->g.bars;
+            /* (the rest of what a note may be, and its echoes: mel_test) */
+            (void)in;
+            (void)steps;
             motifs++;
-            CHECK(steps >= 32u, "%s: a motif on a chord of %d bars", name, c->g.bars);
-            CHECK(in + 2u * EN_ECHO_STEPS < steps, "%s: a motif note at %u of a chord of %u: its echo leaves", name, in, steps);
-            CHECK(rel_in(c->g.ch.tones, c->g.ch.tonic, e->note), "%s: motif note %d not in the chord", name, e->note);
-            motif_chords += in == 8u;
+            if (!(e->step & 7u))
+                CHECK(rel_in(c->g.ch.tones, c->g.ch.tonic, e->note), "%s: motif note %d on a strong beat, not in the chord", name, e->note);
+            CHECK(abs_in(p, root, e->note) || c->g.ch.borrowed || live, "%s: motif note %d outside the pool", name, e->note);
+            motif_chords += !(e->step & 15u);
         } else if (e->kind == 3) {
             const uint32_t steps = 16u * c->g.bars, in = e->step - c->step;
             const ch_t *nx = c + 1;
@@ -288,7 +284,7 @@ static void flow_run(const char *name, uint32_t p, int root, int live)
             CHECK(abs_in(p, root, e->note) || c->g.ch.borrowed || live, "%s: lone note %d outside the pool", name, e->note);
         }
     }
-    printf("  flow %-10s %d chords: %.2f chord attacks a change; lone notes a chord of 1 bar %.2f, 2 %.2f, 4 %.2f; %u motif notes in %u phrases; %u leading tones; peak %d voices, %u stolen\n", name, nch, (double)att / (nch > 1 ? nch - 1 : 1),
+    printf("  flow %-10s %d chords: %.2f chord attacks a change; lone notes a chord of 1 bar %.2f, 2 %.2f, 4 %.2f; %u motif notes, %u on a bar line; %u leading tones; peak %d voices, %u stolen\n", name, nch, (double)att / (nch > 1 ? nch - 1 : 1),
            (double)lone_by_len[1] / (n_by_len[1] ? n_by_len[1] : 1u), (double)lone_by_len[2] / (n_by_len[2] ? n_by_len[2] : 1u), (double)lone_by_len[4] / (n_by_len[4] ? n_by_len[4] : 1u), motifs, motif_chords, leads, en_ep_peak, en_ep_steals);
     (void)sing;
     (void)exempt;
@@ -394,38 +390,6 @@ static void bass_checks(void)
         printf("  bass set %d: %.2f notes a bar; chords of 1 bar %u, 2 %u, 4 %u; %u leading tones in %u chords\n", level, (double)notes / bars, by_len[1], by_len[2], by_len[4], leads, chords);
         CHECK((double)notes / bars <= (level == EN_BASS_ROLL ? 3.25 : level == EN_BASS_FULL ? 3.0 : 2.25), "set %d: too many notes: %.2f", level, (double)notes / bars);
         CHECK(leads * 4u >= chords, "set %d: %u leading tones in %u chords", level, leads, chords);
-    }
-}
-
-/* the motifs, pure: the note and its first two echoes in the chord, whatever the pool; long enough chords have them whole */
-static void motif_checks(void)
-{
-    int m, n;
-    for (m = 0; m < 2; m++)
-        for (n = 0; n < 4; n++) {
-            CHECK(en_motif_fits(m, n, 64u), "motif %d note %d not whole on four bars", m, n);
-            CHECK(!en_motif_fits(m, n, 16u), "motif %d note %d on one bar", m, n);
-            if (n < 3)
-                CHECK(en_motif_fits(m, n, 32u), "motif %d: note %d left out on two bars", m, n);
-            else
-                CHECK(!en_motif_fits(m, n, 32u), "motif %d: its echoes leave a chord of two bars", m);
-        }
-    {
-        uint32_t mask;
-        for (mask = 1u; mask <= 4095u; mask += 2u) {
-            en_gen_t st;
-            en_gchord_t g;
-            int i;
-            if (popcount(mask) < 3)
-                continue;
-            en_gen_start(&st);
-            for (i = 0; i < 12; i++) {
-                en_gen_next(&st, mask, 0, 3u, 50, i & 3, EN_MASK_ALL, &g);
-                for (m = 0; m < 2; m++)
-                    for (n = 0; n < 4; n++)
-                        CHECK(g.ch.tones >> ((en_motif_note_ch(m, n, &g.ch) + 120) % 12) & 1u, "pool %03x: motif out of its chord", mask);
-            }
-        }
     }
 }
 
@@ -841,7 +805,6 @@ int main(void)
     flow_checks();
     lone_checks();
     bass_checks();
-    motif_checks();
     hour_checks();
     drum_checks();
     hat_checks();

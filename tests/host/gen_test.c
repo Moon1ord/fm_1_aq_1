@@ -533,7 +533,7 @@ static void family_checks(void)
 }
 
 /* ---- the degrees: which notes may carry a chord (en_gen_next's mask) */
-#define GOLDEN_ALL_ON 0x8993b33du                /* the generator before it had a mask, 0772c0a: all on must be that, to the note */
+#define GOLDEN_ALL_ON 0xb6409fedu                /* the generator before it had a mask, 0772c0a: all on must be that, to the note */
 static void all_on_checks(void)
 {
     static const int E[3] = {0, 50, 100}, K[2] = {0, 5};

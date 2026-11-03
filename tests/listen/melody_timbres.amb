@@ -1,0 +1,31 @@
+# One motif, one statement in each timbre, softest to brightest, ten seconds each, alone: to pick favourites. Not one of the tests. Evolve 0: the
+# same motif each time. Which timbre at which time: "mel" lines in the trace, a bar is 1.41 s.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/melody_timbres.amb app/build/listen
+master 2430
+tap PLAY
+wait 200
+seed 5
+style liquid
+setpar 2 0
+setpar 4 0
+setpar 12 0
+setpar 16 0
+wait 200
+trace app/build/listen/melody_timbres.trace
+wav melody_timbres.wav
+tap PLAY
+wait 100
+melhear 0
+wait 10000
+melhear 1
+wait 10000
+melhear 2
+wait 10000
+melhear 3
+wait 10000
+melhear 4
+wait 10000
+melhear 5
+wait 10000
+wavstop
+trace off

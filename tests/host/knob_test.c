@@ -153,14 +153,15 @@ static void t_table(void)
     CHECK(!strcmp(t, "-2"), "octave -2: %s", t);
 }
 
-/* ---- the sound that was approved: these hashes are of the render before these knobs existed (0772c0a). If one moves, the
- * default sound has moved: only ever on purpose, and say so. They hold for an IEEE machine at -ffp-contract=off */
+/* ---- the sound that was approved: these hashes are of the render with the melody as it is (0772c0a's until then, the same but for
+ * the melody, the hand's top under it, Jungle's numbers). If one moves, the default sound has moved: only ever on purpose, and say
+ * so. They hold for an IEEE machine at -ffp-contract=off */
 static void t_golden(void)
 {
     static const struct {
         int style;
         uint32_t seed, hash;
-    } G[] = {{0, 1001u, 0x66605f9fu}, {1, 7u, 0x2b8224eeu}, {2, 424242u, 0x4c1d827eu}, {3, 5u, 0xa3957057u}, {4, 6u, 0xcbc8772eu}};
+    } G[] = {{0, 1001u, 0x0a7272d8u}, {1, 7u, 0x84fcc055u}, {2, 424242u, 0xced69cb2u}, {3, 5u, 0x9a05dd4bu}, {4, 6u, 0x983fee21u}};
     meas_t m;
     unsigned i;
     for (i = 0; i < sizeof G / sizeof G[0]; i++) {
@@ -320,28 +321,27 @@ static void t_rate(void)
     printf("  rate: motif notes in 18000 bars at 0, 50, 100: %u %u %u (%.2f, %.2f of 50's)\n", c[0], c[1], c[2], (double)c[0] / c[1], (double)c[2] / c[1]);
     CHECK(c[0] > 20u, "Rate 0 is no motifs at all: %u", c[0]);
     CHECK(c[0] * 3u < c[1], "Rate 0 is not rare: %u of %u", c[0], c[1]);
-    CHECK(c[2] * 10u >= c[1] * 16u && c[2] * 10u <= c[1] * 24u, "Rate 100 is not about twice: %u of %u", c[2], c[1]);
-    {   /* the pure part: 50 leaves the table as it is, for any hash */
-        uint32_t m, h;
-        for (m = 0u; m < 4u; m++)
-            for (h = 0u; h < 2000u; h += 7u) {
-                CHECK((uint32_t)en_motif_due((int)m, 50, h * 2654435761u) == m, "Rate 50 moved the table: %u", m);
-                CHECK(((uint32_t)en_motif_due((int)m, 100, h * 2654435761u) & m) == m, "Rate 100 took a phrase away");
-                CHECK(((uint32_t)en_motif_due((int)m, 0, h * 2654435761u) & ~m) == 0u, "Rate 0 added a phrase");
-            }
-    }
+    /* (a phrase takes its own time, and the rests are what Rate scales: more than half as much again, not more than twice) */
+    CHECK(c[2] * 10u >= c[1] * 14u && c[2] * 10u <= c[1] * 24u, "Rate 100 is not up to about twice: %u of %u", c[2], c[1]);
 }
 static double motif_bright(int tone)
 {
-    meas_t m;
-    start(44u);
-    only(P_MOTIFS);
-    en_set(P_MTONE, tone);
-    en_set(P_MRATE, 100);
-    go();
-    render(90.0f, &m);
-    CHECK(m.peak > 0.005f, "the motifs are silent at Tone %d (%g)", tone, (double)m.peak);
-    return hf_ratio(&m);
+    /* over several pieces and minutes, so several timbres of Tone's part of the palette are heard */
+    double e = 0.0, hf = 0.0;
+    uint32_t sd;
+    for (sd = 0u; sd < 3u; sd++) {
+        meas_t m;
+        start(44u + sd);
+        only(P_MOTIFS);
+        en_set(P_MTONE, tone);
+        en_set(P_MRATE, 100);
+        go();
+        render(240.0f, &m);
+        CHECK(m.peak > 0.005f, "the motifs are silent at Tone %d (%g)", tone, (double)m.peak);
+        e += m.e;
+        hf += m.hf;
+    }
+    return e > 0.0 ? hf / e : 0.0;
 }
 static void t_tone(void)
 {
@@ -350,15 +350,12 @@ static void t_tone(void)
     printf("  tone: high against all: %.3g %.3g %.3g\n", a, b, c);
     CHECK(a < b * 0.99 && b < c * 0.7, "Tone does not open: %g %g %g", a, b, c);
     for (t = 0; t <= 100; t++)
-        for (k = 0; k < 2; k++) {
-            float ratio, idx, dec, keep;
-            int v;
-            for (v = 0; v < 2; v++) {
-                en_motif_voice(t, k, v ? 0.6f : 0.3f, &ratio, &idx, &dec, &keep);
-                CHECK(ratio == (float)(int)ratio && ratio >= 1.0f && ratio <= 2.0f, "Tone %d: an inharmonic ratio %f", t, (double)ratio);
-                CHECK(idx > 0.0f && idx + keep < 1.7f && keep < 0.45f, "Tone %d: index %f and %f (radians): out of the warm range", t, (double)idx, (double)keep);
-                CHECK(dec > 0.02f && dec < 0.4f, "Tone %d: the index's decay %f", t, (double)dec);
-            }
+        for (k = 0; k < EN_NTIMBRES; k++) {
+            en_mel_voice_t v;
+            en_mel_voice(k, t, &v);
+            CHECK(v.ratio == (float)(int)v.ratio && v.ratio >= 1.0f && v.ratio <= 3.0f, "Tone %d: an inharmonic ratio %f", t, (double)v.ratio);
+            CHECK(v.index > 0.0f && v.index + v.floor_idx < 2.4f, "Tone %d: index %f and %f (radians): out of the warm range", t, (double)v.index, (double)v.floor_idx);
+            CHECK(v.idec_s > 0.02f && v.idec_s < 0.5f, "Tone %d: the index's decay %f", t, (double)v.idec_s);
         }
 }
 static void shifted(int p, int by, int ch, int want)

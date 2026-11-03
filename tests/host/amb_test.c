@@ -199,7 +199,7 @@ int main(void)
         en_shed();
         en_regrow();
         bad = 0;
-        for (k = 0; k < 100; k++) {              /* the first motif comes at 38 s */
+        for (k = 0; k < 100; k++) {              /* the first phrase comes some way into the intro */
             int l;
             run(0.5f);
             for (l = 0; l < EN_NLOOP; l++)
@@ -224,8 +224,7 @@ int main(void)
         CHECK(!bad, "all at min: NaN");
     }
 
-    /* (demo-loading) Bell tone no longer shapes the motifs (each has its fixed timbre) and they are too sparse for this
-     * test's 20 s: the Bell tone and Bell oct checks do not apply */
+    /* (the melody's Tone and Octave: mel_test and knob_test) */
     en_init();
     en_play(1);
     run(20.0f);

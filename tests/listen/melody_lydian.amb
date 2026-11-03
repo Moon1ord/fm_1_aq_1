@@ -1,0 +1,14 @@
+# Six minutes of the full mix in Lydian, at the knobs' defaults, with a fixed seed. Not one of the tests. The melody's score: "mel" lines in the trace.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/melody_lydian.amb app/build/listen
+master 2430
+tap PLAY
+wait 200
+seed 1002
+style liquid
+wait 200
+trace app/build/listen/melody_lydian.trace
+wav melody_lydian.wav
+tap PLAY
+wait 360000
+wavstop
+trace off

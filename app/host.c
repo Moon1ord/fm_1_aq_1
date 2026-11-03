@@ -9,7 +9,7 @@
  * storeamb (what AMB-1 leaves in the store: its magic and format, nothing of ours); storeold (the project as it is, whole, but
  * for the format before this one); battery N (the battery read as N,
  * plat.h's plat_battery: -1..4; "battery off" the simulator's own, full); seed N (the musical seed, from the next choice on;
- * until told it is EN_HARM_SEED); setpar P V (parameter P to V, as a knob would); style NAME; energy N; breaks N; trace FILE
+ * until told it is EN_HARM_SEED); melhear T (a statement in this timbre at the next chance: an audition); setpar P V (parameter P to V, as a knob would); style NAME; energy N; breaks N; trace FILE
  * (a line for each bar: step section level character break's bars; a line for each chord: "chord" step name bars character key tones bass, the last two above the key)
  * and trace off; panic and uiinit (what the platform does around an update); overload (blocks too heavy, twice). */
 #include <stdio.h>
@@ -25,6 +25,16 @@ static void trace_chord(uint32_t step, const en_gchord_t *g, int character)
     if (trace_f) {
         char nm[24];
         fprintf(trace_f, "chord %u %s %d %d %d %03x %d\n", step, en_gchord_name(g, nm), g->bars, character, g->ch.tonic, g->ch.tones, g->ch.bass);
+    }
+}
+static void trace_mel(uint32_t step, const en_phrase_t *p)
+{
+    if (trace_f) {
+        int i;
+        fprintf(trace_f, "mel %u %s %c%s %04x %d", step, EN_TIMBRE_NAME[p->timbre], "SARC"[p->role & 3], p->recalled ? "*" : "", p->sig, p->rest);
+        for (i = 0; i < p->n; i++)
+            fprintf(trace_f, " %d:%d:%d:%d:%d", p->note[i].step, p->note[i].note, p->note[i].len, p->note[i].vel, p->note[i].echo);
+        fprintf(trace_f, "\n");
     }
 }
 static void host_par(int p, int v)
@@ -174,6 +184,11 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
         trace_f = strcmp(a, "off") ? fopen(a, "w") : 0;
         en_trace = trace_f ? trace_bar : 0;
         en_trace_chord = trace_f ? trace_chord : 0;
+        en_trace_mel = trace_f ? trace_mel : 0;
+        return 1;
+    }
+    if (!strcmp(cmd, "melhear")) {                /* melhear T: a statement in timbre T at the next chance; -1 back to its own */
+        en_test_mel_hear(atoi(a));
         return 1;
     }
     if (!strcmp(cmd, "storeamb")) {               /* what AMB-1 leaves in the store: its magic, its format */

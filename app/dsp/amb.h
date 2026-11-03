@@ -148,6 +148,7 @@ int en_test_silent(void);                       /* since en_panic */
 int en_test_bass_down(void);                    /* notes the engine thinks are down, by layer: what MIDI should say */
 int en_test_bells_on(void);                     /* the melody's notes MIDI has been told are down: one at most */
 int en_test_bell_voices(void);                  /* its voices sounding, tails too */
+extern uint32_t en_test_bell_echoes;            /* its notes that have gone to the echo */
 float en_test_bell_stolen(void);                /* the loudest a sounding voice was when it was taken: its level, 0..1 */
 void en_test_bell_note(int timbre, int note, float vel);   /* one note in a timbre, at once, out of the echo: to measure it */
 void en_test_mel_hear(int timbre);              /* a statement at the next chance in this timbre, -1 back to its own: to audition them */

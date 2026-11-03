@@ -1,0 +1,16 @@
+# Six minutes of the full mix in Ionian, at the knobs' defaults, with a fixed seed. Not one of the tests. The melody's score: "mel" lines in the trace.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/melody_ionian.amb app/build/listen
+master 2430
+tap PLAY
+wait 200
+seed 1001
+style liquid
+turn ALGO -3
+expect pool 0xAB5
+wait 200
+trace app/build/listen/melody_ionian.trace
+wav melody_ionian.wav
+tap PLAY
+wait 360000
+wavstop
+trace off

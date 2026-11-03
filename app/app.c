@@ -7,7 +7,26 @@
 #include "ui.c"
 
 /* the engine's MIDI out (clock, notes when MIDI out is on): to USB */
-void en_midi_out(uint32_t st, uint32_t d1, uint32_t d2) { plat_midi_out(st >> 4 | st << 8 | d1 << 16 | d2 << 24); }
+#ifdef PLAT_HOST
+static uint16_t ledger[4];                       /* the simulator's count of the notes MIDI has said are down: channels 1..4 (host.c) */
+static void ledger_note(uint32_t st, uint32_t d1, uint32_t d2)
+{
+    const uint32_t c = st & 15u;
+    if (c < 4u && (st & 0xF0u) == 0x90u && d2)
+        ledger[c]++;
+    else if (c < 4u && (st & 0xF0u) == 0x80u && ledger[c])
+        ledger[c]--;
+    else if (c < 4u && (st & 0xF0u) == 0xB0u && d1 == 123u)
+        ledger[c] = 0u;
+}
+#endif
+void en_midi_out(uint32_t st, uint32_t d1, uint32_t d2)
+{
+#ifdef PLAT_HOST
+    ledger_note(st, d1, d2);
+#endif
+    plat_midi_out(st >> 4 | st << 8 | d1 << 16 | d2 << 24);
+}
 
 /* ---- the contract */
 void app_init(void)

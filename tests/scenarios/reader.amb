@@ -68,9 +68,9 @@ said PIECE Aqua, D Lydian, tempo 172
 wait 300
 # the buttons' messages, said once
 tap REC
-said FREEZE ON
+said HOLD ON
 tap REC
-said FREEZE OFF
+said HOLD OFF
 tap PLAY
 said RESTING
 wait 300
@@ -84,7 +84,12 @@ said MOTIF OCTAVE +1
 tap OCT-
 said MOTIF OCTAVE 0
 tap EDIT
-said NEXT CHORD ON THE BAR
+said NEXT SECTION ON THE BAR
+# SEL + EDIT: a break, where there are drums; here none yet
+press SEL
+tap EDIT
+release SEL
+said NO DRUMS NO BREAK
 # a help card: its button, then its lines
 press SAVE
 wait 1000
@@ -94,8 +99,13 @@ tap SAVE
 said SAVED
 press REC
 wait 1000
-said REC button. FREEZE: THE CHORD HOLDS AND THE REVERB RINGS ON. AGAIN: THAW
+said REC button. HOLD: THE CHORD STAYS, NO NEW SECTION. THE REST PLAYS ON. AGAIN: LET GO
 release REC
+wait 100
+press EDIT
+wait 1000
+said EDIT button. THE NEXT SECTION, ON THE NEXT BAR. + SELECT: A BREAK, ON THE NEXT BAR
+release EDIT
 wait 100
 # the chord moving by itself: queued (said after what is being said)
 wait 90000

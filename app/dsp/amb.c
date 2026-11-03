@@ -229,7 +229,7 @@ static float knob_curve(int v, int mid, float lo, float base, float hi)
 }
 
 /* ------------------------------------------------------------ commands --- */
-enum { C_SET, C_POOL, C_MASK, C_PLAY, C_NEXT, C_FREEZE, C_SEED, C_PANIC, C_CLOCK, C_REGROW };
+enum { C_SET, C_POOL, C_MASK, C_PLAY, C_NEXT, C_BREAK, C_HOLD, C_SEED, C_PANIC, C_RESTORE, C_CLOCK, C_REGROW };
 #define QN 64u
 static uint32_t q[QN];
 static volatile uint32_t q_w, q_r;
@@ -242,23 +242,29 @@ static void post(uint32_t c, int a, int b)
     BARRIER();
     q_w = w + 1;
 }
-void en_set(int p, int v) { post(C_SET, p, v); }
+void en_set(int p, int v)
+{
+    if ((unsigned)p < P_NPARAMS)
+        post(C_SET, p, v < PARAMS[p].lo ? PARAMS[p].lo : v > PARAMS[p].hi ? PARAMS[p].hi : v);
+}
 void en_pool(uint32_t pool) { post(C_POOL, 0, (int)(pool & 0xFFFu)); }
 void en_mask(uint32_t m) { post(C_MASK, 0, (int)(m & 0xFFFu)); }
 void en_play(int on) { post(C_PLAY, on, 0); }
 void en_next(void) { post(C_NEXT, 0, 0); }
-void en_freeze(int on) { post(C_FREEZE, on, 0); }
+void en_break(void) { post(C_BREAK, 0, 0); }
+void en_hold(int on) { post(C_HOLD, on, 0); }
 void en_seed(uint32_t s)
 {
     s ^= s >> 24;                                /* what the command has no room for */
     post(C_SEED, (int)(s >> 16 & 0xFFu), (int)(s & 0xFFFFu));
 }
 void en_panic(void) { post(C_PANIC, 0, 0); }
+void en_restore(void) { post(C_RESTORE, 0, 0); }
 void en_clock(int msg) { post(C_CLOCK, msg, 0); }
 void en_regrow(void) { post(C_REGROW, 0, 0); }
 
 /* -------------------------------------------------------------- state --- */
-volatile uint8_t en_playing, en_frozen, en_ext;
+volatile uint8_t en_playing, en_held, en_ext;
 volatile uint8_t en_chord[EN_NPAD], en_chord_root, en_chord_n, en_chord_bars;
 volatile float en_drift, en_pad_level, en_bass_level;
 volatile uint8_t en_loop_pos[EN_NLOOP];
@@ -272,6 +278,8 @@ static int16_t par[P_NPARAMS];
 static uint32_t pool = 0xAB5u;                  /* Ionian until told: what the harmony is made of, from the next chord */
 static uint32_t degrees = EN_MASK_ALL;          /* the notes chords may stand on (en_mask), likewise */
 static float tunefac = 1.0f;
+static uint8_t started;                         /* it has played: from now on it only ever goes on */
+static uint8_t silent, restore_due;             /* en_panic: nothing until en_restore (and the room clear) */
 #define RNG_START 0x9E3779B9u
 static uint32_t rng = RNG_START;
 static uint32_t song_seed = EN_HARM_SEED;       /* every musical choice: the arranger, the harmony, the bass, the drums */
@@ -339,7 +347,6 @@ static float brk_lp[2], brk_hp, plp[4], eplp[2];
 
 /* ------------------------------------------------------------------ space --- */
 static float echo_send, rev_send, echo_len, echo_len_t, echo_fb = 0.55f;
-static float rev_in_gain = 1.0f;                /* falls to 0 while frozen */
 
 /* ------------------------------------------------------------- the arranger --- */
 /* Endless passes: intro, hats, light, breakdown, full, way out, then the intro again with the chords where they have got to. A
@@ -482,7 +489,23 @@ int en_arr_break(uint32_t bar, int level, int style, int breaks, uint32_t seed, 
     return (int)len;
 }
 
-volatile uint8_t en_section, en_style, en_drum_level, en_break_bars;
+/* a break asked for on this bar: it starts on it and ends with a phrase, as every break does. Late in a phrase it runs from here to
+ * the end, at most four bars. Earlier, the phrase is cut short by *skip bars, bar lines unmoved, so the break can have its style's
+ * length and still end with it: nothing to wait for, and the next phrase on the grid */
+int en_arr_break_now(uint32_t bar, int style, uint32_t seed, uint32_t *skip)
+{
+    const brk_rhythm_t *r = en_style_rhythm(style);
+    const uint32_t pos = bar % EN_ARR_PHRASE, first = (100u - r->break_len) * 8u / 100u, then = first + 3u;
+    const uint32_t n = (brk_hash(seed, 6u, bar) >> 8) % 8u, len = n < first ? 1u : n < then ? 2u : 4u;
+    if (pos >= EN_ARR_PHRASE - 4u) {
+        *skip = 0u;
+        return (int)(EN_ARR_PHRASE - pos);
+    }
+    *skip = EN_ARR_PHRASE - len - pos;
+    return (int)len;
+}
+
+volatile uint8_t en_section, en_style, en_drum_level, en_break_bars, en_drum_next;
 
 /* ---------------------------------------------------------------- the song --- */
 /* Waiting for something to load: warm, calm, hopeful, a thing about to begin that never quite arrives. The tonic is never the
@@ -1439,6 +1462,9 @@ const char *en_gchord_name(const en_gchord_t *g, char *buf)
 /* the engine's: the chord playing, and the next, made a little ahead (the bass leads into it) from a copy of the generator's
  * state, so that a new pool or key can have it made again. Chords, bass and held voices sound h_pool and h_root until the next
  * chord; single notes and motifs follow pool and par[P_ROOT] at once */
+#if defined EN_HOST || defined PLAT_HOST
+uint32_t en_test_gens;
+#endif
 static en_gen_t gen_now, gen_nxt;
 static en_gchord_t ch_now, ch_nxt;
 static uint32_t ch_left, ch_steps, ch_count;     /* steps to the next chord; this chord's; chords since the top */
@@ -1525,6 +1551,8 @@ static inline float blep_saw(float t, float dt)
  * does not have lets go over a second or two, so one dissolves into the other. What it does have is not struck again:
  * it swells gently, phase unbroken. Between the changes, now and then one soft note. */
 #define NKEYS 12
+#define EP_HELD_RISE 1.0000151f                  /* a time constant of 1.5 s */
+#define EP_HELD_AMP 0.18f                        /* REC or a rest: where the hand's notes settle, about where a chord is halfway through */
 typedef struct {
     float cph, tph, cinc, tinc;
     float amp, dec, rel, att, arate;
@@ -1534,7 +1562,6 @@ typedef struct {
 } ep_t;
 static ep_t ep[NKEYS];
 static int ep_lim = NKEYS;
-void en_shed(void) { ep_lim = 6; }
 static float ep_vol, ep_trem, song_touch = 0.9f;
 static float bloom_att = 1.0f, bloom_open = 0.00009f, bloom_close = 1.0f;   /* Bloom: the attacks' time, how quickly the body opens, closes */
 static float bright_body = 1.0f, bright_tine = 1.0f, bright_bus = 0.40f;    /* Bright: the two indexes, the bus's one pole */
@@ -1548,6 +1575,39 @@ static void ep_key_up(ep_t *e)
     e->held = 0;
     e->dec = e->rel;
     midi(0x80, e->note, 0);
+}
+
+/* Overloaded: six voices until the next piece. The chord's notes keep theirs, moved down if they must be; the rest let go now and
+ * are gone in about a quarter of a second, no click and for good. From the audio interrupt, between renders */
+void en_shed(void)
+{
+    int i, j = 0;
+    if (ep_lim <= 6)
+        return;
+    ep_lim = 6;
+    for (i = 6; i < NKEYS; i++) {
+        ep_t *e = &ep[i];
+        if (e->on && e->held) {
+            while (j < 6 && ep[j].on && ep[j].held)
+                j++;
+            if (j < 6) {
+                const ep_t t = ep[j];
+                ep[j] = *e;
+                *e = t;
+            }
+        }
+        if (!e->on)
+            continue;
+        if (e->wait > 0) {                       /* not sounding yet: nothing to let down */
+            e->on = 0;
+            if (e->held || e->hold > 0)
+                midi(0x80, e->note, 0);
+            continue;
+        }
+        if (e->held || e->hold > 0)
+            ep_key_up(e);
+        e->rel = e->dec = fm_expf(-1.0f / (0.040f * EN_SR));
+    }
 }
 
 static float ep_amp_of(float vel) { return 0.42f + 0.58f * fm_clampf(vel * song_touch, 0.05f, 1.0f); }
@@ -1685,6 +1745,7 @@ static uint32_t lone_max(uint32_t bars)
     return most < knob ? most : knob;
 }
 static uint32_t ep_lone;                         /* this chord's so far */
+static uint8_t keys_back;                        /* after silence: the hand comes back on the next step */
 static uint8_t fresh;                            /* a note a key just added to the pool, + 1: it speaks on the next eighth */
 
 static void ep_inner(const inner_t *g)
@@ -1744,6 +1805,7 @@ static struct {
     uint8_t midi_note;
 } bass;
 static float bass_vol, bass_song, bass_song_t, bass_glide = 0.0012f;
+static uint8_t bass_back;                        /* out of a rest: it does not wait for the figure's next note */
 volatile uint32_t en_bass_notes;
 
 /* the line: two-bar figures, a note on a step and what it is. Each note lasts until the next, so a figure names only where
@@ -2010,7 +2072,6 @@ static void hat_hit(char c, float vel, int32_t wait)
         hat[1].dec = fm_expf(-1.0f / (0.0035f * EN_SR));   /* choked */
 }
 
-static uint32_t song;
 static int song_level;
 static float brk_fc, brk_fc_t, pad_fc, pad_fc_t, duck, duck_s, lift, lift_t;
 
@@ -2038,14 +2099,32 @@ static uint32_t arr_start;                       /* the step this section began 
 static en_part_t part_now, part_nxt;             /* this bar's and the next bar's */
 static int arr_style;                            /* the style the bar is played in: taken on the bar */
 static brk_gen_t rhythm_gen;
+static uint8_t next_due, break_due;              /* EDIT, SELECT + EDIT: on the next bar */
+static uint8_t brk_asked, brk_asked_now;         /* a break asked for is running; this bar is one */
+static uint32_t brk_asked_end, brk_asked_len;    /* the bar it ends before; how long it is */
 #if defined EN_HOST || defined PLAT_HOST
 void (*en_trace)(uint32_t step, int section, int level, int character, int break_bars);
 void (*en_trace_chord)(uint32_t step, const en_gchord_t *chord, int character);
 #endif
 
+static uint32_t song;                            /* the next step */
+
+/* a step's bar of the section. A section is whole phrases from a phrase's start, so held, the phrase it is in simply comes round
+ * again: what is asked of a later bar is that bar of this phrase */
+static uint32_t bars_in(uint32_t s)
+{
+    uint32_t in = (s - arr_start) / 16u;
+    if (en_held) {
+        const uint32_t base = (song - arr_start) / 16u / EN_ARR_PHRASE * EN_ARR_PHRASE;
+        if (in >= base + EN_ARR_PHRASE)
+            in = base + (in - base) % EN_ARR_PHRASE;
+    }
+    return in;
+}
+
 static void part_at(uint32_t s, en_part_t *o)
 {
-    const uint32_t in = (s - arr_start) / 16u;
+    const uint32_t in = bars_in(s);
     if (in < arr_cur.bars)
         en_arr_part(&arr_cur, in, arr_style, par[P_ENERGY], o);
     else
@@ -2054,7 +2133,7 @@ static void part_at(uint32_t s, en_part_t *o)
 
 static uint32_t pass_at(uint32_t s)
 {
-    return (s - arr_start) / 16u < arr_cur.bars ? arr_cur.pass : arr_nxt.pass;
+    return bars_in(s) < arr_cur.bars ? arr_cur.pass : arr_nxt.pass;
 }
 
 static void arr_follow(void)                     /* what comes after this section, as things stand */
@@ -2073,6 +2152,8 @@ static void arr_bar(uint32_t s)                  /* on the bar */
         arr_follow();
         return;
     }
+    if (en_held && s > arr_start && !(s % (16u * EN_ARR_PHRASE)))
+        arr_start += 16u * EN_ARR_PHRASE;        /* held: this phrase again, no time gone from the section */
     in = (s - arr_start) / 16u;
     if (in >= arr_cur.bars) {
         arr_cur = arr_nxt;
@@ -2089,10 +2170,15 @@ static uint32_t motif_base;                      /* the bar that pass began at *
 /* the next chord, a little ahead of it, from the pool and the key as they are now */
 static uint32_t prep_pool, prep_degrees;
 static int prep_root;
-#define PREP_STALE() (prep_pool != pool || prep_degrees != degrees || prep_root != par[P_ROOT])
+static uint8_t prep_due;                         /* its moment went by (held), or the change has been brought forward */
+#define PREP_STALE() (prep_due || prep_pool != pool || prep_degrees != degrees || prep_root != par[P_ROOT])
 static void chord_prepare(uint32_t at)
 {
     en_part_t p;
+#if defined EN_HOST || defined PLAT_HOST
+    en_test_gens++;
+#endif
+    prep_due = 0u;
     part_at(at, &p);
     gen_nxt = gen_now;
     en_gen_next(&gen_nxt, pool, par[P_ROOT], song_seed, par[P_EVOLVE], p.character, degrees, &ch_nxt);
@@ -2130,15 +2216,21 @@ static void motif_choose(uint32_t bar)
             motif_now[n] = (int8_t)nearest_tone(ch_now.ch.tones, MOTIF[motif_on][n].note);
 }
 
+static void chord_time(uint32_t bar)              /* this chord's length from this bar: whatever is asked, it ends with the phrase */
+{
+    const uint32_t grid = 8u - bar % 8u;
+    ch_steps = (ch_now.bars < grid ? ch_now.bars : grid) * 16u;
+    ch_left = ch_steps;
+}
+
 static void chord_commit(uint32_t s, int character)   /* at the change, and only there */
 {
-    const uint32_t bar = s / 16u, grid = 8u - bar % 8u;
+    const uint32_t bar = s / 16u;
     gen_now = gen_nxt;
     ch_now = ch_nxt;
     h_pool = prep_pool;
     h_root = prep_root;
-    ch_steps = (ch_now.bars < grid ? ch_now.bars : grid) * 16u;   /* (the grid holds whatever has been done to the song's counter) */
-    ch_left = ch_steps;
+    chord_time(bar);
     ch_count++;
     motif_choose(bar);
     (void)character;
@@ -2178,6 +2270,12 @@ static void song_step(uint32_t s)
         h_pass = pass_at(0u);
         harmony_restart();
         fresh_chord = 1;
+    } else if (!ch_left && en_held) {            /* held: the chord's time comes round, the same chord, nothing struck */
+        chord_time(s / 16u);
+        ch_count++;                              /* (each time round its own figures) */
+        ep_lone = 0u;
+        motif_choose(s / 16u);
+        pad_swell_t = 1.0f;
     } else if (!ch_left) {
         en_part_t p;
         const uint32_t pass = pass_at(s);
@@ -2193,7 +2291,10 @@ static void song_step(uint32_t s)
         fresh_chord = 1;
     }
     cs = ch_steps - ch_left;
-    if (ch_left == 8u)
+    if (en_held) {
+        if (ch_left <= 8u)
+            prep_due = 1u;                       /* made when it is let go, for where things are then */
+    } else if (ch_left == 8u)
         chord_prepare(s + ch_left);
     else if (ch_left < 8u && PREP_STALE())
         chord_prepare(s + ch_left);              /* changed since: this change takes it */
@@ -2207,6 +2308,7 @@ static void song_step(uint32_t s)
             level_set(&p, s == 0u);
         part_now = p;
         part_at(s + 16u, &part_nxt);
+        en_drum_next = part_nxt.level;
         want = en_arr_break(bar, song_level, arr_style, par[P_BREAKS], song_seed, &in);
         if (want) {                              /* a break leads to a downbeat: not when the next phrase has none */
             en_part_t after;
@@ -2214,9 +2316,23 @@ static void song_step(uint32_t s)
             if (after.level < 2u)
                 want = 0;
         }
+        if (brk_asked) {                         /* the one asked for: to its phrase's end, whatever the knob and the hash say */
+            want = (int)(brk_asked_end - bar);
+            in = brk_asked_len - (uint32_t)want;
+            if (bar + 1u >= brk_asked_end)
+                brk_asked = 0u;
+        }
+        brk_asked_now = brk_asked;
+        if (brk_asked) {                         /* the one asked for: to its phrase's end, whatever the knob and the hash say */
+            want = (int)(brk_asked_end - bar);
+            in = brk_asked_len - (uint32_t)want;
+            if (bar + 1u >= brk_asked_end)
+                brk_asked = 0u;
+        }
         if (!s)
             brk_gen_start(&rhythm_gen);
-        brk_gen_bar(&rhythm_gen, en_style_rhythm(arr_style), song_level, par[P_ENERGY], par[P_EVOLVE], song_seed, bar, want, in, &brk_bar);
+        /* (half time has breaks only when asked for: at the full rhythm's numbers, as a break is, and back again after) */
+        brk_gen_bar(&rhythm_gen, en_style_rhythm(arr_style), brk_asked_now && song_level == 4 ? 3 : song_level, par[P_ENERGY], par[P_EVOLVE], song_seed, bar, want, in, &brk_bar);
         en_section = p.section;
         en_drum_level = p.level;
         en_break_bars = (uint8_t)want;
@@ -2228,7 +2344,7 @@ static void song_step(uint32_t s)
     /* the kit holds its breath in the last bar before a higher level, with the air rising into it */
     if ((part_nxt.level == 2 || part_nxt.level == 3) && part_now.level != part_nxt.level) {
         const uint32_t to = 16u - (s & 15u);
-        if (part_now.level >= 2)
+        if (part_now.level >= 2 && !brk_asked_now)   /* (a break asked for is heard to its end) */
             flags |= BRK_DROP;
         if (to == 12u)
             flags |= BRK_SWELL;
@@ -2253,7 +2369,8 @@ static void song_step(uint32_t s)
     pad_gate = 1.0f;
 
     /* the piano */
-    if (fresh_chord) {
+    if (fresh_chord || keys_back) {
+        keys_back = 0u;
         inner_set = part_now.character;
         ep_lone = 0u;
         ep_chord(0.44f + 0.04f * frand(), bass_song_t <= 0.0f);
@@ -2278,12 +2395,17 @@ static void song_step(uint32_t s)
         if (beat || (bass_song_t > 0.0f && set != EN_BASS_LONG)) {
             int len = 0;
             /* into a new key the bass does not lead: the next root's step would mean nothing in this one */
-            const en_hchord_t *nx = ch_left <= 8u && prep_root == h_root ? &ch_nxt.ch : &ch_now.ch;
+            const en_hchord_t *nx = ch_left <= 8u && prep_root == h_root && !en_held && !prep_due ? &ch_nxt.ch : &ch_now.ch;
             const int off = en_bass_ch(&ch_now.ch, nx, h_pool, ch_count, cs, ch_steps, set, song_seed, &len);
             if (off >= 0)
                 bass_note(off, (uint32_t)len);
         } else if (bass_song_t > 0.0f && fresh_chord) {
             bass_note(bass_off(ch_now.ch.bass), ch_steps);
+        }
+        if (bass_back) {
+            bass_back = 0u;
+            if (bass_song_t > 0.0f && bass.hold <= 0)
+                bass_note(bass_off(ch_now.ch.bass), ch_left < 16u ? ch_left : 16u);
         }
     }
 
@@ -2303,12 +2425,66 @@ static void song_step(uint32_t s)
 
 /* the grid: one call a sixteenth (MIDI clock: 6 ticks) */
 static uint32_t sixteenth;
+
+/* EDIT, on the bar: the next section, now. A section starts a phrase, so the phrase's count moves up to one: the bar lines stay where
+ * they are, and all that hangs on phrases (breaks, chords, grooves) holds as ever. It starts on a new chord, as a section does; held,
+ * the chord stays and its time starts over */
+static void section_next(void)
+{
+    const uint32_t phrase = 16u * EN_ARR_PHRASE;
+    next_due = 0u;
+    brk_asked = 0u;
+    arr_style = par[P_STYLE];
+    arr_follow();
+    arr_cur = arr_nxt;
+    if (song % phrase)
+        song = (song / phrase + 1u) * phrase;
+    arr_start = song;
+    arr_follow();
+    ch_left = 0u;
+    prep_due = 1u;
+}
+
+/* SELECT + EDIT, on the bar: where there are drums, a break from this bar to a phrase's end (en_arr_break_now). A chord does not outlast
+ * the phrase, and the phrase after it has a downbeat to land on: if that would be the next section's and it has no kick, this section
+ * has one phrase more */
+static void break_now(void)
+{
+    en_part_t p;
+    uint32_t skip = 0u, bar, left;
+    int len;
+    break_due = 0u;
+    part_at(song, &p);
+    if (brk_asked || p.level < 2u)
+        return;
+    len = en_arr_break_now(song / 16u, par[P_STYLE], song_seed, &skip);
+    song += skip * 16u;
+    bar = song / 16u;
+    left = (EN_ARR_PHRASE - bar % EN_ARR_PHRASE) * 16u;
+    if (ch_left > left) {
+        ch_steps -= ch_left - left;
+        ch_left = left;
+    }
+    part_at(song + left, &p);
+    if (p.level < 2u) {
+        en_arr_t *a = bars_in(song) < arr_cur.bars ? &arr_cur : &arr_nxt;   /* (on the bar a section is about to begin: that one's) */
+        a->bars = (uint16_t)(a->bars + EN_ARR_PHRASE);
+    }
+    brk_asked = 1u;
+    brk_asked_end = bar + left / 16u;
+    brk_asked_len = (uint32_t)len;
+}
+
 static void tick(void)
 {
-    if (!en_frozen) {
-        song_step(song);
-        song++;
+    if (song && !(song & 15u)) {
+        if (next_due)
+            section_next();
+        if (break_due)
+            break_now();
     }
+    song_step(song);
+    song++;
     sixteenth++;
     en_bars = sixteenth;
 }
@@ -2487,7 +2663,7 @@ static void heads_step(uint32_t n)
     fb_lean = 0.25f * motion * (1.0f + mod[8].v);
     if (head_left <= n) {
         head_left = (uint32_t)((20.0f + 40.0f * frand()) * EN_SR);
-        if (en_playing && !en_frozen && frand() < motion)
+        if (en_playing && frand() < motion)
             head2_t = HEAD2[(int)(frand() * 4.999f)];
     } else {
         head_left -= n;
@@ -2549,6 +2725,42 @@ static uint32_t ext_age;
 volatile uint32_t en_test_nans;
 float en_test_peak_in;
 uint32_t en_test_degrees(void) { return degrees; }
+uint32_t en_test_song(void) { return song; }
+uint32_t en_test_chord_left(void) { return ch_left; }
+uint32_t en_test_section_bar(void) { return (song - arr_start) / 16u; }
+uint32_t en_test_section_bars(void) { return arr_cur.bars; }
+int en_test_silent(void) { return silent; }
+int en_test_bass_down(void) { return bass.hold > 0; }
+int en_test_bells_on(void)
+{
+    int i, n = 0;
+    for (i = 0; i < NBELL; i++)
+        n += bell[i].on;
+    return n;
+}
+int en_test_keys_on(void)
+{
+    int i, n = 0;
+    for (i = 0; i < NKEYS; i++)
+        n += ep[i].on;
+    return n;
+}
+int en_test_keys_down(void)                     /* the voices whose keys are down: what MIDI should say */
+{
+    int i, n = 0;
+    for (i = 0; i < NKEYS; i++)
+        n += ep[i].on && (ep[i].held || ep[i].hold > 0);
+    return n;
+}
+float en_test_keys_low(void)                    /* the quietest key that is held */
+{
+    float lo = 9.0f;
+    int i;
+    for (i = 0; i < NKEYS; i++)
+        if (ep[i].on && ep[i].held && ep[i].amp < lo)
+            lo = ep[i].amp;
+    return lo;
+}
 float en_test_bass_pitch(void) { return bass.inc; }
 float en_test_bass_target(void) { return bass.inc_t; }
 void en_test_ticks(uint32_t n)
@@ -2564,26 +2776,32 @@ void en_test_jump(uint32_t step)
 #endif
 static void tempo_set(void) { step_len = EN_SR * 60.0f / ((float)par[P_TEMPO] * 4.0f); }
 
-/* the key or the pool changed. Playing: nothing now, the next chord takes it (song_step). Stopped: the next chord at once,
- * the time it has left unchanged, so the screen shows it and the music goes on from it */
+/* the key or the pool changed: the next chord takes it (song_step), growing or resting. Before the first step there is no next
+ * chord, so this one is made again. A drain's worth of changes comes here once */
+static uint8_t harm_due;
 static void harmony(void)
 {
     if (par[P_TEMPO] <= 0)
         return;                                  /* not yet (en_init applies in order) */
-    if (!song) {
+    if (!song && !en_playing)                    /* (playing: its first step is about to do it) */
         harmony_restart();
-    } else if (!en_playing) {
-        chord_prepare(song);
-        {
-            const uint32_t left = ch_left, steps = ch_steps;
-            en_part_t p;
-            part_at(song, &p);
-            chord_commit(song, p.character);
-            ch_left = left;
-            ch_steps = steps;
-        }
-    }
     publish_chord();
+}
+
+static void notes_off(void)                      /* every note down let go, by name and by channel: MIDI out's rule applies */
+{
+    int i;
+    for (i = 0; i < NKEYS; i++)
+        if (ep[i].on && (ep[i].held || ep[i].hold > 0))
+            midi(0x80, ep[i].note, 0);
+    for (i = 0; i < NBELL; i++)
+        if (bell[i].on)
+            midi(0x81, bell[i].note, 0);
+    if (bass.hold > 0)
+        midi(0x82, bass.midi_note, 0);
+    for (i = 0; i < 4; i++)
+        midi(0xB0 | (uint32_t)i, 123, 0);
+    midi(0xB9, 123, 0);
 }
 
 static void apply(int p, int v)
@@ -2593,6 +2811,8 @@ static void apply(int p, int v)
         v = pi->lo;
     if (v > pi->hi)
         v = pi->hi;
+    if (p == P_MIDI && !v && par[P_MIDI])
+        notes_off();                             /* while it can still be said */
     par[p] = (int16_t)v;
     switch (p) {
     case P_KEYS: ep_vol = pad_vol = (float)(v * v) * 0.0001f; break;   /* the pad follows the piano's level, one to one */
@@ -2628,36 +2848,59 @@ static void apply(int p, int v)
         brk_set_tempo((float)par[P_TEMPO]);
         echo_time();
         break;
-    case P_ROOT: harmony(); break;
-    case P_MIDI:
-        if (!v)
-            en_midi_out(0xB0, 123, 0);
-        break;
+    case P_ROOT: harm_due = 1u; break;
     default: break;
     }
 }
 
-static void notes_off(void)
-{
-    int i;
-    for (i = 0; i < 4; i++)
-        en_midi_out(0xB0 | (uint32_t)i, 123, 0);
-    en_midi_out(0xB9, 123, 0);
-}
+/* Silence, now and for good, until en_restore: every voice, the pad's way back, and the room's memory: what was ringing does not come
+ * back after it. The render only clears, a little a block, and says nothing */
+static uint32_t clear_at;
 
 static void quiet(void)
 {
     int i;
+    notes_off();
     for (i = 0; i < NBELL; i++)
         bell[i].on = 0;
     for (i = 0; i < NKEYS; i++)
         ep[i].on = 0;
+    ep_gone[0] = ep_gone[1] = 0.0f;
     brk_stop();
+    hat[0].on = hat[1].on = 0;
     for (i = 0; i < EN_NPAD; i++)
-        pad[i].amp = 0.0f;
+        pad[i].amp = pad[i].tgt = 0.0f;
+    pad_gain = pad_gate = 0.0f;
     bass.amp = 0.0f;
     bass.hold = 0;
-    notes_off();
+    en_pad_level = en_bass_level = en_break_level = 0.0f;
+    break_due = 0u;
+    silent = 1u;
+    restore_due = 0u;
+    clear_at = 0u;
+}
+
+#define CLEAR_BLOCK 2048u
+static int space_clear(void)                     /* 1: done */
+{
+    uint32_t k;
+    for (k = 0u; k < CLEAR_BLOCK && clear_at < (uint32_t)DL_TOTAL + TAPE_N + PLEX_N; k++, clear_at++) {
+        if (clear_at < (uint32_t)DL_TOTAL)
+            pl_buf[clear_at] = 0.0f;
+        else if (clear_at < (uint32_t)DL_TOTAL + TAPE_N)
+            tape[clear_at - (uint32_t)DL_TOTAL] = 0;
+        else
+            plex[clear_at - (uint32_t)DL_TOTAL - TAPE_N] = 0;
+    }
+    if (clear_at < (uint32_t)DL_TOTAL + TAPE_N + PLEX_N)
+        return 0;
+    pl_bw = pl_damp_l = pl_damp_r = 0.0f;
+    tape_acc = tape_lp = tape_hp = tape_p1 = tape_p2 = tape_c1 = tape_c2 = 0.0f;
+    plex_lp = plex_lp2 = 0.0f;
+    brk_lp[0] = brk_lp[1] = brk_hp = 0.0f;
+    plp[0] = plp[1] = plp[2] = plp[3] = eplp[0] = eplp[1] = 0.0f;
+    duck = duck_s = 0.0f;
+    return 1;
 }
 
 void en_init(void)
@@ -2680,11 +2923,13 @@ void en_init(void)
     pulse = 0;
     sixteenth = 0u;
     en_bars = 0u;
-    en_playing = en_frozen = en_ext = 0u;
+    en_playing = en_held = en_ext = 0u;
+    started = silent = restore_due = 0u;
+    next_due = break_due = brk_asked = brk_asked_now = 0u;
+    keys_back = bass_back = prep_due = 0u;
     hat_ph[0] = hat_ph[1] = hat_ph[2] = hat_ph[3] = 0u;
     hat[0].lp1 = hat[0].lp2 = hat[1].lp1 = hat[1].lp2 = 0.0f;
     bass.ph = bass.inc = bass.inc_t = 0.0f;
-    rev_in_gain = 1.0f;
     q_r = q_w = 0;
 #if defined EN_HOST || defined PLAT_HOST
     en_test_nans = 0u;
@@ -2741,7 +2986,7 @@ void en_init(void)
     part_now.level = part_nxt.level = 0u;
     h_pass = motif_base = 0u;
     motif_on = -1;
-    en_section = en_drum_level = en_break_bars = 0u;
+    en_section = en_drum_level = en_break_bars = en_drum_next = 0u;
     brk_init();                                  /* before apply: it resets what apply sets */
     for (i = 0; i < P_NPARAMS; i++)              /* the tempo last: until it is set, what needs all of them waits (echo_time, harmony) */
         if (i != P_TEMPO)
@@ -2752,6 +2997,7 @@ void en_init(void)
     fresh = 0u;
     ep_lone = 0u;
     harmony();
+    harm_due = 0u;
     for (l = 0; l < EN_NLOOP; l++)               /* the screen's loops show the motifs' notes, nothing moves in them */
         for (i = 0; i < EN_LOOP_MAX; i++)
             en_loop_note[l][i] = l < 2 && i < 4 ? MOTIF[l][i].note : -1;
@@ -2769,32 +3015,66 @@ static void clock_pulse(void)
         pulse = 0;
 }
 
+/* Growing, from the top only the first time; after that from exactly where it rested */
 static void play_start(int from_top)
 {
     if (from_top) {
         pulse = 0;
         sixteenth = 0;
         song = 0u;
+    } else {
+        bass_back = 1u;
     }
+    started = 1u;
     pulse_left = 0.0f;
     en_playing = 1;
     if (!en_ext)
         midi(from_top ? 0xFA : 0xFB, 0, 0);
 }
 
+/* Resting: the grid stops where it is. The drums' sounds under way run to their ends, the motifs ring and let go by themselves, the
+ * bass lets go now. The hand stays down and the pad sings on: no new chord, nothing struck (render_keys keeps the hand up) */
 static void play_stop(void)
 {
-    int i;
-    brk_stop();
+    brk_release();
     en_playing = 0;
-    pad_gate = 0.0f;
-    for (i = 0; i < NKEYS; i++)
-        if (ep[i].on)
-            ep[i].hold = 1;
+    break_due = 0u;
+    if (bass.hold > 0)
+        midi(0x82, bass.midi_note, 0);
     bass.hold = 0;
     if (!en_ext)
         midi(0xFC, 0, 0);
-    notes_off();
+}
+
+/* MIDI Start, once it has played: the master's bar 1 is now. The next step is the top of a bar and of a phrase, so the bars and the
+ * phrases are the master's from here on. The section and the chord are not given up: the phrase playing starts over, in the same
+ * place in the section, and the chord's time with it, nothing struck */
+static void grid_top(void)
+{
+    const uint32_t phrase = 16u * EN_ARR_PHRASE;
+    if (song % phrase) {
+        song = (song / phrase + 1u) * phrase;
+        arr_start += phrase;
+    }
+    pulse = 0;
+    sixteenth = 0;
+    pulse_left = 0.0f;
+    brk_asked = break_due = 0u;
+    chord_time(song / 16u);
+    ep_lone = 0u;
+    bass_back = 1u;
+}
+
+static void silence_over(void)                   /* en_restore: it grows, from where it was, the hand and the pad coming back */
+{
+    int i;
+    silent = restore_due = 0u;
+    for (i = 0; i < EN_NPAD; i++)
+        pad[i].tgt = 1.0f;
+    pad_gate = 1.0f;
+    keys_back = 1u;
+    if (!en_playing)
+        play_start(!started);
 }
 
 static void drain(void)
@@ -2818,23 +3098,32 @@ static void drain(void)
                 fresh = (uint8_t)(bit + 1);
             }
             pool = now;
-            harmony();
+            harm_due = 1u;
             break;
         }
         case C_MASK:
             if ((uint32_t)b != degrees) {        /* (a piece taken up says it, mostly unchanged) */
                 degrees = (uint32_t)b & 0xFFFu;
-                harmony();
+                harm_due = 1u;
             }
             break;
         case C_PLAY:
+            if (silent)
+                break;
             if (a && !en_playing)
-                play_start(1);
+                play_start(!started);
             else if (!a && en_playing)
                 play_stop();
             break;
-        case C_NEXT: break;                      /* (Task 4 gives it a meaning) */
-        case C_FREEZE: en_frozen = (uint8_t)(a != 0); break;
+        case C_NEXT:
+            if (!silent)
+                next_due = 1u;                   /* (resting: on the first bar it grows again) */
+            break;
+        case C_BREAK:
+            if (!silent && en_playing)
+                break_due = 1u;
+            break;
+        case C_HOLD: en_held = (uint8_t)(a != 0); break;
         case C_SEED:
             song_seed = (uint32_t)a << 16 | (uint32_t)(b & 0xFFFF);
             rng = RNG_START ^ song_seed * 2654435761u;   /* the small errors of time and touch follow it too */
@@ -2845,24 +3134,46 @@ static void drain(void)
             en_ext = 1;
             brk_set_ext(1);
             ext_age = 0;
+            if (silent)
+                break;
             if (a == EN_CLK_TICK) {
                 if (en_playing)
                     clock_pulse();
             } else if (a == EN_CLK_START) {
-                play_start(1);
+                if (!started) {
+                    play_start(1);
+                } else {
+                    grid_top();
+                    if (!en_playing)
+                        play_start(0);
+                }
             } else if (a == EN_CLK_CONTINUE) {
                 if (!en_playing)
-                    play_start(0);
+                    play_start(!started);
             } else if (en_playing) {
                 play_stop();
             }
             break;
-        case C_PANIC: quiet(); break;
+        case C_PANIC:
+            if (en_playing)
+                play_stop();
+            quiet();
+            break;
+        case C_RESTORE:
+            if (silent)
+                restore_due = 1u;                /* (once the room is clear) */
+            else if (!en_playing)
+                play_start(!started);
+            break;
         case C_REGROW:                           /* a new piece: its key; the song goes on */
-            harmony();
+            harm_due = 1u;
             ep_lim = NKEYS;
             break;
         }
+    }
+    if (harm_due) {
+        harm_due = 0u;
+        harmony();
     }
 }
 
@@ -2965,12 +3276,13 @@ static void render_keys(uint32_t n)
     }
     ep_gone[0] = fm_flush(ep_gone[0]);
     ep_gone[1] = fm_flush(ep_gone[1]);
-    for (i = 0; i < ep_lim; i++) {
+    for (i = 0; i < NKEYS; i++) {                /* (past the limit, what en_shed is letting go) */
         ep_t *e = &ep[i];
         float cph = e->cph, tph = e->tph, amp = e->amp, ib = e->ib, ibt = e->ibt, it = e->it, att = e->att;
         const float cinc = e->cinc, tinc = e->tinc, ibd = e->ibd, itd = e->itd, ar = e->arate, gl = e->gl * g, gr = e->gr * g;
         float dec = e->dec, x = 0.0f;
         uint32_t k = 0;
+        int settle;
         if (!e->on)
             continue;
         if (e->wait > 0) {
@@ -2988,6 +3300,11 @@ static void render_keys(uint32_t n)
                 dec = e->rel;
             }
         }
+        /* a chord nothing will follow: above that place it falls as ever, under it it comes up, softly, phase unbroken; there it stays,
+         * for hours, no lower and no higher */
+        settle = e->held && (en_held || !en_playing);
+        if (settle)
+            dec = amp > EP_HELD_AMP ? dec : amp < EP_HELD_AMP ? EP_HELD_RISE : 1.0f;
         if (it > 0.0006f) {                      /* the tine's ping, then a lookup saved */
             for (; k < n; k++) {
                 const float m = sine(cph) * (ib + 0.012f) + sine(tph) * it;
@@ -3021,9 +3338,11 @@ static void render_keys(uint32_t n)
                 att += (1.0f - att) * ar;
             }
         }
+        if (settle && (dec > 1.0f ? amp > EP_HELD_AMP : dec < 1.0f && amp < EP_HELD_AMP))
+            amp = EP_HELD_AMP;
         e->cph = cph;
         e->tph = tph;
-        e->amp = amp;
+        e->amp = fm_flush(amp);                  /* (a chord held by a clock that has gone slow: not down among the denormals) */
         e->ib = fm_flush(ib);
         e->ibt = fm_flush(ibt);
         e->it = fm_flush(it);
@@ -3245,7 +3564,7 @@ static void render_hats(uint32_t n)
 static void render_chunk(int32_t *out, uint32_t n, float gain)
 {
     uint32_t j;
-    const float rg = rev_send * rev_in_gain * 1.09f, eg = echo_send * 2.1f;
+    const float rg = rev_send * 1.09f, eg = echo_send * 2.1f;
     for (j = 0; j < n; j++)
         mixl[j] = mixr[j] = rsend[j] = esend[j] = 0.0f;
     /* the duck: the kick pulls the melodic bus down a little and lets it back in a quarter of a second */
@@ -3291,9 +3610,8 @@ static void control(uint32_t n)                 /* once a chunk: the slow things
     bass_song = fm_flush(bass_song + (bass_song_t - bass_song) * slow);
     pad_swell += (pad_swell_t - pad_swell) * fm_minf((float)n * (1.0f / (1.1f * EN_SR)), 1.0f);
     lift = fm_flush(lift + (lift_t - lift) * (lift_t > lift ? (float)n * (1.0f / (0.8f * EN_SR)) : slow * 0.75f));
-    pl_decay += ((en_frozen ? 0.9995f : pl_decay_t) - pl_decay) * 0.002f;
+    pl_decay += (pl_decay_t - pl_decay) * 0.002f;
     pl_dd2 = fm_clampf(pl_decay + 0.15f, 0.25f, 0.5f);
-    rev_in_gain += ((en_frozen ? 0.0f : 1.0f) - rev_in_gain) * 0.01f;
     for (i = 0; i < EN_NLOOP; i++)
         en_loop_glow[i] = fm_flush(en_loop_glow[i] * 0.985f);
 }
@@ -3305,6 +3623,14 @@ void en_render(int32_t *out, uint32_t n, uint32_t gain_q12)
     if (en_ext && ++ext_age > 100u) {
         en_ext = 0;
         brk_set_ext(0);
+    }
+    if (silent) {
+        uint32_t j;
+        for (j = 0; j < 2u * n; j++)
+            out[j] = 0;
+        if (space_clear() && restore_due)
+            silence_over();
+        return;
     }
     while (n) {
         uint32_t k = n > BLK ? BLK : n;

@@ -49,6 +49,7 @@ typedef struct {
 typedef struct {
     brk_groove_t base, cur;              /* what it is, and what it is this time round */
     uint32_t seed, next, start, gno;     /* the bar expected; this groove's first bar, its number */
+    uint32_t brk_next;                   /* the bar a break going on would have next */
     uint16_t life;                       /* bars */
     uint8_t on, level, density, ghostn, synco, half, tail, brk_hits;
 } brk_gen_t;
@@ -66,7 +67,8 @@ extern volatile char brk_hit_core, brk_hit_top;   /* the sound this step chose o
 extern volatile char brk_hat_hit;                 /* the hat this step asks of the engine: h j l i closed, o open, '.' none */
 extern volatile float brk_hat_vel;                /* and how hard */
 extern volatile uint32_t brk_kicks, brk_snares;
-void brk_stop(void);                     /* what sounds fades out; the next step starts cleanly */
+void brk_stop(void);                     /* nothing sounds, now */
+void brk_release(void);                  /* no more steps for now: the sounds under way run to their ends, the next step starts cleanly */
 void brk_render(float *out, uint32_t n); /* ADDS mono */
 void brk_render_stem(int stem, float *out, uint32_t n);   /* ADDS one stem, mono */
 

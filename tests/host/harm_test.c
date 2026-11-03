@@ -96,6 +96,7 @@ static void render_until(uint32_t step)
         bad_out += en_pad_level != en_pad_level || en_bass_level != en_bass_level;
     }
 }
+static int start_evolve = -1;
 static void engine_start(uint32_t p, int root, uint32_t seed)
 {
     static int32_t b[512];
@@ -107,6 +108,8 @@ static void engine_start(uint32_t p, int root, uint32_t seed)
     en_set(P_ROOT, root);
     en_pool(p);
     en_seed(seed);
+    if (start_evolve >= 0)
+        en_set(P_EVOLVE, start_evolve);
     en_play(1);
     nch = 0;
     bad_out = 0u;
@@ -139,18 +142,10 @@ static void engine_checks(void)
         uint32_t last_c = 0u;
         float last_drift = -1.0f;
         int last_n = 0, publish_ok = 0;
+        start_evolve = e;
         engine_start(lyd, 2, 1001u + (uint32_t)evo);
-        en_set(P_EVOLVE, e);
+        start_evolve = -1;
         en_gen_start(&st);
-        {
-            /* en_set arrives after the first chord was made: restart with it in force */
-            static int32_t b[512];
-            en_play(0);
-            en_render(b, 256, 1024);
-            en_play(1);
-            nch = 0;
-            en_render(b, 256, 1024);
-        }
         while (en_bars < 8000u) {
             static int32_t b[512];
             en_render(b, 64, 1024);
@@ -622,11 +617,11 @@ static void live_checks(void)
         render_until(400u);
         n0 = nch;
         root = en_chord_root;
-        en_freeze(1);
+        en_hold(1);
         for (k = 0; k < 4000; k++)
             en_render(b, 256, 1024);
         CHECK(nch == n0 && en_chord_root == root, "frozen, the chord moved");
-        en_freeze(0);
+        en_hold(0);
         render_until(en_bars + 90u);
         CHECK(nch > n0, "after the freeze no chord");
     }

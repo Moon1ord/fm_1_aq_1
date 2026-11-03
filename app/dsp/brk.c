@@ -732,6 +732,7 @@ static void break_bar(brk_gen_t *g, const brk_rhythm_t *r, int energy, int evolv
     const int d = clamp100((int)r->density + (energy - 70) / 5), sy = r->synco;
     const int gh = !r->ghost ? 0 : clamp100((int)r->ghost + (energy - 70) / 5);
     const int half = r->density < 35u, last = in + 1u == (uint32_t)len;
+    const int cont = in && g->brk_next == bar;   /* its bar before was this break's: entered in the middle, nothing carries over */
     /* low Evolve: the same break comes back */
     const uint32_t id = evolve < 25 ? g->gno * 8u + (uint32_t)len : bar - in;
     uint32_t xb = rn_seed(hmix(seed, 40u, id)), x = rn_seed(hmix(seed, 41u, id * 4u + in));
@@ -743,12 +744,12 @@ static void break_bar(brk_gen_t *g, const brk_rhythm_t *r, int energy, int evolv
     brk_gen_limits(r, 3, energy, &kmax, &sm, &hmax);
     b.o = o;
     b.n = b.first = 0;
-    b.tail = in ? g->tail : 0;
+    b.tail = cont ? g->tail : 0;
     b.runmax = 3 + (sy >= 50 || gh >= 60);
     b.budget = lo + span * (int)(in + 1u) / len + (energy >= 85) - (energy < 40);
     if (b.budget < 3)
         b.budget = 3;
-    if (in && b.budget < g->brk_hits)            /* it never falls back, whatever the last bar's elements came to */
+    if (cont && b.budget < g->brk_hits)            /* it never falls back, whatever the last bar's elements came to */
         b.budget = g->brk_hits;
     if (b.budget >= hmax)
         b.budget = hmax - 1;                     /* room for what leads to the downbeat */
@@ -852,8 +853,9 @@ static void break_bar(brk_gen_t *g, const brk_rhythm_t *r, int energy, int evolv
     g->tail = (uint8_t)b.tail;
     if (!o->rest)
         g->brk_hits = (uint8_t)b.n;
-    else if (!in)
+    else if (!cont)
         g->brk_hits = 0u;
+    g->brk_next = bar + 1u;
 }
 
 void brk_gen_bar(brk_gen_t *g, const brk_rhythm_t *r, int level, int energy, int evolve, uint32_t seed, uint32_t bar, int break_bars, uint32_t break_in, brk_bar_t *o)
@@ -964,11 +966,26 @@ float brk_pattern_step(uint32_t step, int flags, uint32_t seed)
 
 void brk_stop(void)
 {
-    int i, j;
-    for (i = 0; i < BRK_NSTEM; i++)
-        for (j = 0; j < 2; j++)
-            if (stem[i].v[j].on)
-                stem[i].v[j].dg = -XF;
+    int i;
+    for (i = 0; i < BRK_NSTEM; i++) {
+        stem[i].v[0].on = stem[i].v[1].on = 0u;
+        pat[i].left = 0u;
+        pat[i].cur = -1;
+    }
+    swelling = 0u;
+}
+
+void brk_release(void)
+{
+    int i;
+    for (i = 0; i < BRK_NSTEM; i++) {
+        voice_t *v = &stem[i].v[stem[i].cur];
+        if (v->on && v->dg >= 0.0f)
+            v->left += (int32_t)pat[i].left * (int32_t)BRK_SLICE;
+        pat[i].left = 0u;
+        pat[i].cur = -1;
+    }
+    swelling = 0u;
 }
 
 void brk_render_stem(int st, float *out, uint32_t n)

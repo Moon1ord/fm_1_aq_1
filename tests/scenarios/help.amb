@@ -7,13 +7,13 @@ wait 1000
 shot help_rec.png
 release REC
 wait 200
-expect frozen 0
+expect held 0
 tap REC
 wait 200
-expect frozen 1
+expect held 1
 tap REC
 wait 200
-expect frozen 0
+expect held 0
 tap ENV
 turn K1 3 10
 expect par4 63

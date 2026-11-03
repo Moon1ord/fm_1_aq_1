@@ -563,7 +563,8 @@ static void wet(int p, int v, double *dry_e, double *tail_e)
     render(10.0f, &m);
     *dry_e = m.e;
     en_play(0);
-    render(14.0f, &m);                           /* what the keys let go */
+    en_set(P_KEYS, 0);                           /* (a rest keeps the hand and the pad: here they stop feeding the room) */
+    render(14.0f, &m);
     render(6.0f, &m);
     *tail_e = m.e;
 }

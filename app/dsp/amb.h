@@ -2,7 +2,11 @@
  * Copyright (C) 2026 Charles Vestal */
 /* AQ-1: an arranger (en_arr_*) and chords composed one at a time (en_gen_*) play an electric piano over a dark pad, two motifs,
  * a sub and drum patterns, through AMB-1's space: an Echoplex and a tape loop after Discreet Music's chain, then Dattorro's
- * plate. FREEZE holds the chord and lets the plate ring on.
+ * plate.
+ *
+ * What the buttons ask. Growing (en_play 1): all of it. Resting (en_play 0): the grid stops; drums, bass and motifs let go and ring out,
+ * the hand and the pad stay on the chord; growing again goes on from exactly there. Held (en_hold): no new chord and no new section,
+ * and everything else plays on over the chord. en_next: the next section, en_break: a break, each on the next bar.
  *
  * Threads: en_render() runs in the audio interrupt. Everything else posts commands, which the render
  * drains at the start of a block; the state below marked (UI) is written by the render and only read
@@ -12,7 +16,7 @@
 #include "brk.h"
 
 #define EN_SR 44100.0f
-#define EN_NLOOP 4                     /* bell tape loops */
+#define EN_NLOOP 4                     /* the rings of motif notes on the screen */
 #define EN_LOOP_MAX 29
 #define EN_NPAD 4                      /* pad voices */
 
@@ -48,25 +52,28 @@ void en_init(void);
 void en_set(int param, int value);
 void en_pool(uint32_t pool);                   /* the scale, relative to the root (bit 0 always set) */
 void en_mask(uint32_t mask);                   /* the notes chords may stand on, relative to the root: from the next chord */
-void en_play(int on);                          /* the garden grows / rests (the tails ring on) */
-void en_next(void);                            /* the next chord: on the next bar (now while resting) */
-void en_freeze(int on);
+void en_play(int on);                          /* it grows / rests */
+void en_next(void);                            /* the next section, on the next bar (resting: on the first bar it grows again) */
+void en_break(void);                           /* a break on the next bar, if there are drums then: it ends with a phrase */
+void en_hold(int on);                          /* the chord stays, the section stays, the rest plays on */
 void en_seed(uint32_t s);                      /* a new seed (24 bits are used): every choice from now on follows it */
-void en_panic(void);                           /* everything quiet, now */
+void en_panic(void);                           /* everything quiet, now, and it stays so until en_restore */
+void en_restore(void);                         /* it grows, from where it was; the first time, from the top */
 void en_regrow(void);                          /* a new piece: its key; the song goes on */
-/* MIDI clock in (as FoMni): ticks drive the 1/16 grid (6 a step) while they keep coming */
+/* MIDI clock in (as FoMni): ticks drive the 1/16 grid (6 a step) while they keep coming. Stop rests, Continue grows on. Start grows
+ * from the top of a bar and a phrase, keeping the section and the chord (the very first time: the song's top) */
 enum { EN_CLK_TICK, EN_CLK_START, EN_CLK_CONTINUE, EN_CLK_STOP };
 void en_clock(int msg);
 
 /* the render (audio ISR): n stereo frames, 24-bit in int32; gain Q12 (the MASTER pot) */
 void en_render(int32_t *out_lr, uint32_t n, uint32_t gain_q12);
-void en_shed(void);   /* the audio interrupt's own: four bell voices until the next piece */
+void en_shed(void);   /* the audio interrupt's own: six key voices until the next piece, the others let go softly */
 
 /* MIDI out, from the render: the app sends it (USB); status, data 1, data 2 */
 void en_midi_out(uint32_t st, uint32_t d1, uint32_t d2);
 
 /* state for the screen (UI) */
-extern volatile uint8_t en_playing, en_frozen, en_ext;
+extern volatile uint8_t en_playing, en_held, en_ext;
 extern volatile uint8_t en_chord[EN_NPAD];     /* the chord's notes (MIDI), the piano's hand: with the root, its name */
 extern volatile uint8_t en_chord_root;         /* the chord's root (not always its bass), MIDI pitch class 0..11 */
 extern volatile uint8_t en_chord_n;            /* its distinct tones, with the root: 2 .. 5 */
@@ -117,9 +124,12 @@ void en_arr_part(const en_arr_t *a, uint32_t bar_in, int style, int energy, en_p
 /* a break wanted at this bar of the song: its length in bars, 0 none, and *in how many of them are already gone. breaks:
  * the knob, 50 the style's own rate. It always ends with its phrase */
 int en_arr_break(uint32_t bar, int level, int style, int breaks, uint32_t seed, uint32_t *in);
+/* a break asked for on this bar: its length, and how many bars of the phrase go first so that it starts here and ends with it */
+int en_arr_break_now(uint32_t bar, int style, uint32_t seed, uint32_t *skip);
 const brk_rhythm_t *en_style_rhythm(int style);
 extern volatile uint8_t en_section, en_style;   /* for the screen: what is playing */
 extern volatile uint8_t en_drum_level, en_break_bars;   /* the level now; the length of the break now, 0 none */
+extern volatile uint8_t en_drum_next;           /* the next bar's level: 2 and up have a kick, so en_break can be had */
 #if defined EN_HOST || defined PLAT_HOST
 void en_test_ticks(uint32_t n);                 /* n sixteenths at once, no time passing: hours in a test */
 void en_test_jump(uint32_t step);               /* the song's counter, as if it had played this far */
@@ -128,6 +138,17 @@ extern volatile uint32_t en_hat_hits;           /* hats struck */
 extern int en_test_pad_off;                     /* the pad out of the mix: to hear the piano by itself */
 extern float en_test_peak_in;                   /* the most that has gone into the limiter (1: its knee, about) */
 uint32_t en_test_degrees(void);                 /* the degrees the engine has been told */
+uint32_t en_test_song(void);                    /* the next step of the song */
+uint32_t en_test_chord_left(void);              /* steps to the next chord */
+uint32_t en_test_section_bar(void);             /* this section's bar; how many it has */
+uint32_t en_test_section_bars(void);
+int en_test_silent(void);                       /* since en_panic */
+int en_test_bass_down(void);                    /* notes the engine thinks are down, by layer: what MIDI should say */
+int en_test_bells_on(void);
+int en_test_keys_down(void);
+int en_test_keys_on(void);                      /* voices sounding or still fading */
+float en_test_keys_low(void);                   /* the quietest key held */
+extern uint32_t en_test_gens;                   /* chords composed for the engine */
 float en_test_bass_pitch(void);                 /* the bass, cycles a sample: where it is and where it is going */
 float en_test_bass_target(void);
 /* each bar as it starts: step, section, level, character, break's bars */

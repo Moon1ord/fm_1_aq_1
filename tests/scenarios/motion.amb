@@ -1,14 +1,14 @@
-# freeze, next chord, stop and rest, save and reboot
+# hold, next section, rest, save and reboot
 wait 2000
 tap REC
 wait 50
-expect frozen 1
-shot frozen.png
+expect held 1
+shot held.png
 wait 3000
 tap REC
 wait 50
-expect frozen 0
-# the next chord comes on the bar
+expect held 0
+# the next section comes on the bar
 tap EDIT
 wait 4000
 tap OCT+
@@ -20,10 +20,13 @@ tap PLAY
 wait 50
 expect playing 0
 wait 50000
-expect pad_level <1
+expect pad_level >50
 shot resting.png
-# while resting, the change saves itself
+# a rest sounds now: nothing saves itself under it until saving can dip the volume; SAVE does
 wait 5000
+expect dirty 1
+expect store_writes 0
+tap SAVE
 expect dirty 0
 expect store_writes >0
 reboot

@@ -151,17 +151,17 @@ int main(void)
         CHECK(changes >= 10, "the chords: %d changes in a minute", changes);
     }
 
-    /* freeze: the chord holds */
+    /* held: the chord stays, the drums go on */
     {
         int held = en_chord[0] + 128 * en_chord[1], k;
         uint32_t h0 = en_hits;
-        en_freeze(1);
+        en_hold(1);
         for (k = 0; k < 60; k++) {
             run(1.0f);
-            CHECK(en_chord[0] + 128 * en_chord[1] == held, "the chord moved while frozen");
+            CHECK(en_chord[0] + 128 * en_chord[1] == held, "the chord moved while held");
         }
-        CHECK(en_hits == h0, "the break kept stepping while frozen: %u", en_hits - h0);
-        en_freeze(0);
+        CHECK(en_hits > h0, "the drums stopped while held");
+        en_hold(0);
     }
 
     /* (demo-loading) a new key and the pool no longer move the voices at once: the next chord takes the new key, and has
@@ -230,15 +230,19 @@ int main(void)
     en_play(1);
     run(20.0f);
 
-    /* stop: the tails die away */
+    /* a rest: the drums, the bass and the motifs stop, the chord and the pad do not (the rest of it: ctl_test) */
     for (i = 0; i < P_NPARAMS; i++)
         en_set(i, en_param_info(i)->def);
     run(120.0f);                                 /* the bass and the drums have come in */
     en_play(0);
     run(40.0f);
-    peak = 0.0f;
-    run(1.0f);
-    CHECK(peak < 0.01f, "quiet after stopping (%f)", (double)peak);
+    {
+        const uint32_t h0 = en_hits;
+        peak = 0.0f;
+        run(1.0f);
+        CHECK(peak > 0.01f, "silent in a rest (%f)", (double)peak);
+        CHECK(en_hits == h0 && en_bass_level == 0.0f, "drums or bass in a rest");
+    }
     CHECK(midi_count > 50u, "MIDI out (%u)", midi_count);
 
     printf(fails ? "amb: %d FAILED\n" : "amb: ok\n", fails);

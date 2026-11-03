@@ -3,7 +3,7 @@
 /* AQ-1 in fm1-base's host simulator (host/plat_host.c, which includes app.c and so this): AMB-1's checks for
  * "expect", its command, a reboot and the screen reader's dump.
  *
- * AMB-1's checks: playing frozen view piece pool dirty sixteenths ext pad_level bass_level chordroot chordN loopnotes
+ * AMB-1's checks: playing held silent midionN keysdown bellson bassdown keyson breakbars barpos stepofbar bars chordhash view piece pool dirty sixteenths ext pad_level bass_level chordroot chordN loopnotes
  * parN battery section style level mask enmask keyslit help ringN (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
  * values, help lines and messages wider than their places. Its commands:
  * storeamb (what AMB-1 leaves in the store: its magic and format, nothing of ours); storeold (the project as it is, whole, but
@@ -11,7 +11,7 @@
  * plat.h's plat_battery: -1..4; "battery off" the simulator's own, full); seed N (the musical seed, from the next choice on;
  * until told it is EN_HARM_SEED); setpar P V (parameter P to V, as a knob would); style NAME; energy N; breaks N; trace FILE
  * (a line for each bar: step section level character break's bars; a line for each chord: "chord" step name bars character key tones bass, the last two above the key)
- * and trace off. */
+ * and trace off; panic and uiinit (what the platform does around an update); overload (blocks too heavy, twice). */
 #include <stdio.h>
 #include <strings.h>
 static FILE *trace_f;
@@ -40,8 +40,30 @@ int app_expect(const char *what, int *got)
     int g;
     if (!strcmp(what, "playing"))
         g = en_playing;
-    else if (!strcmp(what, "frozen"))
-        g = en_frozen;
+    else if (!strcmp(what, "held"))
+        g = en_held;
+    else if (!strcmp(what, "silent"))             /* since a panic */
+        g = en_test_silent();
+    else if (!strncmp(what, "midion", 6))         /* midionN: the notes MIDI has said are down on channel N, 1..4 */
+        g = ledger[(atoi(what + 6) - 1) & 3];
+    else if (!strcmp(what, "keysdown"))           /* what the engine thinks they are: the keys, the motifs, the bass */
+        g = en_test_keys_down();
+    else if (!strcmp(what, "bellson"))
+        g = en_test_bells_on();
+    else if (!strcmp(what, "bassdown"))
+        g = en_test_bass_down();
+    else if (!strcmp(what, "keyson"))             /* key voices sounding, or fading */
+        g = en_test_keys_on();
+    else if (!strcmp(what, "breakbars"))          /* this bar is a break of so many bars */
+        g = en_break_bars;
+    else if (!strcmp(what, "barpos"))             /* the next step's place in its phrase, in bars; on the bar: step / 16 */
+        g = (int)(en_test_song() / 16u % EN_ARR_PHRASE);
+    else if (!strcmp(what, "stepofbar"))
+        g = (int)(en_test_song() % 16u);
+    else if (!strcmp(what, "bars"))               /* the song's next step, in bars */
+        g = (int)(en_test_song() / 16u);
+    else if (!strcmp(what, "chordhash"))          /* the chord, as a number */
+        g = en_chord[0] | en_chord[1] << 7 | en_chord[2] << 14 | en_chord[3] << 21;
     else if (!strcmp(what, "view"))
         g = ui.view;
     else if (!strcmp(what, "piece"))
@@ -104,6 +126,19 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
     (void)c, (void)d;
     if (!strcmp(cmd, "battery")) {               /* battery N: plat_battery as N (-1..4), "battery off" its own */
         batt_host = (int8_t)(strcmp(a, "off") ? atoi(a) : -2);
+        return 1;
+    }
+    if (!strcmp(cmd, "panic")) {                 /* what the platform does before an update */
+        app_panic();
+        return 1;
+    }
+    if (!strcmp(cmd, "uiinit")) {                /* and after it */
+        app_ui_init();
+        return 1;
+    }
+    if (!strcmp(cmd, "overload")) {              /* two heavy blocks in a row */
+        app_overload();
+        app_overload();
         return 1;
     }
     if (!strcmp(cmd, "seed")) {

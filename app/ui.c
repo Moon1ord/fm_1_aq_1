@@ -5,8 +5,10 @@
  *
  *   keys           the scale: each key adds or removes its note from the pool (the root stays)
  *   SEL + a key    whether chords may stand on that note; it stays in the scale either way (two roots stay, besides the tonic)
- *   PLAY           it plays / rests                ARP   the next chord, now
- *   REC            FREEZE: the chord holds, the reverb rings on    OCT- / OCT+   the motifs' octave
+ *   PLAY           it grows / rests: drums, bass and motifs stop and ring out, the hand and the pad stay on the chord
+ *   REC            hold: no new chord, no new section; the drums, the bass and the motifs play on over the chord
+ *   EDIT           the next section, on the next bar    SEL + EDIT   a break, on the next bar, if there are drums then
+ *   OCT- / OCT+    the motifs' octave
  *   HOME + SELECT  tempo   ALGORITHM mode (loads a pool)   PRESETS the piece (Root is on the Setup page)
  *   HOME ENV ARP LFO SEQ FX GLO   the pages: Home, Keys, Motifs, Bass, Drums, Space, Setup (the SELECT encoder steps through them)
  *   KNOB 1-4       the page's four values
@@ -68,6 +70,7 @@ static struct {
     uint32_t turn_t;                   /* the last knob turn */
     uint8_t help;                      /* a button's card is up: the button + 1 */
     uint8_t reset_done;                /* SAVE held: the piece went back to its recipe this hold */
+    uint8_t edit_sel;                  /* EDIT went down with SEL held: a break, whichever comes up first */
     uint8_t dirty;                     /* the project changed since the last save */
     uint32_t act_t, saved_t;
     char msg[2][24];
@@ -336,6 +339,20 @@ static void set_view(int v)
     ui.touched = -1;
 }
 
+/* EDIT: the engine does it on the bar. A break needs drums on that bar, and a level turned up to hear them */
+static void edit(int sel)
+{
+    if (!sel) {
+        en_next();
+        say("NEXT SECTION", en_playing ? "ON THE BAR" : "WHEN IT GROWS");
+    } else if (en_playing && en_drum_next >= 2u && proj.par[P_DRUMS] > 0) {
+        en_break();
+        say("BREAK", "ON THE BAR");
+    } else {
+        warn("NO DRUMS", "NO BREAK");
+    }
+}
+
 static void button(int b)
 {
     int v;
@@ -350,8 +367,7 @@ static void button(int b)
         }
     switch (b) {
     case B_EDIT:
-        en_next();
-        say("NEXT CHORD", en_playing ? "ON THE BAR" : 0);
+        edit(ui.edit_sel);
         break;
     case B_PLAY:
         sp_tp.playing = !en_playing;
@@ -365,8 +381,8 @@ static void button(int b)
         }
         break;
     case B_REC:
-        say("FREEZE", en_frozen ? "OFF" : "ON");
-        en_freeze(!en_frozen);                   /* the engine takes it at its next block */
+        say("HOLD", en_held ? "OFF" : "ON");
+        en_hold(!en_held);                       /* the engine takes it at its next block */
         break;
     case B_OCTDN: case B_OCTUP:
         knob_set(P_MOCT, proj.par[P_MOCT] + (b == B_OCTUP ? 1 : -1));
@@ -442,6 +458,11 @@ static void input(void)
             ui.down_t[i] = plat_ms();
             if (i == B_SAVE)
                 ui.reset_done = 0;
+            if (i == B_EDIT) {
+                ui.edit_sel = (uint8_t)(btn >> B_SEL & 1u);
+                if (ui.edit_sel)
+                    ui.btn_used |= 1u << B_SEL;
+            }
             if (i == B_PLAY)                   /* transport on the press */
                 button((int)i);
         } else if (!(ui.btn_used & m) && i != B_PLAY) {
@@ -856,9 +877,9 @@ static void draw_ring(void)
         char nm[16];
         chord_now(nm);
         if (text_w(&FONT_B, nm) <= 38)
-            text_c(CX, CY - 8, &FONT_B, nm, en_frozen ? K_FROST : K_TEXT);
+            text_c(CX, CY - 8, &FONT_B, nm, en_held ? K_FROST : K_TEXT);
         else
-            text_c(CX, CY - 6, &FONT_XS, nm, en_frozen ? K_FROST : K_TEXT);
+            text_c(CX, CY - 6, &FONT_XS, nm, en_held ? K_FROST : K_TEXT);
     }
 }
 
@@ -898,8 +919,8 @@ static int help_lines(int b, const char *l[HELP_LINES])
     case B_SEQ: L("THE DRUMS"); L("LEVEL, BREAKS, HATS, KIT"); break;
     case B_FX: L("THE SPACE"); L("ECHO, ECHO TIME, REVERB,"); L("SIZE"); break;
     case B_GLO: L("SETUP"); L("ROOT, TUNE, MIDI OUT, LIGHTS"); break;
-    case B_EDIT: L("THE NEXT CHORD,"); L("ON THE NEXT BAR"); break;
-    case B_REC: L("FREEZE: THE CHORD HOLDS"); L(" AND THE REVERB RINGS ON"); L("AGAIN: THAW"); break;
+    case B_EDIT: L("THE NEXT SECTION,"); L(" ON THE NEXT BAR"); L("+ SELECT: A BREAK,"); L(" ON THE NEXT BAR"); break;
+    case B_REC: L("HOLD: THE CHORD STAYS,"); L(" NO NEW SECTION"); L("THE REST PLAYS ON"); L("AGAIN: LET GO"); break;
     case B_OCTDN: L("THE MOTIFS AN OCTAVE DOWN"); L("WITH OCT+, 5 S: UPDATE MODE"); break;
     case B_OCTUP: L("THE MOTIFS AN OCTAVE UP"); L("WITH OCT-, 5 S: UPDATE MODE"); break;
     case B_SAVE: L("SAVES ALL EIGHT PIECES"); L("KEEP HOLDING: THE PIECE"); L(" BACK TO ITS RECIPE"); break;
@@ -923,7 +944,7 @@ static void draw_help(void)
 
 static void draw_main(void)
 {
-    uint32_t h = hash(2166136261u, pool_abs() | (uint32_t)proj.par[P_ROOT] << 12 | (uint32_t)en_frozen << 16 | proj.piece << 24 |
+    uint32_t h = hash(2166136261u, pool_abs() | (uint32_t)proj.par[P_ROOT] << 12 | (uint32_t)en_held << 16 | proj.piece << 24 |
                                         (uint32_t)en_playing << 17 | (uint32_t)proj.par[P_MODE] << 20), i;
     h = hash(h, degrees_shown());
     if (ui.frame % 3u)                           /* the garden moves slowly: 20 frames a second is plenty */
@@ -953,7 +974,7 @@ static void draw_main(void)
         return;
     ui.sig[1] = h;
     cv_begin(240, MAIN_H, K_BG);
-    if (en_frozen) {                             /* the way to the next chord, top right (held: frozen) */
+    if (en_held) {                             /* the way to the next chord, top right (held: it says so) */
         cv_text(232 - text_w(&FONT_XS, "held"), 4, &FONT_XS, "held", K_FROST);
     } else {
         int32_t w = 30, f = (int32_t)(en_drift * (float)w + 0.5f);
@@ -1041,14 +1062,15 @@ static void leds(void)
     b |= 1u << VIEW_BTN[ui.view];
     if (en_playing)
         b |= 1u << B_PLAY;
-    if (en_frozen)
+    if (en_held)
         b |= 1u << B_REC;
     plat_glow(proj.leds == 1);
     plat_leds(b, k);
 }
 
 /* AUTOSAVE: a few seconds after a change, while resting and quiet, nothing touched (a flash erase
- * silences the audio for a moment: never while the garden grows; SAVE saves then) */
+ * silences the audio for a moment: never while the garden grows; SAVE saves then). The pad sings on through a rest now, so it does not
+ * come to this until saving goes through a dip of the volume (the next task but one) */
 #define AUTOSAVE_QUIET 4000u
 static void autosave(void)
 {
@@ -1189,8 +1211,8 @@ static void sp_garden(void)
     sp_buf[0] = 0;
     sp_cat("Chord ");
     sp_chord();
-    if (en_frozen) {
-        sp_cat(", frozen");
+    if (en_held) {
+        sp_cat(", held");
     } else {
         sp_cat(", next chord ");
         sp_int((uint32_t)(fm_clampf(en_drift, 0.0f, 1.0f) * 100.0f + 0.5f));
@@ -1422,6 +1444,10 @@ static int ui_unfit(void)                             /* the host's "unfit": wha
     n += unfit_msg("3 NOTES", "AT LEAST");
     n += unfit_msg("2 DEGREES", "AT LEAST");
     n += unfit_msg("NOT IN", "THE SCALE");
+    n += unfit_msg("NEXT SECTION", "ON THE BAR");
+    n += unfit_msg("NEXT SECTION", "WHEN IT GROWS");
+    n += unfit_msg("BREAK", "ON THE BAR");
+    n += unfit_msg("NO DRUMS", "NO BREAK");
     for (x = 0; x < 12; x++)
         n += unfit_msg("NO CHORDS ON", EN_NOTE_NAME[x]);
     return n;
@@ -1429,13 +1455,14 @@ static int ui_unfit(void)                             /* the host's "unfit": wha
 static void speak_dump(void)
 {
     static const char *const MSG[][2] = {{"UPDATE MODE IN", "3.."}, {"UPDATE MODE", "CANCELLED"},
-                                         {"NEXT CHORD", "ON THE BAR"}, {"NEXT CHORD", 0}, {"RESTING", 0},
-                                         {"GROWING", 0}, {"FREEZE", "ON"}, {"FREEZE", "OFF"}, {"SAVED", 0}};
+                                         {"NEXT SECTION", "ON THE BAR"}, {"NEXT SECTION", "WHEN IT GROWS"}, {"BREAK", "ON THE BAR"},
+                                         {"RESTING", 0}, {"GROWING", 0}, {"HOLD", "ON"}, {"HOLD", "OFF"}, {"SAVED", 0}};
     static const char *const WARN[][2] = {{"THE ROOT STAYS", "(SETUP)"}, {"3 NOTES", "AT LEAST"},
-                                          {"NOT SAVED", "FLASH ERROR"}, {"2 DEGREES", "AT LEAST"}, {"NOT IN", "THE SCALE"}};
+                                          {"NOT SAVED", "FLASH ERROR"}, {"2 DEGREES", "AT LEAST"}, {"NOT IN", "THE SCALE"},
+                                          {"NO DRUMS", "NO BREAK"}};
     project_t keep = proj;
     uint8_t keep_view = ui.view, keep_help = ui.help, keep_dirty = ui.dirty, keep_play = sp_tp.playing;
-    uint8_t keep_ext = en_ext, keep_frozen = en_frozen;
+    uint8_t keep_ext = en_ext, keep_held = en_held;
     int v, i, x, lo, hi;
     char t[48];
     for (v = 0; v < NVIEWS; v++) {
@@ -1457,12 +1484,12 @@ static void speak_dump(void)
             proj = keep;
         }
     }
-    for (x = 0; x < 8; x++) {                         /* WHERE: growing, resting, unsaved, a clock, frozen, custom */
+    for (x = 0; x < 8; x++) {                         /* WHERE: growing, resting, unsaved, a clock, held, custom */
         ui.view = (uint8_t)(x * 3 % NVIEWS);
         sp_tp.playing = (uint8_t)(x & 1);
         ui.dirty = (uint8_t)(x >> 1 & 1);
         en_ext = (uint8_t)(x == 3);
-        en_frozen = (uint8_t)(x == 5);
+        en_held = (uint8_t)(x == 5);
         proj.pool = x == 6 ? 0xFFFu : x == 7 ? 0x91u : keep.pool;
         proj.mask = x == 4 ? (uint16_t)(EN_MASK_ALL & ~(1u << 4 | 1u << 9)) : (uint16_t)EN_MASK_ALL;
         proj.par[P_ROOT] = (int16_t)(x * 5 % 12);
@@ -1475,7 +1502,7 @@ static void speak_dump(void)
     ui.dirty = keep_dirty;
     sp_tp.playing = keep_play;
     en_ext = keep_ext;
-    en_frozen = keep_frozen;
+    en_held = keep_held;
     ui.view = keep_view;
     for (i = 0; i < NB; i++) {
         const char *l[HELP_LINES];
@@ -1548,8 +1575,7 @@ void ui_init(void)
     ui.touched = -1;
     lcd_fill(0, 0, 240, 240, K_BG);
     en_seed(seed_now());
-    if (!en_playing)
-        en_play(1);                              /* it grows from the start */
+    en_restore();                                /* it grows: from the start at power-on, from where it was after a panic */
     sp_tp.playing = 1;
     sp_tp.play_t = plat_ms();
 }

@@ -79,8 +79,6 @@ extern volatile float en_loop_glow[EN_NLOOP];  /* 0..1: a bell just rang from th
 extern volatile uint32_t en_bars;              /* sixteenths played since start (for tests) */
 extern volatile uint32_t en_hits;              /* the break's kicks and snares played: the screen counts them */
 extern volatile float en_break_level;          /* the break's level, for the meter */
-extern volatile uint8_t en_pad_note[EN_NPAD];  /* the note each voice sings now (MIDI) */
-extern volatile float en_pad_amp[EN_NPAD];     /* and how loud */
 
 /* the pure parts, for the tests and the screen */
 int en_scale(uint32_t pool, int *steps);       /* the pool's pitch classes (relative), ascending; count */
@@ -189,7 +187,6 @@ int en_pool_nearest(uint32_t pool, int root, int note);        /* the pool's not
 int en_bass_ch(const en_hchord_t *ch, const en_hchord_t *nx, uint32_t pool, uint32_t count, uint32_t cs, uint32_t steps, int level,
                uint32_t seed, int *len);
 int en_motif_note_ch(int m, int n, const en_hchord_t *ch);
-int en_motif_step(int m, int n);               /* motif 0 call, 1 answer; note 0..3: its step in the chord */
 /* what a turn of the table plays: bit 0 the call, bit 1 the answer. rate: the Rate knob, 50 the table as it is, under it fewer, over it
  * more; h: a hash of the turn */
 int en_motif_due(int due, int rate, uint32_t h);

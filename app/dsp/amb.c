@@ -267,8 +267,6 @@ volatile float en_loop_glow[EN_NLOOP];
 volatile uint32_t en_bars;
 volatile uint32_t en_hits;
 volatile float en_break_level;
-volatile uint8_t en_pad_note[EN_NPAD];
-volatile float en_pad_amp[EN_NPAD];
 
 static int16_t par[P_NPARAMS];
 static uint32_t pool = 0xAB5u;                  /* Ionian until told: what the harmony is made of, from the next chord */
@@ -2150,8 +2148,7 @@ static void chord_commit(uint32_t s, int character)   /* at the change, and only
 #endif
 }
 
-/* for the tests: a motif's note, its step in the chord, and whether it plays on a chord of this length */
-int en_motif_step(int m, int n) { return MOTIF[m & 1][n & 3].step; }
+/* for the tests: a motif's note, and whether it plays on a chord of this length */
 int en_motif_fits(int m, int n, uint32_t steps) { return motif_fits(m, n, steps); }
 int en_motif_note_ch(int m, int n, const en_hchord_t *ch) { return nearest_tone(ch->tones, MOTIF[m & 1][n & 3].note); }
 
@@ -2893,7 +2890,6 @@ static void render_pad(uint32_t n)
                     inc0 = v->inc[0], inc1 = v->inc[1];
         if (amp < 1e-5f && tgt < 1e-4f) {
             v->amp = 0.0f;
-            en_pad_amp[i] = 0.0f;
             continue;
         }
         pn = fm_clampf(PAD_PAN[i] + 0.25f * motion * mod[(i + 3) % NMOD_PAD].v, -1.0f, 1.0f);
@@ -2920,8 +2916,6 @@ static void render_pad(uint32_t n)
         f = mtof(v->now + 0.05f * motion * mod[i].v);
         v->inc[0] = f * 0.99856f * (1.0f / EN_SR);           /* -2.5 and +2.5 cents: slow, and warm */
         v->inc[1] = f * 1.00144f * (1.0f / EN_SR);
-        en_pad_note[i] = v->note;
-        en_pad_amp[i] = amp;
         lvl = fm_maxf(lvl, amp);
     }
     en_pad_level = lvl;

@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: MPL-2.0 */
-/* The break: two stems of a kit (brk_data.h), played a slice a sixteenth. CORE keeps its skeleton where it is; TOP
- * and the fill at a phrase's end are what changes. Same threads as the engine: brk_step and brk_render in the audio
- * interrupt, nothing here is called from elsewhere. Float only, no libm, no allocation. */
+/* The drums: two banks of sounds (brk_data.h), played a slice a sixteenth from bars composed one at a time. Same threads as the
+ * engine: everything here in the audio interrupt, nothing is called from elsewhere. Float only, no libm, no allocation. */
 #pragma once
 #include <stdint.h>
 
@@ -20,11 +19,8 @@ void brk_init(void);
 void brk_set_kit(int kit);
 void brk_set_tempo(float bpm);
 void brk_set_ext(int ext);               /* an external clock: a wider tolerance (steps land on block edges) */
-void brk_set_evolve(float e);            /* 0..1 */
-void brk_set_busy(float b);              /* 0..1: TOP sounds on 40 .. 100 % of its steps */
 void brk_levels(float core, float top, float ramp_samples);   /* call on a change, not continuously: each call
                                          restarts the ramp from the remaining distance */
-void brk_step(uint32_t sixteenth);       /* one call a sixteenth, counted from the start */
 /* The drums of a bar. The arranger says what it wants (a level, a style's numbers, an energy, and a break of so many
  * bars, how far in); brk_gen_bar composes it, once a bar; brk_pattern_step plays it a step at a time. Levels: 0 none, 1 hats,
  * 2 light, 3 fuller, 4 half time. A style's rhythm is only these numbers. */
@@ -61,7 +57,7 @@ void brk_gen_bar(brk_gen_t *g, const brk_rhythm_t *r, int level, int energy, int
 void brk_gen_limits(const brk_rhythm_t *r, int level, int energy, int *kicks, int *snares_ghosts, int *break_hits);
 extern brk_bar_t brk_bar;                /* the bar being played */
 uint32_t brk_hash(uint32_t seed, uint32_t what, uint32_t a);
-/* one call a sixteenth, instead of brk_step, playing brk_bar. flags: BRK_DROP the kit holds its breath, BRK_SWELL the
+/* one call a sixteenth, playing brk_bar. flags: BRK_DROP the kit holds its breath, BRK_SWELL the
  * rising air starts here; seed: the air's strength, a pure function of it and the step. Returns the kick's strength, 0 none,
  * what the melodic bus ducks under. */
 enum { BRK_DROP = 1, BRK_SWELL = 2 };
@@ -76,7 +72,6 @@ void brk_render_stem(int stem, float *out, uint32_t n);   /* ADDS one stem, mono
 
 /* for the screen and the tests */
 extern volatile uint32_t brk_hits;       /* CORE's kicks and snares played */
-extern volatile int8_t brk_st_core, brk_st_top;   /* this step's slices; -1 none */
 extern volatile uint32_t brk_jumps;      /* crossfaded moves */
 extern volatile uint32_t brk_decoded;    /* source samples decoded */
 void brk_decode_range(int kit, int stem, uint32_t start, uint32_t n, int16_t *out);   /* start: a slice's */

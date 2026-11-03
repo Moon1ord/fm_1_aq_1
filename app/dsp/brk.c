@@ -32,27 +32,15 @@ typedef struct {
 
 static stem_t stem[BRK_NSTEM];
 static int kit;
-static float inc = BRK_RATE / 44100.0f, evolve, busy, tol = TOL_INT;
+static float inc = BRK_RATE / 44100.0f, tol = TOL_INT;
 static float xf_out = XF;                /* how fast what sounds gets out of a new hit's way */
 static float next_vel = 1.0f;            /* the gain of the next voice started */
 static int32_t next_wait;                /* and how late, in output samples */
-static uint8_t fill;
-static uint32_t rs = 0x2545F491u;
 
 brk_bar_t brk_bar;
 volatile uint32_t brk_hits, brk_jumps, brk_decoded, brk_kicks, brk_snares;
 volatile char brk_hit_core, brk_hit_top, brk_hat_hit;
 volatile float brk_hat_vel;
-volatile int8_t brk_st_core, brk_st_top;
-
-static uint32_t rnd(void)
-{
-    rs ^= rs << 13;
-    rs ^= rs >> 17;
-    rs ^= rs << 5;
-    return rs;
-}
-static float frand(void) { return (float)(rnd() >> 8) * (1.0f / 16777216.0f); }
 
 static inline int32_t ima(const uint8_t *d, uint32_t p, int32_t *pred, int32_t *idx)
 {
@@ -165,11 +153,9 @@ void brk_init(void)
     pat[0].left = pat[1].left = 0u;
     pat[0].cur = pat[1].cur = -1;
     swelling = 0u;
-    fill = 0u;
     brk_hits = brk_jumps = brk_decoded = brk_kicks = brk_snares = 0u;
     next_vel = 1.0f;
     next_wait = 0;
-    brk_st_core = brk_st_top = -1;
     for (i = 0; i < 16; i++)
         brk_bar.core[i] = brk_bar.top[i] = brk_bar.hat[i] = '.';
     brk_bar.is_break = 0u;
@@ -179,12 +165,10 @@ void brk_set_kit(int k)
 {
     if ((unsigned)k > 1u)
         return;
-    kit = k;                             /* a voice keeps its own kit; the next step crossfades to the new one */
+    kit = k;                             /* a voice keeps its own kit; the next hit is the new kit's */
 }
 void brk_set_tempo(float bpm) { inc = BRK_RATE * (1.0f / 44100.0f) * bpm * (1.0f / 170.0f); }
 void brk_set_ext(int ext) { tol = ext ? TOL_EXT : TOL_INT; }
-void brk_set_evolve(float e) { evolve = e; }
-void brk_set_busy(float b) { busy = b; }
 
 void brk_levels(float core, float top, float ramp_samples)
 {
@@ -197,30 +181,6 @@ void brk_levels(float core, float top, float ramp_samples)
         stem[i].rem = r;
         stem[i].ramp = (d < 0.0f ? -d : d) / r;
     }
-}
-
-void brk_step(uint32_t sixteenth)
-{
-    const uint32_t step = sixteenth % BRK_NSTEP, bs = sixteenth % 16u;
-    const int filling = fill && bs >= 13u && sixteenth / 16u % 8u == 7u;
-    int core = (int)step, top = (int)step;
-    if (bs == 0u)
-        fill = 0u;
-    else if (bs == 12u)
-        fill = (uint8_t)(sixteenth / 16u % 8u == 7u && frand() < evolve);
-    if (filling)
-        core = (int)((step & ~15u) + 12u);   /* the snare again */
-    if (frand() >= 0.4f + 0.6f * busy)
-        top = -1;
-    else if (frand() < evolve * 0.5f)
-        top = (int)((rnd() >> 8) % 8u * 4u + step % 4u);
-    brk_st_core = (int8_t)core;
-    brk_st_top = (int8_t)top;
-    stem_step(BRK_CORE, core);
-    stem_step(BRK_TOP, top);
-    if ((stem[BRK_CORE].lvl > 0.0f || stem[BRK_CORE].tgt > 0.0f) &&
-        (bs == 0u || bs == 4u || bs == 10u || bs == 12u || filling))
-        brk_hits++;
 }
 
 /* ---- the patterns ----
@@ -985,7 +945,6 @@ float brk_pattern_step(uint32_t step, int flags, uint32_t seed)
     }
     brk_hat_hit = hc;
     brk_hat_vel = (float)brk_bar.vhat[bs] * 0.01f;
-    brk_st_core = (int8_t)(bc ? bc->slice : -1);
     brk_hit_core = cc;
     brk_hit_top = tc;
     xf_out = PAT_XF;

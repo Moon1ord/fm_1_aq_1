@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: MPL-2.0 */
-/* The break on the host: the decoder, the skeleton, TOP's rules, the player's joins. */
+/* The break on the host: the decoder, the player's joins, what a bar of hits does through it. */
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
@@ -20,6 +20,23 @@ static int fails;
 
 static float out[4096];
 static float peak, maxd, prev;
+
+/* a bar by hand: each letter a sound on that step, as hard as it goes */
+static void bar_of(const char *core, const char *top)
+{
+    int i;
+    memset(&brk_bar, 0, sizeof brk_bar);
+    for (i = 0; i < 16; i++) {
+        brk_bar.core[i] = core[i];
+        brk_bar.top[i] = top[i];
+        brk_bar.hat[i] = '.';
+        brk_bar.vcore[i] = brk_bar.vtop[i] = 100u;
+    }
+}
+#define HITS "K...S.....k.S..."
+#define HITS_TOP ".f.....e.....f.."
+#define NO_HITS "................"
+static void stp(uint32_t s) { brk_pattern_step(s, 0, 0u); }
 static void play(float bpm, float spacing, uint32_t steps, uint32_t from)
 {
     float len = 44100.0f * 60.0f / (bpm * 4.0f) * spacing;
@@ -27,7 +44,7 @@ static void play(float bpm, float spacing, uint32_t steps, uint32_t from)
     float left = 0.0f;
     for (s = 0; s < steps; s++) {
         uint32_t n;
-        brk_step(from + s);
+        stp(from + s);
         left += len;
         n = (uint32_t)left;
         left -= (float)n;
@@ -46,7 +63,7 @@ static void play(float bpm, float spacing, uint32_t steps, uint32_t from)
     }
 }
 
-/* CORE-only fills: the largest |out - prev| in the 16 samples after a step that jumped (jmax), and elsewhere (nmax) */
+/* the largest |out - prev| in the 16 samples after a step that jumped (jmax), and elsewhere (nmax) */
 static float jmax, nmax;
 static void clicks(uint32_t steps, uint32_t from, float spacing)
 {
@@ -54,7 +71,7 @@ static void clicks(uint32_t steps, uint32_t from, float spacing)
     uint32_t s;
     for (s = 0; s < steps; s++) {
         uint32_t n, j0 = brk_jumps, first = 16u, j;
-        brk_step(from + s);
+        stp(from + s);
         first = brk_jumps != j0 ? 16u : 0u;
         left += len;
         n = (uint32_t)left;
@@ -95,100 +112,41 @@ int main(void)
             }
         }
 
-    /* the skeleton never moves, in 10 000 bars at full Evolve, and the fill does happen */
-    {
-        int fills = 0;
-        brk_init();
-        brk_set_evolve(1.0f);
-        brk_levels(1.0f, 1.0f, 1.0f);
-        for (s = 0; s < 160000u; s++) {
-            uint32_t bs = s % 16u;
-            brk_step(s);
-            if (bs == 0u || bs == 4u || bs == 10u || bs == 12u)
-                CHECK(brk_st_core == (int8_t)(s % BRK_NSTEP), "step %u played %d", s, brk_st_core);
-            else if (brk_st_core != (int8_t)(s % BRK_NSTEP)) {
-                CHECK(bs >= 13u && s / 16u % 8u == 7u, "a fill outside a phrase's last steps, step %u", s);
-                fills++;
-            }
-        }
-        CHECK(fills > 1000, "fills %d", fills);
-        printf("  fills in 10000 bars: %d\n", fills);
-    }
-
-    /* Evolve 0: no fill, TOP in order; Busy 0: about 40 % of TOP; Busy 1: all of it */
-    {
-        int on = 0;
-        brk_init();
-        brk_set_evolve(0.0f);
-        brk_set_busy(0.0f);
-        brk_levels(1.0f, 1.0f, 1.0f);
-        for (s = 0; s < 32000u; s++) {
-            brk_step(s);
-            CHECK(brk_st_core == (int8_t)(s % BRK_NSTEP), "evolve 0: core moved at %u", s);
-            if (brk_st_top >= 0) {
-                on++;
-                CHECK(brk_st_top == (int8_t)(s % BRK_NSTEP), "evolve 0: top moved at %u", s);
-            }
-        }
-        CHECK(on > 11000 && on < 14500, "busy 0: %d of 32000", on);
-        brk_set_busy(1.0f);
-        for (s = 0; s < 3200u; s++) {
-            brk_step(s);
-            CHECK(brk_st_top >= 0, "busy 1: a step without top");
-        }
-    }
-
-    /* TOP swaps keep the position in the beat */
-    {
-        int moved = 0;
-        brk_init();
-        brk_set_evolve(1.0f);
-        brk_set_busy(1.0f);
-        brk_levels(1.0f, 1.0f, 1.0f);
-        for (s = 0; s < 32000u; s++) {
-            brk_step(s);
-            CHECK(brk_st_top >= 0 && (uint32_t)brk_st_top % 4u == s % 4u, "top %d at step %u", brk_st_top, s);
-            moved += brk_st_top != (int8_t)(s % BRK_NSTEP);
-        }
-        CHECK(moved > 8000, "top moved %d", moved);
-    }
-
-    /* the joins: in order at any tempo in range, no crossfade after the first step */
+    /* the joins: a sound runs through its slices at any tempo in range, no crossfade but the one that starts it */
     {
         static const float T[3] = {150.0f, 170.0f, 180.0f};
         for (k = 0; k < 3; k++) {
             brk_init();
-            brk_set_evolve(0.0f);
-            brk_set_busy(1.0f);
             brk_set_tempo(T[k]);
             brk_levels(1.0f, 1.0f, 1.0f);
+            bar_of("K...............", NO_HITS);
             play(T[k], 1.0f, 1u, 0u);
             s = brk_jumps;
-            play(T[k], 1.0f, 640u, 1u);
-            CHECK(brk_jumps == s, "tempo %.0f: %u jumps playing in order", (double)T[k], brk_jumps - s);
+            play(T[k], 1.0f, 3u, 1u);
+            CHECK(brk_jumps == s, "tempo %.0f: %u jumps inside a kick", (double)T[k], brk_jumps - s);
         }
     }
 
-    /* the fills' crossfades are no click: CORE alone at Evolve 1, so every jump is a fill (CLICK is far below a hard
-     * cut, which is a snare's tail cut off); a kit change and quick jumps are held to it too */
+    /* a hit that cuts a tail is no click (CLICK is far below a hard cut, a snare's tail cut off); a kit change and quick hits are
+     * held to it too */
     {
         enum { PH = 128 };
         uint32_t j0;
         brk_init();
         brk_set_tempo(170.0f);
-        brk_set_evolve(1.0f);
         brk_levels(1.0f, 0.0f, 1.0f);
+        bar_of(HITS, NO_HITS);
         jmax = nmax = prev = 0.0f;
         clicks(PH * 40u, 0u, 1.0f);
-        printf("  fill jumps: %u, click %f, natural %f\n", brk_jumps, (double)jmax, (double)nmax);
-        CHECK(brk_jumps >= 40u * 3u, "fills jumped %u times", brk_jumps);
-        CHECK(jmax < CLICK, "a fill's crossfade clicks: %f", (double)jmax);
+        printf("  hits' jumps: %u, click %f, natural %f\n", brk_jumps, (double)jmax, (double)nmax);
+        CHECK(brk_jumps >= 40u * 8u * 4u, "only %u jumps", brk_jumps);
+        CHECK(jmax < CLICK, "a hit's crossfade clicks: %f", (double)jmax);
 
-        /* a kit change in mid-play crossfades at the next step */
+        /* a kit change in mid-play: the sound under way goes on, in its own kit, to its end; the next hit is the new kit's */
         brk_init();
         brk_set_tempo(170.0f);
-        brk_set_evolve(0.0f);
         brk_levels(1.0f, 0.0f, 1.0f);
+        bar_of(HITS, NO_HITS);
         jmax = nmax = prev = 0.0f;
         clicks(1u, 0u, 0.02f);            /* the kick, loud, when the kit changes */
         brk_set_kit(1);
@@ -203,28 +161,28 @@ int main(void)
         /* steps faster than the fade: a voice still sounding is not started over */
         brk_init();
         brk_set_tempo(170.0f);
-        brk_set_evolve(0.0f);
         brk_levels(1.0f, 0.0f, 1.0f);
+        bar_of("KkSsKkSsKkSsKkSs", NO_HITS);
         jmax = nmax = prev = 0.0f;
         clicks(3u, 8u, 1.0f);
         clicks(256u, 11u, 0.005f);
-        printf("  quick jumps: click %f\n", (double)jmax);
-        CHECK(jmax < CLICK, "quick jumps click: %f", (double)jmax);
+        printf("  quick hits: click %f\n", (double)jmax);
+        CHECK(jmax < CLICK, "quick hits click: %f", (double)jmax);
 
-        /* a voice still sounding louder is not overwritten: two jumps in a row with no sound between them */
+        /* a voice still sounding louder is not overwritten: two hits in a row with no sound between them */
         brk_init();
         brk_set_tempo(170.0f);
-        brk_set_evolve(0.0f);
         brk_levels(1.0f, 0.0f, 1.0f);
-        brk_step(0u);
+        bar_of("K.S.s.c.........", NO_HITS);
+        stp(0u);
         memset(out, 0, sizeof out);
         brk_render(out, 700u);           /* the kick, loud */
-        brk_step(20u);                   /* a jump: the old voice fades, the new one fades in */
+        stp(2u);                         /* a jump: the old voice fades, the new one fades in */
         memset(out, 0, sizeof out);
         brk_render(out, 8u);
         prev = out[7];
-        brk_step(9u);
-        brk_step(26u);                   /* two more jumps before any sample is rendered */
+        stp(4u);
+        stp(6u);                         /* two more jumps before any sample is rendered */
         memset(out, 0, sizeof out);
         brk_render(out, 16u);
         printf("  louder voice kept: step %f (prev %f)\n", (double)fabsf(out[0] - prev), (double)prev);
@@ -252,20 +210,18 @@ int main(void)
         float pk = 0.0f;
         brk_init();
         brk_set_tempo(170.0f);
-        brk_set_evolve(0.0f);
-        brk_set_busy(1.0f);
+        bar_of(NO_HITS, "g...............");
         brk_levels(0.0f, 0.5f, 2048.0f);
-        brk_step(0u);
+        stp(0u);
         for (i = 0; i < 2048u; i += 256u) {
             memset(a + i, 0, sizeof(float) * 256u);
             brk_render(a + i, 256u);
         }
         brk_init();
         brk_set_tempo(170.0f);
-        brk_set_evolve(0.0f);
-        brk_set_busy(1.0f);
+        bar_of(NO_HITS, "g...............");
         brk_levels(0.0f, 1.0f, 2048.0f);
-        brk_step(0u);
+        stp(0u);
         for (i = 0; i < 2048u; i += 256u) {
             memset(b + i, 0, sizeof(float) * 256u);
             brk_render(b + i, 256u);
@@ -280,10 +236,9 @@ int main(void)
 
         brk_init();
         brk_set_tempo(170.0f);
-        brk_set_evolve(0.0f);
-        brk_set_busy(1.0f);
+        bar_of(HITS, HITS_TOP);
         brk_levels(1.0f, 0.5f, 1.0f);
-        brk_step(0u);
+        stp(0u);
         memset(a, 0, sizeof(float) * 256u);
         brk_render(a, 256u);
         brk_levels(0.0f, 0.0f, 1024.0f);
@@ -300,31 +255,17 @@ int main(void)
         brk_render(a, 0u);               /* an empty block is safe */
     }
 
-    /* a fill that was chosen does not outlive a jump in the count */
-    {
-        uint32_t base = 16u * (8u * 5u + 7u);
-        brk_init();
-        brk_set_evolve(1.0f);
-        brk_levels(1.0f, 1.0f, 1.0f);
-        brk_step(base + 12u);
-        brk_step(base + 13u);
-        CHECK(brk_st_core == (int8_t)((base + 12u) % BRK_NSTEP), "the fill was not chosen");
-        brk_step(16u * (8u * 5u + 3u) + 14u);
-        CHECK(brk_st_core == (int8_t)((16u * (8u * 5u + 3u) + 14u) % BRK_NSTEP), "a stale fill: %d", brk_st_core);
-    }
-
-    /* slower steps than the tempo: a slice ends and fades; the next slice's hit is not played early */
+    /* a sound over: it fades and nothing runs on into the next sound's head, however late the next step */
     {
         uint32_t d0;
         brk_init();
         brk_set_tempo(170.0f);
-        brk_set_evolve(0.0f);
-        brk_set_busy(1.0f);
-        brk_levels(1.0f, 1.0f, 1.0f);
-        play(170.0f, 1.0f, 1u, 0u);
+        brk_levels(1.0f, 0.0f, 1.0f);
+        bar_of("t...............", NO_HITS);   /* (the core's last sound but one: four slices) */
+        play(170.0f, 1.0f, 3u, 0u);
         d0 = brk_decoded;
-        play(170.0f, 3.0f, 1u, 1u);
-        CHECK(brk_decoded - d0 < 2u * (BRK_SLICE + 46u + 2u + 49u) + 16u, "ran on: %u samples", brk_decoded - d0);
+        play(170.0f, 3.0f, 1u, 3u);
+        CHECK(brk_decoded - d0 < (BRK_SLICE + 46u + 2u + 49u) + 16u, "ran on: %u samples", brk_decoded - d0);
     }
 
     /* silent stems cost nothing; a level of zero is silence */
@@ -332,6 +273,7 @@ int main(void)
         uint32_t d0;
         brk_init();
         brk_levels(0.0f, 0.0f, 1.0f);
+        bar_of(HITS, HITS_TOP);
         d0 = brk_decoded;
         peak = 0.0f;
         play(170.0f, 1.0f, 64u, 0u);

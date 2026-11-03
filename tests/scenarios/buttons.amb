@@ -1,0 +1,120 @@
+# the buttons, as a hand has them: PLAY, REC, EDIT, SEL + EDIT; what MIDI says through them on all five channels
+listen
+wait 200
+expect playing 1
+expect midion2 0
+# the first bars: intro, no drums. SEL + EDIT says so and does nothing
+expect section 0
+press SEL
+tap EDIT
+release SEL
+said NO DRUMS NO BREAK
+wait 1600
+expect section 0
+expect breakbars 0
+# PLAY: a rest. The chord stays down, the grid stops, the bass and the drums go
+expect midion1 >2
+expect midion4 >2
+tap PLAY
+said RESTING
+wait 100
+expect playing 0
+expect midion3 0
+expect midion10 0
+expect midion1 >2
+wait 6000
+expect pad_level >50
+expect keysdown >2
+expect midion1 >2
+expect midion4 >2
+tap PLAY
+said GROWING
+wait 100
+expect playing 1
+# EDIT: the next section, on the next bar
+tap EDIT
+said NEXT SECTION ON THE BAR
+wait 1600
+expect section 1
+expect stepofbar <16
+expect barpos <2
+# the same again, into the light drums
+tap EDIT
+wait 1600
+expect section 2
+expect barpos <2
+wait 1500
+expect level 2
+# the drums go out too: note-ons with their sound, note-offs after their gate
+out
+wait 3000
+out
+wait 3000
+expect_out USB 89 24 00
+expect_out USB 89 2A 00
+# channel 10, kick, snare, a closed hat, with the velocities the generator gave them at this seed; the bass and the pad's channel as well
+expect_out USB 99 24 72
+expect_out USB 99 26 69
+expect_out USB 99 2A 63
+expect_out USB 92 28 5A
+expect_out USB 93 39 50
+expect midion3 <2
+# SEL + EDIT: a break on the next bar
+press SEL
+tap EDIT
+release SEL
+said BREAK ON THE BAR
+wait 1500
+expect breakbars >0
+wait 6000
+expect breakbars 0
+# REC: the chord and the section stay, the rest goes on
+tap REC
+said HOLD ON
+wait 50
+expect held 1
+wait 30000
+expect section 2
+expect level 2
+tap EDIT
+wait 1600
+expect section 3
+wait 20000
+expect section 3
+expect midion1 >2
+tap REC
+said HOLD OFF
+wait 100
+expect held 0
+# MIDI out off: everything let go, nothing more
+tap GLO
+spin K3 -1
+wait 50
+expect midion1 0
+expect midion2 0
+expect midion3 0
+expect midion4 0
+expect midion10 0
+out
+wait 3000
+expect_no_out USB 89 2A 00
+expect_no_out USB 89 24 00
+expect_no_out USB F8 00 00
+spin K3 1
+wait 6000
+expect midion1 <13
+expect midion4 <5
+# MIDI Stop and Start
+midi FC 00 00
+wait 50
+expect playing 0
+expect midion3 0
+expect midion1 >2
+midi FB 00 00
+wait 50
+expect playing 1
+midi FA 00 00
+wait 50
+expect playing 1
+expect barpos 0
+expect section 3

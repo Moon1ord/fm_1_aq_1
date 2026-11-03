@@ -69,7 +69,9 @@ void en_clock(int msg);
 void en_render(int32_t *out_lr, uint32_t n, uint32_t gain_q12);
 void en_shed(void);   /* the audio interrupt's own: six key voices until the next piece, the others let go softly */
 
-/* MIDI out, from the render: the app sends it (USB); status, data 1, data 2 */
+/* MIDI out, from the render: the app sends it (USB); status, data 1, data 2. Channel 1 the keys, 2 the motifs, 3 the bass, 4 the pad's
+ * notes, 10 the drums (36 kick, 38 snare and, softer, ghosts, 37 rim, 45 tom, 42 closed hat, 46 open hat); clock. A layer at level 0
+ * still sends: that is how it is played from elsewhere */
 void en_midi_out(uint32_t st, uint32_t d1, uint32_t d2);
 
 /* state for the screen (UI) */
@@ -145,6 +147,7 @@ uint32_t en_test_section_bars(void);
 int en_test_silent(void);                       /* since en_panic */
 int en_test_bass_down(void);                    /* notes the engine thinks are down, by layer: what MIDI should say */
 int en_test_bells_on(void);
+int en_test_pad_sent(void);
 int en_test_keys_down(void);
 int en_test_keys_on(void);                      /* voices sounding or still fading */
 float en_test_keys_low(void);                   /* the quietest key held */

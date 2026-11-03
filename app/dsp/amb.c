@@ -1522,6 +1522,32 @@ typedef struct {
     uint8_t note;
 } pad_t;
 static pad_t pad[EN_NPAD];
+static uint8_t pad_sent[EN_NPAD];                /* MIDI channel 4: the notes said to be down; 0 none. Notes only: glides are not sent */
+
+/* the pad's notes on the change: those that stay stay down, the rest change. Says only, touches no sound */
+static void pad_midi(void)
+{
+    uint8_t now[EN_NPAD], was[EN_NPAD];
+    int i, j;
+    for (i = 0; i < EN_NPAD; i++) {
+        now[i] = pad[i].note;
+        was[i] = pad_sent[i];
+    }
+    for (i = 0; i < EN_NPAD; i++)                /* what is down already takes itself off both lists */
+        for (j = 0; j < EN_NPAD; j++)
+            if (was[i] && was[i] == now[j]) {
+                was[i] = now[j] = 0u;
+                break;
+            }
+    for (i = 0; i < EN_NPAD; i++)
+        if (was[i])
+            midi(0x83, was[i], 0);
+    for (i = 0; i < EN_NPAD; i++)
+        if (now[i])
+            midi(0x93, now[i], 80);
+    for (i = 0; i < EN_NPAD; i++)
+        pad_sent[i] = pad[i].note;
+}
 #if defined EN_HOST || defined PLAT_HOST
 int en_test_pad_off;
 #define PAD_TEST_GAIN (en_test_pad_off ? 0.0f : 1.0f)
@@ -1694,6 +1720,8 @@ static void ep_chord(float vel, int with_root)
             }
         if (keep) {                              /* it sounds already: no attack, a gentle swell to the new chord's level */
             const float was = e->amp * e->att, to = ep_amp_of(vel);
+            if (!e->held && e->hold <= 0)        /* it was letting go, and MIDI was told: its key is down again */
+                midi(0x90, e->note, (uint32_t)(fm_clampf(vel * song_touch, 0.05f, 1.0f) * 120.0f));
             if (to > was) {
                 e->att = was / to;
                 e->amp = to;
@@ -2037,6 +2065,66 @@ typedef struct {
     uint8_t on;
 } hat_t;
 static hat_t hat[2];                             /* 0 closed, 1 open */
+/* MIDI channel 10: a note for each hit, going out with its sound (a hat's swing, a ghost's lateness; the block it starts in), let go a
+ * fixed gate after. Says only: no random numbers, no sound. A step asks three at most and a gate is shorter than a step, so this is
+ * room to spare; were it ever full (a clock gone wild), the oldest lets go now and gives up its place */
+#define DRUM_GATE 1764                           /* 40 ms */
+#define NDRUMNOTES 8
+static struct {
+    int32_t wait, left;                          /* samples until it goes out; then until it lets go */
+    uint8_t note, vel, on;                       /* on: 1 waiting, 2 down */
+} drum_q[NDRUMNOTES];
+
+static void drum_up(int i)                       /* a place given up: its note let go, if it has gone out */
+{
+    if (drum_q[i].on == 2u)
+        midi(0x89, drum_q[i].note, 0);
+    drum_q[i].on = 0u;
+}
+
+static void drum_note(int note, int pct, int32_t wait)
+{
+    int i, at = 0;
+    int32_t most = -1;
+    if (!par[P_MIDI])
+        return;
+    for (i = 0; i < NDRUMNOTES && drum_q[i].on; i++)
+        if (drum_q[i].left + drum_q[i].wait < most || most < 0) {
+            most = drum_q[i].left + drum_q[i].wait;
+            at = i;
+        }
+    if (i < NDRUMNOTES)
+        at = i;
+    else
+        drum_up(at);
+    pct = pct * 11 / 10;                         /* (a percent, a kick a little over 100 at the most: not all at the ceiling) */
+    drum_q[at].note = (uint8_t)note;
+    drum_q[at].vel = (uint8_t)(pct < 1 ? 1 : pct > 127 ? 127 : pct);
+    drum_q[at].wait = wait;
+    drum_q[at].left = DRUM_GATE;
+    drum_q[at].on = 1u;
+}
+
+static void drum_notes(uint32_t n)               /* each chunk, before it renders: n samples */
+{
+    int i;
+    for (i = 0; i < NDRUMNOTES; i++) {
+        if (!drum_q[i].on)
+            continue;
+        if (drum_q[i].on == 1u) {
+            if (drum_q[i].wait >= (int32_t)n) {
+                drum_q[i].wait -= (int32_t)n;
+                continue;
+            }
+            midi(0x99, drum_q[i].note, drum_q[i].vel);
+            drum_q[i].on = 2u;
+        }
+        drum_q[i].left -= (int32_t)n;
+        if (drum_q[i].left <= 0)
+            drum_up(i);
+    }
+}
+
 static uint32_t hat_ph[4], hat_noise = 0x6C8E9CF5u;
 static float hat_lvl, hat_lvl_t, hat_vol = 1.0f;   /* hat_vol: the Hats knob, the level only: what they play is the drums' */
 static const uint32_t HAT_INC[4] = {300400000u, 448200000u, 589700000u, 781100000u};   /* 3.1, 4.6, 6.1, 8.0 kHz, inharmonic */
@@ -2068,6 +2156,7 @@ static void hat_hit(char c, float vel, int32_t wait)
 #if defined EN_HOST || defined PLAT_HOST
     en_hat_hits++;
 #endif
+    drum_note(open ? 46 : 42, (int)(vel * 100.0f), wait);
     if (!open && hat[1].on)
         hat[1].dec = fm_expf(-1.0f / (0.0035f * EN_SR));   /* choked */
 }
@@ -2260,7 +2349,7 @@ static void harmony_restart(void)                /* the top of the song */
 static void song_step(uint32_t s)
 {
     uint32_t cs;
-    int i, flags = 0, fresh_chord = 0;
+    int i, flags = 0, fresh_chord = 0, round = 0;
     float k;
 
     if (!(s & 15u))
@@ -2276,6 +2365,7 @@ static void song_step(uint32_t s)
         ep_lone = 0u;
         motif_choose(s / 16u);
         pad_swell_t = 1.0f;
+        round = 1;
     } else if (!ch_left) {
         en_part_t p;
         const uint32_t pass = pass_at(s);
@@ -2316,12 +2406,6 @@ static void song_step(uint32_t s)
             if (after.level < 2u)
                 want = 0;
         }
-        if (brk_asked) {                         /* the one asked for: to its phrase's end, whatever the knob and the hash say */
-            want = (int)(brk_asked_end - bar);
-            in = brk_asked_len - (uint32_t)want;
-            if (bar + 1u >= brk_asked_end)
-                brk_asked = 0u;
-        }
         brk_asked_now = brk_asked;
         if (brk_asked) {                         /* the one asked for: to its phrase's end, whatever the knob and the hash say */
             want = (int)(brk_asked_end - bar);
@@ -2352,6 +2436,23 @@ static void song_step(uint32_t s)
     k = brk_pattern_step(s, flags, song_seed);
     if (k > 0.0f)
         duck = fm_maxf(duck, k);
+    {                                            /* (what it chose, for MIDI: the kick, the snare, soft ones lower, the rim, the tom) */
+        const uint32_t bs = s & 15u;
+        const char cc = brk_hit_core, tc = brk_hit_top;
+        const int vc = brk_bar.vcore[bs], vt = brk_bar.vtop[bs];
+        if (cc == 'K' || cc == 'k')
+            drum_note(36, vc, 0);
+        else if (cc == 'S')
+            drum_note(38, vc, 0);
+        else if (cc == 's' || cc == 'c')
+            drum_note(38, vc * 6 / 10, 0);
+        else if (cc == 't')
+            drum_note(45, vc, 0);
+        if (tc == 'r')
+            drum_note(37, vt, !flags ? (int32_t)brk_bar.late[bs] * 44 : 0);
+        else if (tc == 'g' || tc == 'f' || tc == 'e')
+            drum_note(38, vt * 4 / 10, !flags ? (int32_t)brk_bar.late[bs] * 44 : 0);
+    }
     if (brk_hat_hit != '.')
         hat_hit(brk_hat_hit, brk_hat_vel, irand(40));
 
@@ -2361,6 +2462,7 @@ static void song_step(uint32_t s)
             pad[i].note = ch_now.pad_v[i];
             pad[i].tgt = 1.0f;
         }
+        pad_midi();
         publish_chord();
         pad_swell_t = 1.0f;
     } else if (cs == (ch_steps >= 32u ? 24u : 12u)) {
@@ -2399,7 +2501,7 @@ static void song_step(uint32_t s)
             const int off = en_bass_ch(&ch_now.ch, nx, h_pool, ch_count, cs, ch_steps, set, song_seed, &len);
             if (off >= 0)
                 bass_note(off, (uint32_t)len);
-        } else if (bass_song_t > 0.0f && fresh_chord) {
+        } else if (bass_song_t > 0.0f && (fresh_chord || round)) {
             bass_note(bass_off(ch_now.ch.bass), ch_steps);
         }
         if (bass_back) {
@@ -2731,6 +2833,13 @@ uint32_t en_test_section_bar(void) { return (song - arr_start) / 16u; }
 uint32_t en_test_section_bars(void) { return arr_cur.bars; }
 int en_test_silent(void) { return silent; }
 int en_test_bass_down(void) { return bass.hold > 0; }
+int en_test_pad_sent(void)
+{
+    int i, n = 0;
+    for (i = 0; i < EN_NPAD; i++)
+        n += pad_sent[i] != 0u;
+    return n;
+}
 int en_test_bells_on(void)
 {
     int i, n = 0;
@@ -2799,6 +2908,11 @@ static void notes_off(void)                      /* every note down let go, by n
             midi(0x81, bell[i].note, 0);
     if (bass.hold > 0)
         midi(0x82, bass.midi_note, 0);
+    for (i = 0; i < EN_NPAD; i++)
+        if (pad_sent[i])
+            midi(0x83, pad_sent[i], 0);
+    for (i = 0; i < NDRUMNOTES; i++)
+        drum_up(i);
     for (i = 0; i < 4; i++)
         midi(0xB0 | (uint32_t)i, 123, 0);
     midi(0xB9, 123, 0);
@@ -2871,6 +2985,8 @@ static void quiet(void)
     for (i = 0; i < EN_NPAD; i++)
         pad[i].amp = pad[i].tgt = 0.0f;
     pad_gain = pad_gate = 0.0f;
+    for (i = 0; i < EN_NPAD; i++)
+        pad_sent[i] = 0u;
     bass.amp = 0.0f;
     bass.hold = 0;
     en_pad_level = en_bass_level = en_break_level = 0.0f;
@@ -2952,6 +3068,10 @@ void en_init(void)
         ep[i].on = 0;
     for (i = 0; i < NBELL; i++)
         bell[i].on = 0;
+    for (i = 0; i < EN_NPAD; i++)
+        pad_sent[i] = 0u;
+    for (i = 0; i < NDRUMNOTES; i++)
+        drum_q[i].on = 0u;
     pad_gain = pad_gate = 0.0f;
     pad_swell = pad_swell_t = 0.8f;
     en_ep_notes = en_ep_chords = en_ep_singles = en_ep_steals = 0u;
@@ -3073,6 +3193,8 @@ static void silence_over(void)                   /* en_restore: it grows, from w
         pad[i].tgt = 1.0f;
     pad_gate = 1.0f;
     keys_back = 1u;
+    if (started)
+        pad_midi();
     if (!en_playing)
         play_start(!started);
 }
@@ -3648,6 +3770,7 @@ void en_render(int32_t *out, uint32_t n, uint32_t gain_q12)
         if (timed)
             pulse_left -= (float)k;
         control(k);
+        drum_notes(k);
         render_chunk(out, k, gain);
         out += 2 * k;
         n -= k;

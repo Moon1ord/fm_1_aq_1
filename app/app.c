@@ -3,29 +3,16 @@
 /* AMB-1 on fm1-base: the app's unity build (compiled into fm1-base's, after the platform) and the glue between
  * fm1-base's contract (app.h) and AMB-1's parts: the project (project.c), the UI (ui.c) and the engine (dsp/amb.c,
  * its own -O2 unit). */
+#include "midi_gate.h"
 #include "project.c"
 #include "ui.c"
 
 /* the engine's MIDI out (clock, notes when MIDI out is on): to USB */
-#ifdef PLAT_HOST
-static uint16_t ledger[4];                       /* the simulator's count of the notes MIDI has said are down: channels 1..4 (host.c) */
-static void ledger_note(uint32_t st, uint32_t d1, uint32_t d2)
-{
-    const uint32_t c = st & 15u;
-    if (c < 4u && (st & 0xF0u) == 0x90u && d2)
-        ledger[c]++;
-    else if (c < 4u && (st & 0xF0u) == 0x80u && ledger[c])
-        ledger[c]--;
-    else if (c < 4u && (st & 0xF0u) == 0xB0u && d1 == 123u)
-        ledger[c] = 0u;
-}
-#endif
+static midi_gate_t midi_owed;                    /* (the simulator's "midionN" reads it: the notes MIDI has said are down) */
 void en_midi_out(uint32_t st, uint32_t d1, uint32_t d2)
 {
-#ifdef PLAT_HOST
-    ledger_note(st, d1, d2);
-#endif
-    plat_midi_out(st >> 4 | st << 8 | d1 << 16 | d2 << 24);
+    if (midi_gate(&midi_owed, st, d1, d2, plat_midi_out_room(TO_USB)))
+        plat_midi_out(st >> 4 | st << 8 | d1 << 16 | d2 << 24);
 }
 
 /* ---- the contract */

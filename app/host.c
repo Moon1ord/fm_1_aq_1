@@ -44,8 +44,10 @@ int app_expect(const char *what, int *got)
         g = en_held;
     else if (!strcmp(what, "silent"))             /* since a panic */
         g = en_test_silent();
-    else if (!strncmp(what, "midion", 6))         /* midionN: the notes MIDI has said are down on channel N, 1..4 */
-        g = ledger[(atoi(what + 6) - 1) & 3];
+    else if (!strncmp(what, "midion", 6))         /* midionN: the notes MIDI has said are down on channel N */
+        g = midi_gate_ch((uint32_t)(atoi(what + 6) - 1)) >= 0 ? midi_owed.n[midi_gate_ch((uint32_t)(atoi(what + 6) - 1))] : 0;
+    else if (!strcmp(what, "padsent"))
+        g = en_test_pad_sent();
     else if (!strcmp(what, "keysdown"))           /* what the engine thinks they are: the keys, the motifs, the bass */
         g = en_test_keys_down();
     else if (!strcmp(what, "bellson"))

@@ -283,9 +283,11 @@ MIDI comes in over USB and the TRS jack, and goes out over USB.
 - **In, channel 1:** a note adds or removes its note from the scale, like a key.
 - **In, clock:** the beat follows MIDI clock, and start / stop start and stop the garden. The
   screen shows EXT for the tempo.
-- **Out** (on by default): the pad on channel 1, the bells on 2, the bass on 3 and the pulse on 10,
-  and clock with start / stop when AMB-1 runs on its own tempo. Turning MIDI out off sends all
-  notes off.
+- **Out** (on by default): the keys on channel 1, the motifs on 2, the bass on 3, the pad's notes on 4
+  (no glides) and the drums on 10 (kick 36, snare 38, ghosts and soft snares 38 lower, rim 37, tom 45,
+  closed hat 42, open hat 46), and clock with start / stop when it runs on its own tempo. A layer
+  turned down to 0 still sends, so you can play it from another instrument. Turning MIDI out off
+  lets every note go and sends all notes off.
 
 ### Screen reader
 

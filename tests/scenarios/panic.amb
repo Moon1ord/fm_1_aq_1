@@ -1,0 +1,58 @@
+# app_panic and its way back, as the platform does them around an update; and a shed
+wav panic.wav
+wait 200
+expect playing 1
+wait 60000
+expect pad_level >50
+peakreset
+expect midion1 >2
+panic
+wait 10
+expect silent 1
+expect playing 0
+expect pad_level 0
+expect keyson 0
+expect bellson 0
+expect bassdown 0
+expect midion1 0
+expect midion2 0
+expect midion3 0
+expect midion4 0
+expect midion10 0
+peakreset
+out
+wait 5000
+expect pad_level 0
+expect_no_out USB 89 24 00
+expect peak_db_max -119
+# PLAY does not bring it back
+tap PLAY
+wait 100
+expect silent 1
+expect playing 0
+expect pad_level 0
+# and the way back: it grows
+uiinit
+wait 500
+expect silent 0
+expect playing 1
+wait 8000
+expect pad_level >50
+expect keysdown >2
+expect midion1 >2
+expect midion4 >2
+expect bars >30
+wavstop
+# overloaded: six key voices, none lost for good; a new piece gives them back
+overload
+wait 500
+expect keyson <7
+expect keysdown >2
+wait 30000
+expect keyson <7
+turn PRESET 1
+wait 100
+turn PRESET -1
+wait 30000
+expect playing 1
+expect keysdown >2

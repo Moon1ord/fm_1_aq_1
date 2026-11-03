@@ -160,13 +160,16 @@ void en_voice_lead(const int *from, const int *pcs, int nt, int *to, int lo, int
         {1, 0, 2, 3}, {1, 0, 3, 2}, {1, 2, 0, 3}, {1, 2, 3, 0}, {1, 3, 0, 2}, {1, 3, 2, 0},
         {2, 0, 1, 3}, {2, 0, 3, 1}, {2, 1, 0, 3}, {2, 1, 3, 0}, {2, 3, 0, 1}, {2, 3, 1, 0},
         {3, 0, 1, 2}, {3, 0, 2, 1}, {3, 1, 0, 2}, {3, 1, 2, 0}, {3, 2, 0, 1}, {3, 2, 1, 0}};
-    int t[4], p, v, best = 1 << 30;
-    for (v = 0; v < 4; v++)
-        t[v] = pcs[v < nt ? v : 0];                        /* three tones: the root doubled */
+    int tab[4][4], p, v, w, best = 1 << 30;                /* voice v's nearest note of tone w: 16 sums, not 96 */
+    for (w = 0; w < 4; w++) {
+        const int pc = pcs[w < nt ? w : 0];                /* three tones: the root doubled */
+        for (v = 0; v < 4; v++)
+            tab[v][w] = nearest(from[v], pc, lo, hi);
+    }
     for (p = 0; p < 24; p++) {
         int c = 0, n[4], a, b;
         for (v = 0; v < 4; v++) {
-            n[v] = nearest(from[v], t[PERM[p][v]], lo, hi);
+            n[v] = tab[v][PERM[p][v]];
             c += n[v] > from[v] ? n[v] - from[v] : from[v] - n[v];
         }
         for (a = 0; a < 4; a++)                            /* no two voices on one note */

@@ -276,8 +276,8 @@ static void t_all_pools(void)
     }
     printf("  every pool and root: %u phrases, %u notes; most work in one phrase %u\n", phrases, notes, ops_most);
     CHECK(phrases > 50000u, "only %u phrases", phrases);
-    /* The bound: a phrase's work is fixed loops, whatever the pool, so this is a real ceiling; measured about %u, with room for the small pools */
-    CHECK(ops_most < 3000u, "the generator's work: %u", ops_most);
+    /* The bound: a phrase's work is fixed loops, whatever the pool: about 400 steps at the most, measured, each a few instructions */
+    CHECK(ops_most < 1000u, "the generator's work: %u", ops_most);
 }
 
 /* the cost in time, on this machine, against the block */
@@ -436,7 +436,7 @@ static void stat_checks(const melstat_t *s, const char *w)
     CHECK((double)s->steps1 / intervals > 0.40, "%s: steps %.2f", w, (double)s->steps1 / intervals);
     CHECK((double)s->steps2 / intervals > 0.80, "%s: a third or less %.2f", w, (double)s->steps2 / intervals);
     CHECK((double)s->same / intervals < 0.10, "%s: the same note again in %.0f%% of the intervals: drones", w, 100.0 * s->same / intervals);
-    CHECK(s->leaps_back * 100u >= s->leaps * 80u, "%s: %u of %u leaps turned back", w, s->leaps_back, s->leaps);
+    CHECK(s->leaps_back * 100u >= s->leaps * 90u, "%s: %u of %u leaps turned back", w, s->leaps_back, s->leaps);
     CHECK(s->unique_top * 100u >= s->phrases * 85u, "%s: one high point in %u of %u", w, s->unique_top, s->phrases);
     CHECK(s->top_first * 100u <= s->phrases * 45u, "%s: the high point first in %u of %u", w, s->top_first, s->phrases);
     CHECK(s->end_stable * 100u >= s->ends_s * 90u, "%s: %u of %u ends stable", w, s->end_stable, s->ends_s);
@@ -780,6 +780,8 @@ static void t_engine(void)
         en_render(b, 256, 1024);
         CHECK(mel_down == en_test_bells_on(), "MIDI says %d melody notes down, the engine %d", mel_down, en_test_bells_on());
         CHECK(en_test_bells_on() <= 1, "%d melody keys down at once", en_test_bells_on());
+        if (nph && en_bars > ph[nph - 1].at + ph[nph - 1].p.end + 1u)
+            CHECK(mel_down == 0, "a melody key down past its phrase's end, step %u", en_bars);
         most_voices = en_test_bell_voices() > most_voices ? en_test_bell_voices() : most_voices;
     }
     printf("  10 min, Rate 100: %u melody notes; at most %d key down, %d voices; a voice taken at level %.3f at the loudest; %u off a chord foreseen\n", mel_ons, mel_most, most_voices, (double)en_test_bell_stolen(), en_test_mel_refits - r0);
@@ -796,7 +798,8 @@ static void t_engine(void)
     CHECK(flagged > 0u && flagged < played, "%u of %u notes for the echo: some are passing tones", flagged, played);
     CHECK(en_test_bell_echoes - e0 <= flagged && en_test_bell_echoes - e0 + 7u >= flagged, "%u went to the echo, %u should", en_test_bell_echoes - e0, flagged);
     CHECK(mel_bad_off == 0, "%d note-offs for notes not down", mel_bad_off);
-    CHECK(most_voices <= 4, "%d voices", most_voices);
+    /* no more than the old bells had */
+    CHECK(en_test_bell_limit() == 4 && most_voices <= 4, "%d voices of %d", most_voices, en_test_bell_limit());
     CHECK(en_test_mel_refits == r0, "the chords were not as foreseen %u times, with nothing changed", en_test_mel_refits - r0);
     /* a rest: no new notes, the key lets go; growing again it goes on; panic leaves nothing down */
     en_play(0);
@@ -1029,7 +1032,7 @@ static void t_keys(void)
     /* the keys keep flowing with the melody on: lone notes a chord, against the melody at Rate 0 */
     {
         static int32_t b[512];
-        uint32_t n[2], c[2];
+        uint32_t n[2], c[2], under[2] = {0u, 0u};
         int r, i;
         for (r = 0; r < 2; r++) {
             uint32_t s0;
@@ -1037,12 +1040,17 @@ static void t_keys(void)
             en_set(P_MRATE, r ? 100 : 0);
             ledger_reset();
             s0 = en_ep_singles;
-            for (i = 0; i < 44100 * 300 / 256; i++)
+            for (i = 0; i < 44100 * 300 / 256; i++) {
+                const uint32_t s1 = en_ep_singles, sb = en_bars;
                 en_render(b, 256, 1024);
+                if (nph && sb >= ph[nph - 1].at + ph[nph - 1].p.note[0].step && sb < ph[nph - 1].at + ph[nph - 1].p.end)
+                    under[r] += en_ep_singles - s1;
+            }
             n[r] = en_ep_singles - s0;
             c[r] = key_ons;
         }
-        printf("  the keys in 5 min, Rate 0 and Rate 100: lone notes %u %u, all notes %u %u\n", n[0], n[1], c[0], c[1]);
+        printf("  the keys in 5 min, Rate 0 and Rate 100: lone notes %u %u (at Rate 100, %u during a phrase), all notes %u %u\n", n[0], n[1], under[1], c[0], c[1]);
+        CHECK(under[1] >= 5u, "the keys wait for the melody: %u lone notes during its phrases", under[1]);
         CHECK(n[1] * 10u >= n[0] * 6u, "the keys stop flowing round the melody: lone notes %u against %u", n[1], n[0]);
         CHECK(c[1] * 10u >= c[0] * 8u, "the keys stop flowing round the melody: notes %u against %u", c[1], c[0]);
     }

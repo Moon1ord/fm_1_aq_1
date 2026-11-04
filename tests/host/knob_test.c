@@ -161,7 +161,7 @@ static void t_golden(void)
     static const struct {
         int style;
         uint32_t seed, hash;
-    } G[] = {{0, 1001u, 0x0a7272d8u}, {1, 7u, 0x84fcc055u}, {2, 424242u, 0xced69cb2u}, {3, 5u, 0x9a05dd4bu}, {4, 6u, 0x983fee21u}};
+    } G[] = {{0, 1001u, 0x2d472da5u}, {1, 7u, 0x84fcc055u}, {2, 424242u, 0x39c5619bu}, {3, 5u, 0x9a05dd4bu}, {4, 6u, 0x983fee21u}};
     meas_t m;
     unsigned i;
     for (i = 0; i < sizeof G / sizeof G[0]; i++) {

@@ -2194,7 +2194,7 @@ static int mel_seen(const en_mel_t *st, uint16_t sig)
 static void motif_new(en_mel_t *st, const en_mel_in_t *in, int busy, int ns)
 {
     int tries;
-    for (tries = 0; tries < 8; tries++) {        /* (a bound: 16 bits of motifs against 64 that were had) */
+    for (tries = 0; tries < 8; tries++) {        /* (a bound: many more motifs than the ones it knows of) */
         motif_compose(in->seed, st->n * 8u + (uint32_t)tries, busy, ns, &st->now);
         if (!mel_seen(st, st->now.sig))
             break;
@@ -2575,7 +2575,6 @@ static void bell_strike(int timbre, int n, float vel, int echo, int32_t gate, fl
 #if defined EN_HOST || defined PLAT_HOST
     if (v->on && lo > bell_stolen)
         bell_stolen = lo;
-    en_test_bell_echoes += echo != 0;
 #endif
     en_mel_voice(timbre, par[P_MTONE], &tv);
     v->on = 1u;
@@ -2595,6 +2594,9 @@ static void bell_strike(int timbre, int n, float vel, int echo, int32_t gate, fl
     v->rdec = fm_expf(-6.9f / (tv.rel_s * EN_SR));
     v->esg = echo ? 0.15f : 0.0f;                /* only the note's start goes to the echo: its repeats are of that */
     v->edec = fm_expf(-1.0f / (0.14f * EN_SR));
+#if defined EN_HOST || defined PLAT_HOST
+    en_test_bell_echoes += v->esg > 0.0f;
+#endif
     v->vib = tv.vib;
     v->vph = 0.0f;
     v->vinc = 5.1f / EN_SR;
@@ -3514,6 +3516,7 @@ int en_test_bell_voices(void)
     return n;
 }
 float en_test_bell_stolen(void) { return bell_stolen; }
+int en_test_bell_limit(void) { return NBELL; }
 int en_test_keys_limit(void) { return ep_lim; }
 int en_test_keys_down_past(int from)            /* lone notes' keys down on voices from this one on */
 {

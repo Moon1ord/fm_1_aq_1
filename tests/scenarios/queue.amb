@@ -213,3 +213,20 @@ wait 60
 expect enagree 0
 wait 5000
 expect ducked 0
+# ---- the last piece of a quick turn has its own seed, as any piece has: nothing of its tail is lost (the simulator's seed: 7 + 1009 for each piece since the start)
+reboot
+wait 200
+expect seed 7
+turn PRESET 2 1
+wait 50
+expect seed 2025
+reboot
+wait 203
+turn PRESET 3 1
+wait 50
+expect seed 3034
+reboot
+wait 205
+turn PRESET 3 1
+wait 50
+expect seed 3034

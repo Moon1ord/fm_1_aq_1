@@ -102,7 +102,7 @@ int app_expect(const char *what, int *got)
         g = (int)scr.blinks;
     else if (!strcmp(what, "readsheds"))          /* Setup's reading as shown: its S */
         g = (int)scr.r_s;
-    else if (!strcmp(what, "brkshown"))           /* frames so far: of the break's frame */
+    else if (!strcmp(what, "brkshown"))           /* frames since drawreset: of the break's frame */
         g = (int)scr.brk_shown;
     else if (!strcmp(what, "brkquiet"))           /* of a break nobody hears: resting, the drums muted or at level 0 */
         g = (int)scr.brk_quiet;
@@ -216,6 +216,7 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
     }
     if (!strcmp(cmd, "drawreset")) {             /* the screen's counters afresh */
         scr.p_rows = scr.p_bytes = scr.p_px = scr.t_bytes = 0u;
+        scr.brk_shown = scr.brk_quiet = scr.brk_wrong = 0u;
         return 1;
     }
     if (!strcmp(cmd, "panic")) {                 /* what the platform does before an update */

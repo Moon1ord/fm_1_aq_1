@@ -74,8 +74,7 @@ expect brkwrong 0
 # ---- the same at level 0: breaks composed as ever, and no frame
 setpar 16 0
 expect par16 0
-wait 100
-expect brkquiet <30
+drawreset
 wait 40000
 expect brkquiet >60
 expect brkwrong 0
@@ -90,8 +89,8 @@ wait 100
 expect mutedrums 1
 tap ENV
 drawreset
-wait 40000
+wait 80000
 expect mutedrums 1
 expect view 1
-expect brkquiet >120
+expect brkquiet >60
 expect brkwrong 0

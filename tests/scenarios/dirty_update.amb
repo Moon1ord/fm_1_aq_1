@@ -1,12 +1,12 @@
 # An update cancelled at the computer: the platform panics, then starts the UI again. What was not saved is still not saved, and is still known to be
-wait 3000
+wait 5000
 spin K2 5
 expect dirty 1
 panic
-wait 300
+wait 2
 uiinit
 wait 300
-# it has nothing to write yet: it grows, and an autosave is for a rest
+# it has nothing to write yet, however long it has been on: it grows, and an autosave is for a rest
 expect store_writes 0
 expect dirty 1
 wait 6000

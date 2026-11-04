@@ -1,0 +1,97 @@
+# A performance by hand, five minutes in Hands: from the keys alone up through hats, half time, light and full, a break or two, layers taken away
+# and brought back on the beat, and down again to the keys. What a person could do with SELECT + the buttons and Energy (K2 on Home). A fixed seed;
+# app/build/listen/hands.trace has each bar. Not one of the tests.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/hands.amb app/build/listen
+master 2430
+tap PLAY
+wait 200
+seed 2026
+style liquid
+# Hands; Energy all the way down: no drums. Bass and melody off: the keys and the pad alone
+press SEL
+tap HOME
+tap LFO
+tap ARP
+release SEL
+spin K2 -70
+wait 200
+trace app/build/listen/hands.trace
+wav hands.wav
+tap PLAY
+# 0:00 the keys and the pad
+wait 20000
+# 0:20 the melody comes in (over a second)
+press SEL
+tap ARP
+release SEL
+wait 20000
+# 0:40 the bass, on a bar: long roots under it
+press SEL
+tap LFO
+release SEL
+wait 20000
+# 1:00 Energy 5: hats
+spin K2 5
+wait 20000
+# 1:20 Energy 22: half time
+spin K2 17
+wait 30000
+# 1:50 Energy 48: the light rhythm
+spin K2 26
+wait 25000
+# 2:15 a break asked for
+press SEL
+tap EDIT
+release SEL
+wait 10000
+# 2:25 Energy 72: the full rhythm
+spin K2 24
+wait 25000
+# 2:50 kick and snare out, on the bar: hats, bass, melody and keys carry it
+press SEL
+tap SEQ
+release SEL
+wait 11000
+# 3:01 the keys out as well, then all the drums back on one bar
+press SEL
+tap ENV
+release SEL
+wait 5500
+press SEL
+tap SEQ
+tap ENV
+release SEL
+wait 13500
+# 3:20 Energy 90: the peak
+spin K2 18
+wait 10000
+# 3:30 a break in it
+press SEL
+tap EDIT
+release SEL
+wait 30000
+# 4:00 hats off, Energy 48: back to the light rhythm, the kit bare
+press SEL
+tap FX
+release SEL
+spin K2 -42
+wait 20000
+# 4:20 the bass out, hats back; Energy 22: half time, the melody over it
+press SEL
+tap LFO
+tap FX
+release SEL
+spin K2 -26
+wait 15000
+# 4:35 the melody out; Energy 5: hats and keys
+press SEL
+tap ARP
+release SEL
+spin K2 -17
+wait 10000
+# 4:45 Energy 0: the keys and the pad, as it began
+spin K2 -5
+wait 15000
+# 5:00
+wavstop
+trace off

@@ -1,0 +1,330 @@
+# the player's arrangement, as a hand has it: SELECT + a page's button, a layer on or off; SELECT + HOME, Auto or Hands
+wait 300
+expect unfit 0
+listen
+expect view 0
+expect mode 0
+expect arrange 0
+expect mutekeys 0
+# a page button alone: its page, as ever; SELECT alone: nothing
+tap LFO
+expect view 3
+tap SEL
+wait 100
+expect view 3
+expect mutebass 0
+tap HOME
+expect view 0
+# SELECT + LFO: the bass off. The page stays, the level is not touched, it says so, the button's glow goes, the rest stays
+expect par12 50
+expect dim3 1
+press SEL
+tap LFO
+release SEL
+said BASS OFF
+wait 20
+expect view 0
+expect mutebass 1
+expect dim3 0
+expect dim2 1
+expect dim8 1
+expect lit6 1
+# (the page you are on stays lit, off or not; leave it and it goes dark)
+tap LFO
+expect view 3
+wait 20
+expect lit3 1
+tap HOME
+wait 20
+expect lit3 0
+expect dim3 0
+expect mutekeys 0
+expect par12 50
+expect dirty 0
+# and on
+press SEL
+tap LFO
+release SEL
+said BASS ON
+wait 20
+expect mutebass 0
+expect dim3 1
+# each of them, one press of SELECT for several
+press SEL
+tap ENV
+said KEYS OFF
+tap ARP
+said MELODY OFF
+tap SEQ
+said DRUMS OFF
+tap FX
+said HATS OFF
+tap LFO
+said BASS OFF
+release SEL
+wait 20
+expect view 0
+expect mutekeys 1
+expect mutemel 1
+expect mutedrums 1
+expect mutehats 1
+expect mutebass 1
+expect par4 60
+expect par8 60
+expect par16 45
+expect par18 50
+expect par12 50
+# SELECT let go: no page, no card. The levels knobs still move and nothing comes back on by that
+expect help 0
+tap ENV
+expect view 1
+spin K1 1
+expect par4 61
+spin K1 -1
+expect mutekeys 1
+tap HOME
+# all off: the meters read empty, MIDI goes on on all five
+wait 12000
+expect meter0 0
+expect meter1 0
+expect meter2 0
+expect meter3 0
+expect midion1 >0
+expect midion4 >0
+# EDIT: into the drums. A section changed nothing that is off; MIDI has the drums; a break asked for with the drums off is told no
+tap EDIT
+wait 1600
+tap EDIT
+wait 1600
+expect section 2
+expect mutedrums 1
+out
+wait 6000
+out
+wait 3000
+expect_out USB 89 24 00
+expect_out USB 89 2A 00
+expect mutebass 1
+press SEL
+tap EDIT
+release SEL
+said NO DRUMS NO BREAK
+# on again, and everything sounds, on the drums' bar too
+press SEL
+tap ENV
+tap ARP
+tap LFO
+tap SEQ
+tap FX
+release SEL
+wait 3000
+expect mutekeys 0
+expect mutedrums 0
+expect gain0 100
+expect gain3 100
+wait 8000
+expect meter0 >0
+# the drums off on the bar, the keys over a second
+press SEL
+tap SEQ
+release SEL
+expect gain3 100
+wait 2000
+expect gain3 0
+press SEL
+tap SEQ
+release SEL
+wait 2000
+expect gain3 100
+press SEL
+tap ENV
+release SEL
+wait 100
+expect gain0 >50
+expect gain0 <100
+wait 500
+expect gain0 <60
+wait 900
+expect gain0 0
+press SEL
+tap ENV
+release SEL
+wait 1200
+expect gain0 100
+# the card of a held button still comes up, and says so; with SELECT held there is none
+press ENV
+wait 1000
+expect help 3
+release ENV
+wait 50
+expect help 0
+expect view 0
+press SEL
+press ENV
+wait 1000
+expect help 0
+release ENV
+release SEL
+expect view 0
+expect mutekeys 1
+press SEL
+tap ENV
+release SEL
+# SELECT + GLO has no layer: it does nothing, not even the page
+press SEL
+tap GLO
+release SEL
+expect view 0
+# HOME's own: held with the SELECT encoder, the tempo; SELECT's button held, its other job does not come up
+press HOME
+turn SELECT 2 200
+release HOME
+expect par0 172
+expect view 0
+expect mode 0
+spin K1 -2
+expect par0 170
+# Hands: says so, marks the piece changed, leaves the place; no section comes by itself
+tap EDIT
+wait 1600
+expect section 3
+wait 200
+tap SAVE
+said SAVED
+expect dirty 0
+press SEL
+tap HOME
+release SEL
+said HANDS
+wait 50
+expect mode 1
+expect arrange 1
+expect dirty 1
+expect view 0
+wait 180000
+expect section 3
+expect mode 1
+# Energy: the drums, on the bar
+spin K2 -70
+expect par1 0
+wait 2000
+expect level 0
+spin K2 5
+wait 2000
+expect level 1
+spin K2 15
+wait 2000
+expect level 4
+spin K2 25
+wait 2000
+expect level 2
+spin K2 30
+wait 2000
+expect level 3
+expect section 4
+# EDIT: the next section, and it stays; Energy again
+tap EDIT
+said NEXT SECTION ON THE BAR
+wait 1600
+expect section 5
+wait 40000
+expect section 5
+spin K2 -1
+wait 2000
+expect section 4
+expect level 3
+# SELECT + EDIT: a break
+press SEL
+tap EDIT
+release SEL
+said BREAK ON THE BAR
+wait 2000
+expect breakbars >0
+wait 8000
+expect breakbars 0
+expect section 4
+expect level 3
+# saved with the piece, by format; what is off is not
+press SEL
+tap LFO
+release SEL
+expect mutebass 1
+tap SAVE
+said SAVED
+reboot
+wait 300
+expect mode 1
+expect arrange 1
+expect mutebass 0
+expect par1 74
+expect gain2 100
+# the next piece: its own (Auto), everything on; this one kept
+press SEL
+tap SEQ
+tap ARP
+release SEL
+wait 50
+expect mutedrums 1
+turn PRESET 1
+wait 200
+expect piece 1
+expect mode 0
+expect arrange 0
+expect mutedrums 0
+expect mutemel 0
+wait 2000
+expect gain3 100
+expect gain1 100
+turn PRESET -1
+wait 200
+expect piece 0
+expect mode 1
+expect arrange 1
+wait 3000
+expect level 3
+# SAVE held: back to the recipe: Auto, all on
+press SEL
+tap FX
+release SEL
+press SAVE
+wait 1800
+release SAVE
+wait 200
+expect mode 0
+expect arrange 0
+expect mutehats 0
+# Hands, off to a rest and back: there is no bar to wait for
+press SEL
+tap HOME
+release SEL
+said HANDS
+tap PLAY
+wait 200
+expect playing 0
+press SEL
+tap LFO
+release SEL
+wait 100
+expect gain2 0
+press SEL
+tap LFO
+release SEL
+wait 100
+expect gain2 100
+tap PLAY
+wait 200
+expect mode 1
+press SEL
+tap HOME
+release SEL
+said AUTO
+wait 50
+expect mode 0
+# the panic and its way back leave what is off, off
+press SEL
+tap LFO
+release SEL
+panic
+wait 200
+expect silent 1
+expect mutebass 1

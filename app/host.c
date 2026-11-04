@@ -4,7 +4,7 @@
  * "expect", its command, a reboot and the screen reader's dump.
  *
  * AMB-1's checks: playing held silent midionN keysdown bellson bassdown keyson breakbars barpos stepofbar bars chordhash view piece pool dirty sixteenths ext pad_level bass_level chordroot chordN loopnotes
- * parN battery section style level mask enmask keyslit help ringN mode arrange mutekeys mutemel mutebass mutedrums mutehats gainN meterN dimbtn litbtn (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
+ * parN battery section style level mask enmask keyslit help ringN mode arrange mutekeys mutemel mutebass mutedrums mutehats gainN meterN dimN litN (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
  * values, help lines and messages wider than their places. Its commands:
  * storeamb (what AMB-1 leaves in the store: its magic and format, nothing of ours); storeold (the project as it is, whole, but
  * for the format before this one); battery N (the battery read as N,
@@ -70,10 +70,10 @@ int app_expect(const char *what, int *got)
         float lv[4];
         meters_read(lv);
         g = (int)(lv[atoi(what + 5) & 3] * 100.0f);
-    } else if (!strcmp(what, "dimbtn"))           /* the buttons glowing, and lit */
-        g = (int)dim_btn;
-    else if (!strcmp(what, "litbtn"))
-        g = (int)lit_btn;
+    } else if (!strncmp(what, "dim", 3))          /* dimN, litN: button N (plat.h B_*) glowing, lit */
+        g = (int)(dim_btn >> atoi(what + 3) & 1u);
+    else if (!strncmp(what, "lit", 3))
+        g = (int)(lit_btn >> atoi(what + 3) & 1u);
     else if (!strcmp(what, "held"))
         g = en_held;
     else if (!strcmp(what, "silent"))             /* since a panic */

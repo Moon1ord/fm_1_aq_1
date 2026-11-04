@@ -92,11 +92,12 @@ The drawing at the top shows them all; here they are in more detail.
 | Keys | The scale. Each key adds its note to the scale or takes it out; the keys light up for the notes in it. Every octave of a note is the same key. The root stays, and the scale keeps at least three notes. |
 | PLAY | Grow / rest. AMB-1 starts growing by itself when it's switched on. At rest, the sounds fade out slowly and the reverb rings away. Lit green while growing. |
 | REC | **Freeze**: the chord holds and the reverb rings on forever, while the bells and pulse go on dry above it. Press again to thaw. Lit while frozen. |
-| EDIT | The next chord, at the start of the next bar (at once while resting). |
-| HOME | The Garden page: the whole garden. |
+| EDIT | The next section, at the start of the next bar (when it grows again, while resting). SELECT + EDIT: a break on the next bar, if there are drums to play it. |
+| HOME | The Home page: the whole piece. SELECT + HOME: the arrangement, Auto or Hands (see below). |
 | ENV · ARP · LFO · SEQ | The layers' pages: Pad, Bells, Bass, Pulse. |
 | FX · GLO | The Space and Setup pages. The lit button shows the page. |
-| SELECT | The previous or next page. Hold HOME and turn it for the tempo, from any page. |
+| SELECT + ENV · ARP · LFO · SEQ · FX | A layer on or off (see below). The page does not change. |
+| SELECT | Turn: the previous or next page. Hold HOME and turn it for the tempo, from any page. Pressed alone it does nothing. |
 | ALGORITHM | Mode: Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, pentatonic major and minor. Loads the mode's scale; editing it with the keys makes it Custom. |
 | PRESETS | The piece (see [The pieces](#s6)). |
 | KNOB 1–4 | The four values on the screen. A few clicks are always single steps; a quick turn speeds up, so half a turn sweeps the range. |
@@ -108,6 +109,57 @@ The drawing at the top shows them all; here they are in more detail.
 another button puts the card away; letting go after it does nothing else.
 
 ![SAVE's card over the Pad page: SAVES ALL EIGHT PIECES. KEEP HOLDING: THE PIECE BACK TO ITS RECIPE](img/screen-help.png "SAVE's card")
+
+### Arranging it yourself
+
+Hold SELECT and press a layer's button to take that layer out, or bring it back:
+
+| Hold SELECT, press | Layer | When |
+|---|---|---|
+| ENV | Keys and pad | Over about a second |
+| ARP | Melody | Over about a second |
+| LFO | Bass | On the next bar line |
+| SEQ | Kick and snare, with the ghosts, rim and tom | On the next bar line |
+| FX | Hats | On the next bar line |
+
+(While resting there is no bar to wait for: it happens at once.)
+
+A layer that's off only stops being heard. Its level stays where it was, its echoes and reverb ring
+out, its MIDI goes on as at level 0, and everything goes on composing unheard, so it comes back in
+the right place in the song, with the same notes it would have played anyway. With the drums off the
+kick no longer pulls the keys down. The screen says `BASS OFF` or `BASS ON`, and so on; the layer's
+meter reads empty, and its button loses its glow, unless it's the page you're on. All the layers come
+back on with a new piece, when a piece goes back to its recipe, and at power-on; they stay off through
+everything else.
+
+SELECT + HOME switches the piece between two ways of arranging, and the screen says `AUTO` or `HANDS`.
+The piece keeps its choice when saved.
+
+- **Auto:** the arranger leads the sections, as always, with what you've taken out staying out.
+- **Hands:** no section comes by itself, however long you wait. Switching to it holds what is playing
+  right now. Then turn **Energy**: from the next bar it alone sets the drums, and the bass, the piano's
+  touch, the harmony and the melody follow it:
+
+  | Energy | Drums |
+  |---|---|
+  | 0 | None |
+  | 1–9 | Hats |
+  | 10–34 | Half time |
+  | 35–59 | Light |
+  | 60–79 | Full |
+  | 80–100 | Full, and the harmony at its peak |
+
+  The higher the Energy, the busier the rhythm within each step too. The bass plays at every step, long
+  roots until there's a beat, so taking it out is up to you. The Style still counts: its rhythm, its bass
+  figures, how often it breaks (the Breaks knob), and the most its drums ever play, so Drift goes no higher
+  than half time. A piece saved in Hands starts straight away from its Energy.
+
+  EDIT still steps to the next section. The last hand wins: the section plays through as written and stays
+  on its last phrase, with Energy as its ceiling, until you turn Energy, and then Energy has it again.
+  SELECT + EDIT calls a break.
+
+  Back in Auto, the arranger goes on from where you are: from the section that plays what you've been
+  playing, and on round from there.
 
 ---
 

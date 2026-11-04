@@ -229,7 +229,7 @@ static float knob_curve(int v, int mid, float lo, float base, float hi)
 }
 
 /* ------------------------------------------------------------ commands --- */
-enum { C_SET, C_POOL, C_MASK, C_PLAY, C_NEXT, C_BREAK, C_HOLD, C_SEED, C_PANIC, C_RESTORE, C_CLOCK, C_REGROW };
+enum { C_SET, C_POOL, C_MASK, C_PLAY, C_NEXT, C_BREAK, C_HOLD, C_SEED, C_PANIC, C_RESTORE, C_CLOCK, C_REGROW, C_LAYER, C_LAYERS_ON, C_ARRANGE };
 #define QN 64u
 static uint32_t q[QN];
 static volatile uint32_t q_w, q_r;
@@ -262,9 +262,13 @@ void en_panic(void) { post(C_PANIC, 0, 0); }
 void en_restore(void) { post(C_RESTORE, 0, 0); }
 void en_clock(int msg) { post(C_CLOCK, msg, 0); }
 void en_regrow(void) { post(C_REGROW, 0, 0); }
+void en_layer(int layer, int on) { post(C_LAYER, layer, on); }
+void en_layers_on(void) { post(C_LAYERS_ON, 0, 0); }
+void en_arrange(int mode, int as_saved) { post(C_ARRANGE, mode, as_saved); }
 
 /* -------------------------------------------------------------- state --- */
 volatile uint8_t en_playing, en_held, en_ext;
+volatile uint8_t en_mute_keys, en_mute_mel, en_mute_bass, en_mute_drums, en_mute_hats, en_mode;
 volatile uint8_t en_chord[EN_NPAD], en_chord_root, en_chord_n, en_chord_bars;
 volatile float en_drift, en_pad_level, en_bass_level;
 volatile uint8_t en_loop_pos[EN_NLOOP];
@@ -395,11 +399,13 @@ static const struct {
 
 const brk_rhythm_t *en_style_rhythm(int style) { return &STYLE[(unsigned)style < EN_NSTYLES ? style : 0].rhythm; }
 
+static const uint8_t LV_RANK[5] = {0, 1, 3, 4, 2}, RANK_LV[5] = {0, 1, 4, 2, 3};   /* the levels by how much they play: none, hats, half time, light, full */
+static int energy_rank(int energy) { return energy < 10 ? 1 : energy < 35 ? 2 : energy < ENERGY_FULL ? 3 : 4; }
+
 static int arr_cap(int level, int energy)        /* a drum level under the energy's ceiling */
 {
-    static const uint8_t RANK[5] = {0, 1, 3, 4, 2}, LEVEL[5] = {0, 1, 4, 2, 3};
-    const int top = energy < 10 ? 1 : energy < 35 ? 2 : energy < ENERGY_FULL ? 3 : 4;
-    return RANK[level] > top ? LEVEL[top] : level;
+    const int top = energy_rank(energy);
+    return LV_RANK[level] > top ? RANK_LV[top] : level;
 }
 
 void en_arr_range(int style, int section, int energy, int *lo_bars, int *hi_bars)
@@ -443,19 +449,22 @@ void en_arr_next(en_arr_t *a, uint32_t seed, int style, int energy)
     arr_enter(a, next, seed, style, energy);
 }
 
+static uint32_t phase_one(int section, uint32_t phrases)   /* a section's first phase's phrases */
+{
+    switch (section) {
+    case EN_SEC_LIGHT: return 1u;
+    case EN_SEC_DOWN: return (phrases + 1u) / 2u;
+    case EN_SEC_FULL: return phrases > 3u ? phrases - 2u : phrases == 3u ? 2u : phrases;
+    case EN_SEC_OUT: return phrases > 1u ? phrases - 1u : 1u;
+    default: return phrases;
+    }
+}
+
 void en_arr_part(const en_arr_t *a, uint32_t bar_in, int style, int energy, en_part_t *o)
 {
     const style_t *st = &STYLE[(unsigned)style < EN_NSTYLES ? style : 0];
-    const uint32_t phrases = a->bars / EN_ARR_PHRASE;
-    uint32_t first = phrases;                    /* the first phase's phrases */
+    const uint32_t phrases = a->bars / EN_ARR_PHRASE, first = phase_one(a->section, phrases);
     int ph, lv;
-    switch (a->section) {
-    case EN_SEC_LIGHT: first = 1u; break;
-    case EN_SEC_DOWN: first = (phrases + 1u) / 2u; break;
-    case EN_SEC_FULL: first = phrases > 3u ? phrases - 2u : phrases == 3u ? 2u : phrases; break;
-    case EN_SEC_OUT: first = phrases > 1u ? phrases - 1u : 1u; break;
-    default: break;
-    }
     ph = bar_in >= first * EN_ARR_PHRASE;
     lv = st->lv[a->section][ph];
     o->section = a->section;
@@ -471,6 +480,39 @@ void en_arr_part(const en_arr_t *a, uint32_t bar_in, int style, int energy, en_p
     }
     if (energy < ENERGY_FULL && o->character == 3u)
         o->character = 2u;
+}
+
+/* Hands: Energy says it all, in the steps its ceiling has: nothing, hats, half time, light, full, and at the top the peak. Each step is the place in the
+ * song that plays so, and what the section does there, but for the bass: it is always there to be had, long roots until there is a beat, since which
+ * layers play is the player's now. Ramps of a bar: asked for, it comes. A style's numbers still count: its rhythm, its figures, its breaks, and the
+ * most its drums ever play (Drift's peak is half time; the harmony rises all the same) */
+void en_hands_part(int style, int energy, en_part_t *o)
+{
+    static const struct {
+        uint8_t from, section, character, bass, touch;
+    } STEP[6] = {
+        {0, EN_SEC_INTRO, 0, 75, 92},
+        {1, EN_SEC_HATS, 1, 75, 95},
+        {10, EN_SEC_DOWN, 1, 75, 96},
+        {35, EN_SEC_LIGHT, 2, 100, 100},
+        {ENERGY_FULL, EN_SEC_FULL, 2, 112, 108},
+        {80, EN_SEC_FULL, 3, 112, 114},
+    };
+    const style_t *st = &STYLE[(unsigned)style < EN_NSTYLES ? style : 0];
+    int i = 5, top = 0, s, ph;
+    while (energy < STEP[i].from)
+        i--;
+    for (s = 0; s < EN_NSECTIONS; s++)
+        for (ph = 0; ph < 2; ph++)
+            if (LV_RANK[st->lv[s][ph]] > top)
+                top = LV_RANK[st->lv[s][ph]];
+    ph = i ? energy_rank(energy) : 0;
+    o->section = STEP[i].section;
+    o->level = RANK_LV[ph < top ? ph : top];
+    o->character = STEP[i].character;
+    o->ramp = 1u;
+    o->bass = STEP[i].bass;
+    o->touch = STEP[i].touch;
 }
 
 int en_arr_break(uint32_t bar, int level, int style, int breaks, uint32_t seed, uint32_t *in)
@@ -2722,8 +2764,51 @@ static void hat_hit(char c, float vel, int32_t wait)
         hat[1].dec = fm_expf(-1.0f / (0.0035f * EN_SR));   /* choked */
 }
 
+/* ------- the layers on and off: a gain on each, where it leaves for the mix and the room; the voices play on underneath */
+#define MUTE_RATE_S(s) (1.0f / ((s) * EN_SR))
+static const float MUTE_RATE[EN_NLAYERS] = {MUTE_RATE_S(1.0f), MUTE_RATE_S(1.0f), MUTE_RATE_S(0.015f), MUTE_RATE_S(0.005f), MUTE_RATE_S(0.005f)};
+static float mute_pos[EN_NLAYERS], mute_to[EN_NLAYERS];   /* the way along it, 0..1, and where it is going; the gain is its square */
+static float mg[EN_NLAYERS], mgd[EN_NLAYERS];    /* this chunk's: the first sample's gain, and the step a sample */
+
+static void mutes_bar(void)                      /* on the bar, or resting, there being none: bass and drums take what has been asked */
+{
+    mute_to[EN_L_BASS] = en_mute_bass ? 0.0f : 1.0f;
+    mute_to[EN_L_DRUMS] = en_mute_drums ? 0.0f : 1.0f;
+    mute_to[EN_L_HATS] = en_mute_hats ? 0.0f : 1.0f;
+}
+
+static void layer_set(int l, int off)
+{
+    const uint8_t v = (uint8_t)(off != 0);
+    switch (l) {
+    case EN_L_KEYS: en_mute_keys = v; mute_to[l] = v ? 0.0f : 1.0f; break;
+    case EN_L_MEL: en_mute_mel = v; mute_to[l] = v ? 0.0f : 1.0f; break;
+    case EN_L_BASS: en_mute_bass = v; break;
+    case EN_L_DRUMS: en_mute_drums = v; break;
+    case EN_L_HATS: en_mute_hats = v; break;
+    default: break;
+    }
+}
+
+static void mutes_step(uint32_t n)
+{
+    int l;
+    for (l = 0; l < EN_NLAYERS; l++) {
+        const float to = mute_to[l], g0 = mute_pos[l] * mute_pos[l];
+        float p = mute_pos[l];
+        if (p != to) {
+            const float d = MUTE_RATE[l] * (float)n;
+            p = p < to ? fm_minf(p + d, to) : fm_maxf(p - d, to);
+            mute_pos[l] = p;
+        }
+        mg[l] = g0;
+        mgd[l] = (p * p - g0) * (1.0f / (float)n);
+    }
+}
+
 static int song_level;
 static float brk_fc, brk_fc_t, pad_fc, pad_fc_t, duck, duck_s, lift, lift_t;
+static float duck0, duck1;                       /* this chunk's duck, ramped: 0 none .. 1 the kick's full weight */
 
 static int memcmp_part(const en_part_t *a, const en_part_t *b)
 {
@@ -2759,12 +2844,20 @@ void (*en_trace_chord)(uint32_t step, const en_gchord_t *chord, int character);
 
 static uint32_t song;                            /* the next step */
 
+/* Hands. Energy's (hands_energy): en_hands_part, and the arranger only keeps the place, for Auto to go on from. A section left to itself: the phrase it
+ * is in comes round, as held; after EDIT (hands_run) it plays on as written first, to its last phrase, and that comes round */
+static uint8_t hands, hands_energy, hands_run;
+
 /* a step's bar of the section. A section is whole phrases from a phrase's start, so held, the phrase it is in simply comes round
  * again: what is asked of a later bar is that bar of this phrase */
 static uint32_t bars_in(uint32_t s)
 {
     uint32_t in = (s - arr_start) / 16u;
-    if (en_held) {
+    if (hands && hands_run && !en_held) {
+        const uint32_t last = (uint32_t)arr_cur.bars - EN_ARR_PHRASE;
+        if (in >= arr_cur.bars)
+            in = last + (in - last) % EN_ARR_PHRASE;
+    } else if (en_held || hands) {
         const uint32_t base = (song - arr_start) / 16u / EN_ARR_PHRASE * EN_ARR_PHRASE;
         if (in >= base + EN_ARR_PHRASE)
             in = base + (in - base) % EN_ARR_PHRASE;
@@ -2774,7 +2867,12 @@ static uint32_t bars_in(uint32_t s)
 
 static void part_at(uint32_t s, en_part_t *o)
 {
-    const uint32_t in = bars_in(s);
+    uint32_t in;
+    if (hands && hands_energy) {
+        en_hands_part(arr_style, par[P_ENERGY], o);
+        return;
+    }
+    in = bars_in(s);
     if (in < arr_cur.bars)
         en_arr_part(&arr_cur, in, arr_style, par[P_ENERGY], o);
     else
@@ -2787,6 +2885,24 @@ static void arr_follow(void)                     /* what comes after this sectio
     en_arr_next(&arr_nxt, song_seed, arr_style, par[P_ENERGY]);
 }
 
+/* Energy's section, kept for Auto to go on from: the place that plays what Energy asks, this bar of the phrase */
+static void hands_place(uint32_t s)
+{
+    en_part_t p;
+    en_hands_part(arr_style, par[P_ENERGY], &p);
+    if (p.section != arr_cur.section) {
+        const uint32_t phrase = 16u * EN_ARR_PHRASE;
+        uint32_t before = 0u;
+        arr_enter(&arr_cur, p.section, song_seed, arr_style, par[P_ENERGY]);
+        if (p.section == EN_SEC_DOWN || p.section == EN_SEC_LIGHT) {
+            const uint32_t phrases = arr_cur.bars / EN_ARR_PHRASE, first = phase_one(p.section, phrases);
+            before = first < phrases ? first : phrases - 1u;
+        }
+        arr_start = s - s % phrase - before * phrase;   /* (early in the song it wraps, and a difference from it is still right) */
+        arr_follow();
+    }
+}
+
 static void arr_bar(uint32_t s)                  /* on the bar */
 {
     uint32_t in;
@@ -2795,10 +2911,14 @@ static void arr_bar(uint32_t s)                  /* on the bar */
         en_arr_first(&arr_cur, song_seed, arr_style, par[P_ENERGY]);
         arr_start = 0u;
         arr_follow();
+        if (hands && hands_energy)
+            hands_place(s);
         return;
     }
-    if (en_held && s > arr_start && !(s % (16u * EN_ARR_PHRASE)))
+    if (s != arr_start && !(s % (16u * EN_ARR_PHRASE)) && (en_held || (hands && (!hands_run || (s - arr_start) / 16u >= arr_cur.bars))))
         arr_start += 16u * EN_ARR_PHRASE;        /* held: this phrase again, no time gone from the section */
+    if (hands && hands_energy)
+        hands_place(s);
     in = (s - arr_start) / 16u;
     if (in >= arr_cur.bars) {
         arr_cur = arr_nxt;
@@ -3028,8 +3148,10 @@ static void song_step(uint32_t s)
     int i, flags = 0, fresh_chord = 0, round = 0;
     float k;
 
-    if (!(s & 15u))
+    if (!(s & 15u)) {
         arr_bar(s);
+        mutes_bar();
+    }
     if (s == 0u) {
         inner_set = 0;
         harmony_restart();
@@ -3197,6 +3319,8 @@ static void section_next(void)
     next_due = 0u;
     brk_asked = 0u;
     arr_style = par[P_STYLE];
+    hands_energy = 0u;
+    hands_run = hands;
     arr_follow();
     arr_cur = arr_nxt;
     if (song % phrase)
@@ -3492,6 +3616,8 @@ uint32_t en_test_chord_left(void) { return ch_left; }
 uint32_t en_test_section_bar(void) { return (song - arr_start) / 16u; }
 uint32_t en_test_section_bars(void) { return arr_cur.bars; }
 int en_test_silent(void) { return silent; }
+float en_test_mute_gain(int l) { return mute_pos[l] * mute_pos[l]; }
+float en_test_duck(void) { return duck1; }
 int en_test_bass_down(void) { return bass.hold > 0; }
 int en_test_pad_sent(void)
 {
@@ -3605,6 +3731,10 @@ static void apply(int p, int v)
         v = pi->hi;
     if (p == P_MIDI && !v && par[P_MIDI])
         notes_off();                             /* while it can still be said */
+    if (p == P_ENERGY && hands && v != par[p]) { /* turned: from the next bar it is Energy's */
+        hands_energy = 1u;
+        hands_run = 0u;
+    }
     par[p] = (int16_t)v;
     switch (p) {
     case P_KEYS: ep_vol = pad_vol = (float)(v * v) * 0.0001f; break;   /* the pad follows the piano's level, one to one */
@@ -3720,6 +3850,12 @@ void en_init(void)
     en_playing = en_held = en_ext = 0u;
     started = silent = restore_due = 0u;
     next_due = break_due = brk_asked = brk_asked_now = 0u;
+    hands = hands_energy = hands_run = en_mode = 0u;
+    en_mute_keys = en_mute_mel = en_mute_bass = en_mute_drums = en_mute_hats = 0u;
+    for (i = 0; i < EN_NLAYERS; i++) {
+        mute_pos[i] = mute_to[i] = mg[i] = 1.0f;
+        mgd[i] = 0.0f;
+    }
     keys_back = bass_back = prep_due = 0u;
     hat_ph[0] = hat_ph[1] = hat_ph[2] = hat_ph[3] = 0u;
     hat[0].lp1 = hat[0].lp2 = hat[1].lp1 = hat[1].lp2 = 0.0f;
@@ -3968,6 +4104,27 @@ static void drain(void)
             else if (!en_playing)
                 play_start(!started);
             break;
+        case C_LAYER:
+            layer_set(a, !b);
+            break;
+        case C_LAYERS_ON:
+            for (a = 0; a < EN_NLAYERS; a++)
+                layer_set(a, 0);
+            break;
+        case C_ARRANGE:
+            if (a && !hands) {
+                hands = 1u;
+                hands_energy = b != 0;
+                hands_run = 0u;
+            } else if (a) {
+                hands_energy = hands_energy || b;
+            } else if (hands) {                  /* on from where it is: the place has been kept */
+                hands = hands_energy = hands_run = 0u;
+                if (started)
+                    arr_follow();
+            }
+            en_mode = hands;
+            break;
         case C_REGROW:                           /* a new piece: its key; the song goes on */
             harm_due = 1u;
             ep_lim = NKEYS;
@@ -3986,7 +4143,6 @@ static float mixl[BLK], mixr[BLK], rsend[BLK], esend[BLK];
 
 /* the melodic bus: filled by the pad, then (the same memory) by the piano */
 static float padl[BLK], padr[BLK];
-static float duck0, duck1;                       /* this chunk's duck, ramped: 0 none .. 1 the kick's full weight */
 
 static void render_pad(uint32_t n)
 {
@@ -4035,16 +4191,17 @@ static void render_pad(uint32_t n)
     en_pad_level = lvl;
     c = 1.0f - fm_expf(-FM_TWO_PI * fm_clampf(pad_fc * (1.0f + 0.35f * lift + 0.10f * motion * mod[4].v), 200.0f, 4000.0f) * (1.0f / EN_SR));
     {
-        const float dd = (duck1 - duck0) * (1.0f / (float)n);
-        float dk = duck0;
+        const float dd = (duck1 - duck0) * (1.0f / (float)n), md = mgd[EN_L_KEYS];
+        float dk = duck0, mv = mg[EN_L_KEYS];
         for (j = 0; j < n; j++) {
             float l, r, gd;
             plp[0] += c * (padl[j] - plp[0]);
             plp[1] += c * (plp[0] - plp[1]);
             plp[2] += c * (padr[j] - plp[2]);
             plp[3] += c * (plp[2] - plp[3]);
-            l = plp[1];
-            r = plp[3];
+            l = plp[1] * mv;
+            r = plp[3] * mv;
+            mv += md;
             dk += dd;
             gd = 1.0f - 0.22f * dk;
             mixl[j] += l * gd;
@@ -4062,8 +4219,8 @@ static void render_keys(uint32_t n)
     int i;
     uint32_t j;
     const float g = ep_vol * 0.62f * (1.0f + 0.18f * lift), cl = bright_bus + 0.12f * lift;         /* the bus's one pole: at the default ~3.6 kHz */
-    float trem0, trem1, dt, tr, gd, dg;
-    const float ibo = bloom_open;
+    float trem0, trem1, dt, tr, gd, dg, mv = mg[EN_L_KEYS];
+    const float ibo = bloom_open, md = mgd[EN_L_KEYS];
     {
         int on = 0;
         for (i = 0; i < ep_lim; i++)
@@ -4174,8 +4331,9 @@ static void render_keys(uint32_t n)
         dd = 1.0f - 0.05f * gd;                  /* barely: the piano must not be interrupted */
         a = 1.0f - 0.14f * (1.0f + tr);
         b = 1.0f - 0.14f * (1.0f - tr);
-        l = eplp[0];
-        r = eplp[1];
+        l = eplp[0] * mv;
+        r = eplp[1] * mv;
+        mv += md;
         mixl[j] += l * a * dd;
         mixr[j] += r * b * dd;
         rsend[j] += (l + r) * 0.55f;
@@ -4190,8 +4348,8 @@ static void render_bass(uint32_t n)
     uint32_t j;
     const float g = bass_vol * 0.86f * bass_song, tgt = bass.hold > 0 ? bass.sus : 0.0f,
                 rate = tgt > bass.amp ? 1.0f / (0.012f * EN_SR) : 1.0f / (0.022f * EN_SR);
-    const float dd = (duck1 - duck0) * (1.0f / (float)n);
-    float dk = duck0;
+    const float dd = (duck1 - duck0) * (1.0f / (float)n), md = mgd[EN_L_BASS];
+    float dk = duck0, mv = mg[EN_L_BASS];
     float ph = bass.ph, amp = bass.amp, idx = bass.idx, inc = bass.inc, spk = bass.spk;
     if (amp < 1e-5f && bass.hold <= 0) {
         bass.amp = 0.0f;
@@ -4199,7 +4357,8 @@ static void render_bass(uint32_t n)
         return;
     }
     for (j = 0; j < n; j++) {
-        const float m = sine(ph) * idx, x = sine(ph + m + 1.0f) * amp * g * (1.0f - 0.45f * dk);
+        const float m = sine(ph) * idx, x = sine(ph + m + 1.0f) * amp * g * (1.0f - 0.45f * dk) * mv;
+        mv += md;
         dk += dd;
         ph += inc;
         if (ph >= 1.0f)
@@ -4228,11 +4387,12 @@ static void render_bass(uint32_t n)
 static void render_bells(uint32_t n)
 {
     int i;
-    const float g = bell_vol * BELL_GAIN;
+    const float g = bell_vol * BELL_GAIN, md = mgd[EN_L_MEL];
     for (i = 0; i < NBELL; i++) {
         bell_t *v = &bell[i];
         float cph = v->cph, mph = v->mph, amp = v->amp, idx = v->idx, att = v->att, esg = v->esg, cinc = v->cinc, minc = v->minc;
         const float keep = v->ifl, adec = v->adec;
+        float mv;
         uint32_t j = 0;
         if (!v->on)
             continue;
@@ -4253,8 +4413,10 @@ static void render_bells(uint32_t n)
             cinc *= d;
             minc *= d;
         }
+        mv = mg[EN_L_MEL] + (float)j * md;
         for (; j < n; j++) {
-            const float m = sine(mph) * (idx + keep), x = sine(cph + m + 4.0f) * amp * att * g;
+            const float m = sine(mph) * (idx + keep), x = sine(cph + m + 4.0f) * amp * att * g * mv;
+            mv += md;
             mixl[j] += x * v->gl;
             mixr[j] += x * v->gr;
             rsend[j] += x * 0.30f;
@@ -4297,7 +4459,8 @@ static void render_break(uint32_t n)
     float pk = 0.0f;
     const float c = 1.0f - fm_expf(-FM_TWO_PI * brk_fc * (1.0f / EN_SR)),
                 ct = 1.0f - fm_expf(-FM_TWO_PI * TOP_FC[song_level] * (1.0f / EN_SR));   /* the hats have their own, wide open */
-    const float v = break_vol * 2.6f;
+    const float v = break_vol * 2.6f, md = mgd[EN_L_DRUMS];
+    float mv = mg[EN_L_DRUMS];
     for (j = 0; j < n; j++)
         brk_mix[j] = brk_top[j] = 0.0f;
     brk_render_stem(BRK_CORE, brk_mix, n);
@@ -4310,10 +4473,11 @@ static void render_break(uint32_t n)
         t = brk_lp[1] * v;
         brk_hp += 0.045f * (x - brk_hp);
         s = x - brk_hp;
-        mixl[j] += x + t * 0.52f;
-        mixr[j] += x + t * 0.52f;
-        rsend[j] += s * 0.16f + t * 0.40f;
-        esend[j] += s * 0.01f + t * 0.04f;
+        mixl[j] += (x + t * 0.52f) * mv;
+        mixr[j] += (x + t * 0.52f) * mv;
+        rsend[j] += (s * 0.16f + t * 0.40f) * mv;
+        esend[j] += (s * 0.01f + t * 0.04f) * mv;
+        mv += md;
         a = x < 0.0f ? -x : x;
         pk = a > pk ? a : pk;
     }
@@ -4327,12 +4491,13 @@ static void render_break(uint32_t n)
 static void render_hats(uint32_t n)
 {
     int i, on = 0;
-    const float g = break_vol * hat_lvl * 3.3f * hat_vol;
+    const float g = break_vol * hat_lvl * 3.3f * hat_vol, md = mgd[EN_L_HATS];
     hat_lvl += (hat_lvl_t - hat_lvl) * fm_minf((float)n * (1.0f / (0.4f * EN_SR)), 1.0f);
     for (i = 0; i < 2; i++) {
         hat_t *v = &hat[i];
         float amp = v->amp, l1 = v->lp1, l2 = v->lp2;
         const float dec = v->dec;
+        float mv;
         uint32_t j = 0, a = hat_ph[0], b = hat_ph[1], c = hat_ph[2], d = hat_ph[3], nz = hat_noise;
         if (!v->on)
             continue;
@@ -4345,6 +4510,7 @@ static void render_hats(uint32_t n)
             j = (uint32_t)v->wait;
             v->wait = 0;
         }
+        mv = mg[EN_L_HATS] + (float)j * md;
         for (; j < n; j++) {
             float x, y;
             a += HAT_INC[0];
@@ -4358,7 +4524,8 @@ static void render_hats(uint32_t n)
             l1 += HAT_HP * (x - l1);
             x -= l1;
             l2 += HAT_HP * (x - l2);
-            y = (x - l2) * amp * g;
+            y = (x - l2) * amp * g * mv;
+            mv += md;
             mixl[j] += y * 0.72f;
             mixr[j] += y * 0.92f;
             rsend[j] += y * 0.03f;               /* almost no room, no echo */
@@ -4386,11 +4553,12 @@ static void render_chunk(int32_t *out, uint32_t n, float gain)
     for (j = 0; j < n; j++)
         mixl[j] = mixr[j] = rsend[j] = esend[j] = 0.0f;
     /* the duck: the kick pulls the melodic bus down a little and lets it back in a quarter of a second */
-    duck0 = duck_s;
+    mutes_step(n);
+    duck0 = duck_s * mg[EN_L_DRUMS];             /* (a kick nobody hears pulls nothing down) */
     duck_s += (duck - duck_s) * fm_minf((float)n * (1.0f / (0.005f * EN_SR)), 1.0f);
     duck = fm_flush(duck * fm_expf(-(float)n * (1.0f / (0.11f * EN_SR))));
     duck_s = fm_flush(duck_s);                   /* no kick for minutes: never down among the denormals */
-    duck1 = duck_s;
+    duck1 = duck_s * (mute_pos[EN_L_DRUMS] * mute_pos[EN_L_DRUMS]);
     render_pad(n);
     render_keys(n);
     render_bass(n);
@@ -4421,6 +4589,8 @@ static void control(uint32_t n)                 /* once a chunk: the slow things
 {
     int i;
     const float slow = (float)n * (1.0f / (6.0f * EN_SR));
+    if (!en_playing)
+        mutes_bar();
     mods_step(n);
     heads_step(n);
     brk_fc += (brk_fc_t - brk_fc) * fm_minf(slow * (lift_t > 0.0f ? 4.0f : 1.0f), 1.0f);

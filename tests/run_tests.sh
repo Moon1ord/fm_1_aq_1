@@ -38,6 +38,8 @@ run knob sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promot
     -o $OUT/knob_test tests/host/knob_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/knob_test"
 run mel sh -c "$CC -O2 -ffp-contract=off -std=c99 -D_POSIX_C_SOURCE=200809L -D_DARWIN_C_SOURCE -Wall -Wextra -Wdouble-promotion -Werror -DEN_HOST -Iapp/dsp -Ibase/include \
     -o $OUT/mel_test tests/host/mel_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/mel_test"
+run hands sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promotion -Werror -DEN_HOST -Iapp/dsp -Ibase/include \
+    -o $OUT/hands_test tests/host/hands_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/hands_test"
 run ctl sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promotion -Werror -DEN_HOST -Iapp/dsp -Ibase/include \
     -o $OUT/ctl_test tests/host/ctl_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/ctl_test"
 run brk sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promotion -Werror -Iapp/dsp -o $OUT/brk_test tests/host/brk_test.c app/dsp/brk.c -lm && $OUT/brk_test"

@@ -20,13 +20,15 @@
 enum { OBJ_PROJ, OBJ_PANEL, OBJ_NOBJ };
 #define APP_STORE_MAP {0xFC000u, 0xDC000u}
 #define PROJ_MAGIC 0x31555141u           /* "AQU1" */
-#define PROJ_FORMAT 4u                   /* 4: the seven pages' knobs, the degrees (AMB-1's and older saves are not read: the recipes) */
+#define PROJ_FORMAT 5u                   /* 5: Auto or Hands, by piece. 4: the seven pages' knobs, the degrees (AMB-1's and older saves are not read: the recipes) */
 #define NPIECES EN_NPIECES
 
 typedef struct {
     int16_t par[P_NPARAMS];
     uint16_t pool;
     uint16_t mask;                       /* the notes chords may stand on, relative to the root */
+    uint8_t arrange;                     /* EN_AUTO, EN_HANDS */
+    uint8_t rsv;
 } slot_t;
 
 typedef struct {
@@ -36,7 +38,8 @@ typedef struct {
     uint16_t mask;                       /* the notes chords may stand on, likewise (SELECT + a key); a note out of the scale keeps its bit */
     uint8_t leds;                        /* lights: 0 off, 1 keys and the buttons' glow, 2 keys only */
     uint8_t piece;                       /* which piece */
-    uint8_t rsv0[2];
+    uint8_t arrange;                     /* its arrangement: EN_AUTO, EN_HANDS (SELECT + HOME) */
+    uint8_t rsv0;
     slot_t slot[NPIECES];                /* every piece as it was left (Tune and MIDI out are global) */
     uint8_t rsv[16];                     /* room to grow */
 } project_t;

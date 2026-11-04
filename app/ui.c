@@ -5,6 +5,8 @@
  *
  *   keys           the scale: each key adds or removes its note from the pool (the root stays)
  *   SEL + a key    whether chords may stand on that note; it stays in the scale either way (two roots stay, besides the tonic)
+ *   SEL + ENV ARP LFO SEQ FX   keys and pad, melody, bass, kick and snare, hats: on or off (off until the next piece or power-on; levels untouched)
+ *   SEL + HOME     the arrangement: Auto, or Hands (Energy is the drums, no section comes by itself), kept with the piece
  *   PLAY           it grows / rests: drums, bass and motifs stop and ring out, the hand and the pad stay on the chord
  *   REC            hold: no new chord, no new section; the drums, the bass and the motifs play on over the chord
  *   EDIT           the next section, on the next bar    SEL + EDIT   a break, on the next bar, if there are drums then
@@ -325,6 +327,7 @@ static void set_piece(int i)                    /* the piece playing kept as it 
 {
     project_piece(i);
     project_apply();
+    en_layers_on();
     en_seed(seed_now());
     en_regrow();
     say_as("PIECE", piece_name(proj.piece), 0);
@@ -345,12 +348,44 @@ static void edit(int sel)
     if (!sel) {
         en_next();
         say("NEXT SECTION", en_playing ? "ON THE BAR" : "WHEN IT GROWS");
-    } else if (en_playing && en_drum_next >= 2u && proj.par[P_DRUMS] > 0) {
+    } else if (en_playing && en_drum_next >= 2u && proj.par[P_DRUMS] > 0 && !en_mute_drums) {
         en_break();
         say("BREAK", "ON THE BAR");
     } else {
         warn("NO DRUMS", "NO BREAK");
     }
+}
+
+/* SELECT + a page's button: its layer on or off, the page stays where it is. HOME: the arrangement. Setup has nothing to turn off */
+static const struct {
+    uint8_t btn, layer;
+    const char *name;
+} LAYER_BTN[EN_NLAYERS] = {{B_ENV, EN_L_KEYS, "KEYS"}, {B_ARP, EN_L_MEL, "MELODY"}, {B_LFO, EN_L_BASS, "BASS"}, {B_SEQ, EN_L_DRUMS, "DRUMS"}, {B_FX, EN_L_HATS, "HATS"}};
+static int layer_off(int l)
+{
+    return l == EN_L_KEYS ? en_mute_keys : l == EN_L_MEL ? en_mute_mel : l == EN_L_BASS ? en_mute_bass : l == EN_L_DRUMS ? en_mute_drums : en_mute_hats;
+}
+static int sel_button(int b)                     /* 1: it was a page's */
+{
+    int v, i;
+    for (i = 0; i < EN_NLAYERS; i++)
+        if (LAYER_BTN[i].btn == b) {
+            const int off = layer_off(LAYER_BTN[i].layer);
+            en_layer(LAYER_BTN[i].layer, off);
+            say(LAYER_BTN[i].name, off ? "ON" : "OFF");
+            return 1;
+        }
+    if (b == B_HOME) {
+        proj.arrange = proj.arrange == EN_AUTO ? EN_HANDS : EN_AUTO;
+        en_arrange(proj.arrange, 0);
+        say(proj.arrange == EN_HANDS ? "HANDS" : "AUTO", 0);
+        mark_dirty();
+        return 1;
+    }
+    for (v = 0; v < NVIEWS; v++)
+        if (VIEW_BTN[v] == b)
+            return 1;
+    return 0;
 }
 
 static void button(int b)
@@ -463,6 +498,8 @@ static void input(void)
                 if (ui.edit_sel)
                     ui.btn_used |= 1u << B_SEL;
             }
+            if (btn >> B_SEL & 1u && (int)i != B_SEL && sel_button((int)i))
+                ui.btn_used |= m | 1u << B_SEL;  /* on the press; nothing on its release, no page, no card */
             if (i == B_PLAY)                   /* transport on the press */
                 button((int)i);
         } else if (!(ui.btn_used & m) && i != B_PLAY) {
@@ -516,6 +553,7 @@ static void input(void)
         ui.help = 0;
         project_piece_reset();
         project_apply();
+        en_layers_on();
         en_regrow();
         say("RESET", piece_name(proj.piece));
         mark_dirty();
@@ -883,17 +921,24 @@ static void draw_ring(void)
     }
 }
 
-static void draw_meters(void)                    /* left: the four layers */
+static void meters_read(float *lv)               /* a layer off shows empty */
 {
-    static const uint16_t C[4] = {K_PAD, K_BELL, K_BASS, K_PULSE}, T[4] = {K_PAD_T, K_BELL_T, K_BASS_T, K_PULSE_T};
-    float lv[4], bm = 0.0f;
+    float bm = 0.0f;
     int i;
     for (i = 0; i < EN_NLOOP; i++)
         bm = fm_maxf(bm, en_loop_glow[i]);
-    lv[0] = en_pad_level * (float)proj.par[P_KEYS] * 0.01f;
-    lv[1] = bm * (float)proj.par[P_MOTIFS] * 0.01f;
-    lv[2] = en_bass_level * (float)proj.par[P_BASS] * 0.01f;
-    lv[3] = en_break_level * 4.0f;
+    lv[0] = en_mute_keys ? 0.0f : en_pad_level * (float)proj.par[P_KEYS] * 0.01f;
+    lv[1] = en_mute_mel ? 0.0f : bm * (float)proj.par[P_MOTIFS] * 0.01f;
+    lv[2] = en_mute_bass ? 0.0f : en_bass_level * (float)proj.par[P_BASS] * 0.01f;
+    lv[3] = en_mute_drums ? 0.0f : en_break_level * 4.0f;
+}
+
+static void draw_meters(void)                    /* left: the four layers */
+{
+    static const uint16_t C[4] = {K_PAD, K_BELL, K_BASS, K_PULSE}, T[4] = {K_PAD_T, K_BELL_T, K_BASS_T, K_PULSE_T};
+    float lv[4];
+    int i;
+    meters_read(lv);
     for (i = 0; i < 4; i++) {
         int32_t x = 10 + i * 11, h = (int32_t)(fm_clampf(lv[i], 0.0f, 1.0f) * 80.0f + 0.5f);
         cv_round(x, 46, 7, 86, 3, T[i]);
@@ -912,12 +957,12 @@ static int help_lines(int b, const char *l[HELP_LINES])
     int n = 0;
 #define L(t) (l[n++] = (t))
     switch (b) {
-    case B_HOME: L("HOME"); L("TEMPO, ENERGY, EVOLVE, STYLE"); L("+ SELECT: TEMPO"); L("SEL + KEY: CHORDS ON IT, OR NOT"); break;
-    case B_ENV: L("THE KEYS"); L("LEVEL, BLOOM, BRIGHT, NOTES"); break;
-    case B_ARP: L("THE MOTIFS"); L("LEVEL, RATE, TONE, OCTAVE"); break;
-    case B_LFO: L("THE BASS"); L("LEVEL, MOVE, GLIDE, OCTAVE"); break;
-    case B_SEQ: L("THE DRUMS"); L("LEVEL, BREAKS, HATS, KIT"); break;
-    case B_FX: L("THE SPACE"); L("ECHO, ECHO TIME, REVERB,"); L("SIZE"); break;
+    case B_HOME: L("TEMPO, ENERGY, EVOLVE, STYLE"); L("HOLD + TURN SELECT: TEMPO"); L("SEL + KEY: CHORDS ON IT, OR NOT"); L("SEL + HOME: AUTO OR HANDS"); break;
+    case B_ENV: L("THE KEYS"); L("LEVEL, BLOOM, BRIGHT, NOTES"); L("SEL + ENV: KEYS AND PAD"); L(" ON OR OFF"); break;
+    case B_ARP: L("THE MOTIFS"); L("LEVEL, RATE, TONE, OCTAVE"); L("SEL + ARP: MELODY ON OR OFF"); break;
+    case B_LFO: L("THE BASS"); L("LEVEL, MOVE, GLIDE, OCTAVE"); L("SEL + LFO: BASS ON OR OFF"); break;
+    case B_SEQ: L("THE DRUMS"); L("LEVEL, BREAKS, HATS, KIT"); L("SEL + SEQ: KICK AND SNARE"); L(" ON OR OFF"); break;
+    case B_FX: L("THE SPACE"); L("ECHO, ECHO TIME, REVERB,"); L(" SIZE"); L("SEL + FX: HATS ON OR OFF"); break;
     case B_GLO: L("SETUP"); L("ROOT, TUNE, MIDI OUT, LIGHTS"); break;
     case B_EDIT: L("THE NEXT SECTION,"); L(" ON THE NEXT BAR"); L("+ SELECT: A BREAK,"); L(" ON THE NEXT BAR"); break;
     case B_REC: L("HOLD: THE CHORD STAYS,"); L(" NO NEW SECTION"); L("THE REST PLAYS ON"); L("AGAIN: LET GO"); break;
@@ -947,6 +992,7 @@ static void draw_main(void)
     uint32_t h = hash(2166136261u, pool_abs() | (uint32_t)proj.par[P_ROOT] << 12 | (uint32_t)en_held << 16 | proj.piece << 24 |
                                         (uint32_t)en_playing << 17 | (uint32_t)proj.par[P_MODE] << 20), i;
     h = hash(h, degrees_shown());
+    h = hash(h, (uint32_t)en_mute_keys | (uint32_t)en_mute_mel << 1 | (uint32_t)en_mute_bass << 2 | (uint32_t)en_mute_drums << 3);
     if (ui.frame % 3u)                           /* the garden moves slowly: 20 frames a second is plenty */
         return;
     if (ui.help) {
@@ -1056,16 +1102,32 @@ static uint32_t keys_lit(void)
     return k;
 }
 
+/* the page buttons of the layers that are off: no glow (the page you are on stays lit) */
+static uint32_t leds_dark(void)
+{
+    uint32_t d = 0u;
+    int i;
+    for (i = 0; i < EN_NLAYERS; i++)
+        if (layer_off(LAYER_BTN[i].layer))
+            d |= 1u << LAYER_BTN[i].btn;
+    return d & ~(1u << VIEW_BTN[ui.view]);
+}
+
 static void leds(void)
 {
-    uint32_t b = 0, k = keys_lit();
+    uint32_t b = 0, k = keys_lit(), dark = leds_dark();
     b |= 1u << VIEW_BTN[ui.view];
     if (en_playing)
         b |= 1u << B_PLAY;
     if (en_held)
         b |= 1u << B_REC;
     plat_glow(proj.leds == 1);
-    plat_leds(b, k);
+    if (!dark || proj.leds != 1) {
+        plat_leds(b, k);
+    } else {                                     /* plat_leds' own, less those; PLAY on its green LED */
+        const uint32_t play = 1u << B_PLAY, dim = ((1u << NB) - 1u) & ~b & ~dark;
+        plat_lights((b & ~play) | (b & play ? LED_PLAY_GREEN : 0u), k, (dim & ~play) | (dim & play ? LED_PLAY_GREEN : 0u), 0, 2);
+    }
 }
 
 /* AUTOSAVE: a few seconds after a change, while resting and quiet, nothing touched (a flash erase
@@ -1448,6 +1510,8 @@ static int ui_unfit(void)                             /* the host's "unfit": wha
     n += unfit_msg("NEXT SECTION", "WHEN IT GROWS");
     n += unfit_msg("BREAK", "ON THE BAR");
     n += unfit_msg("NO DRUMS", "NO BREAK");
+    for (x = 0; x < EN_NLAYERS; x++)
+        n += unfit_msg(LAYER_BTN[x].name, "OFF");
     for (x = 0; x < 12; x++)
         n += unfit_msg("NO CHORDS ON", EN_NOTE_NAME[x]);
     return n;
@@ -1456,7 +1520,9 @@ static void speak_dump(void)
 {
     static const char *const MSG[][2] = {{"UPDATE MODE IN", "3.."}, {"UPDATE MODE", "CANCELLED"},
                                          {"NEXT SECTION", "ON THE BAR"}, {"NEXT SECTION", "WHEN IT GROWS"}, {"BREAK", "ON THE BAR"},
-                                         {"RESTING", 0}, {"GROWING", 0}, {"HOLD", "ON"}, {"HOLD", "OFF"}, {"SAVED", 0}};
+                                         {"RESTING", 0}, {"GROWING", 0}, {"HOLD", "ON"}, {"HOLD", "OFF"}, {"SAVED", 0},
+                                         {"KEYS", "ON"}, {"KEYS", "OFF"}, {"MELODY", "ON"}, {"MELODY", "OFF"}, {"BASS", "ON"}, {"BASS", "OFF"},
+                                         {"DRUMS", "ON"}, {"DRUMS", "OFF"}, {"HATS", "ON"}, {"HATS", "OFF"}, {"HANDS", 0}, {"AUTO", 0}};
     static const char *const WARN[][2] = {{"THE ROOT STAYS", "(SETUP)"}, {"3 NOTES", "AT LEAST"},
                                           {"NOT SAVED", "FLASH ERROR"}, {"2 DEGREES", "AT LEAST"}, {"NOT IN", "THE SCALE"},
                                           {"NO DRUMS", "NO BREAK"}};

@@ -4,7 +4,7 @@
  * "expect", its command, a reboot and the screen reader's dump.
  *
  * AMB-1's checks: playing held silent midionN keysdown bellson bassdown keyson breakbars barpos stepofbar bars chordhash view piece pool dirty sixteenths ext pad_level bass_level chordroot chordN loopnotes
- * parN battery section style level mask enmask keyslit help ringN (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
+ * parN battery section style level mask enmask keyslit help ringN mode arrange mutekeys mutemel mutebass mutedrums mutehats gainN meterN dimbtn litbtn (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
  * values, help lines and messages wider than their places. Its commands:
  * storeamb (what AMB-1 leaves in the store: its magic and format, nothing of ours); storeold (the project as it is, whole, but
  * for the format before this one); battery N (the battery read as N,
@@ -50,6 +50,30 @@ int app_expect(const char *what, int *got)
     int g;
     if (!strcmp(what, "playing"))
         g = en_playing;
+    else if (!strcmp(what, "mode"))               /* the engine's arrangement, and the project's */
+        g = en_mode;
+    else if (!strcmp(what, "arrange"))
+        g = proj.arrange;
+    else if (!strcmp(what, "mutekeys"))
+        g = en_mute_keys;
+    else if (!strcmp(what, "mutemel"))
+        g = en_mute_mel;
+    else if (!strcmp(what, "mutebass"))
+        g = en_mute_bass;
+    else if (!strcmp(what, "mutedrums"))
+        g = en_mute_drums;
+    else if (!strcmp(what, "mutehats"))
+        g = en_mute_hats;
+    else if (!strncmp(what, "gain", 4))           /* gainN: layer N's gain, % */
+        g = (int)(en_test_mute_gain(atoi(what + 4)) * 100.0f);
+    else if (!strncmp(what, "meter", 5)) {        /* meterN: the meter N's reading, % */
+        float lv[4];
+        meters_read(lv);
+        g = (int)(lv[atoi(what + 5) & 3] * 100.0f);
+    } else if (!strcmp(what, "dimbtn"))           /* the buttons glowing, and lit */
+        g = (int)dim_btn;
+    else if (!strcmp(what, "litbtn"))
+        g = (int)lit_btn;
     else if (!strcmp(what, "held"))
         g = en_held;
     else if (!strcmp(what, "silent"))             /* since a panic */

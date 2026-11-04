@@ -15,6 +15,7 @@ static void recipe(int i, slot_t *s)
 {
     en_piece(i, s->par, &s->pool);
     s->mask = EN_MASK_ALL;
+    s->arrange = EN_AUTO;
 }
 
 static void take(const slot_t *s)                /* a piece's settings into play, the globals kept */
@@ -25,6 +26,7 @@ static void take(const slot_t *s)                /* a piece's settings into play
             proj.par[p] = s->par[p];
     proj.pool = s->pool;
     proj.mask = s->mask;
+    proj.arrange = s->arrange;
 }
 
 static void keep(void)                           /* the piece playing, into its slot */
@@ -34,6 +36,7 @@ static void keep(void)                           /* the piece playing, into its 
         proj.slot[proj.piece].par[p] = proj.par[p];
     proj.slot[proj.piece].pool = proj.pool;
     proj.slot[proj.piece].mask = proj.mask;
+    proj.slot[proj.piece].arrange = proj.arrange;
 }
 
 void project_defaults(void)
@@ -74,10 +77,10 @@ static int project_valid(void)                  /* another or a damaged save: th
     int i;
     if (proj.magic != PROJ_MAGIC || !pool_ok(proj.pool) || proj.mask >> 12 || !pars_ok(proj.par))
         return 0;
-    if (proj.format != PROJ_FORMAT || proj.piece >= NPIECES)
+    if (proj.format != PROJ_FORMAT || proj.piece >= NPIECES || proj.arrange > EN_HANDS)
         return 0;
     for (i = 0; i < NPIECES; i++)
-        if (!pool_ok(proj.slot[i].pool) || proj.slot[i].mask >> 12 || !pars_ok(proj.slot[i].par))
+        if (!pool_ok(proj.slot[i].pool) || proj.slot[i].mask >> 12 || !pars_ok(proj.slot[i].par) || proj.slot[i].arrange > EN_HANDS)
             return 0;
     return 1;
 }
@@ -122,4 +125,5 @@ void project_apply(void)
         en_set(i, proj.par[i]);
     en_mask(proj.mask);
     en_pool(proj.pool);
+    en_arrange(proj.arrange, 1);
 }

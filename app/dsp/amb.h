@@ -7,6 +7,7 @@
  * What the buttons ask. Growing (en_play 1): all of it. Resting (en_play 0): the grid stops; drums, bass and motifs let go and ring out,
  * the hand and the pad stay on the chord; growing again goes on from exactly there. Held (en_hold): no new chord and no new section,
  * and everything else plays on over the chord. en_next: the next section, en_break: a break, each on the next bar.
+ * en_layer: a layer on or off, as a gain: nothing that composes or plays knows of it. en_arrange: Auto, the arranger leads; Hands, Energy does.
  *
  * Threads: en_render() runs in the audio interrupt. Everything else posts commands, which the render
  * drains at the start of a block; the state below marked (UI) is written by the render and only read
@@ -60,6 +61,17 @@ void en_seed(uint32_t s);                      /* a new seed (24 bits are used):
 void en_panic(void);                           /* everything quiet, now, and it stays so until en_restore */
 void en_restore(void);                         /* it grows, from where it was; the first time, from the top */
 void en_regrow(void);                          /* a new piece: its key; the song goes on */
+/* The layers, on and off. Off is a gain and nothing else: what composes goes on composing and MIDI goes on, like a level of 0, and the room rings out
+ * what it had. Keys (with the pad) and melody go over about a second; bass, kick and snare (with the ghosts, the rim, the tom and the kick's duck)
+ * and hats on the next bar line, at once while resting. A panic leaves them; a start has them all on. */
+enum { EN_L_KEYS, EN_L_MEL, EN_L_BASS, EN_L_DRUMS, EN_L_HATS, EN_NLAYERS };
+void en_layer(int layer, int on);
+void en_layers_on(void);                       /* all of them, as each would come back */
+/* Auto: the arranger leads. Hands: no section comes by itself; turning Energy sets the drums, the bass and the harmony from then on (en_hands_part),
+ * and EDIT goes to the next section, which stays, on its last phrase, Energy its ceiling, until Energy is turned: the last hand wins. as_saved 0 (the
+ * button) holds what is playing until then; as_saved 1 (a piece taken up) is Energy's at once. Back to Auto it goes on from where it is */
+enum { EN_AUTO, EN_HANDS };
+void en_arrange(int mode, int as_saved);
 /* MIDI clock in (as FoMni): ticks drive the 1/16 grid (6 a step) while they keep coming. Stop rests, Continue grows on. Start grows
  * from the top of a bar and a phrase, keeping the section and the chord (the very first time: the song's top) */
 enum { EN_CLK_TICK, EN_CLK_START, EN_CLK_CONTINUE, EN_CLK_STOP };
@@ -76,6 +88,8 @@ void en_midi_out(uint32_t st, uint32_t d1, uint32_t d2);
 
 /* state for the screen (UI) */
 extern volatile uint8_t en_playing, en_held, en_ext;
+extern volatile uint8_t en_mute_keys, en_mute_mel, en_mute_bass, en_mute_drums, en_mute_hats;   /* 1: asked off (the sound follows: en_layer) */
+extern volatile uint8_t en_mode;               /* EN_AUTO, EN_HANDS */
 extern volatile uint8_t en_chord[EN_NPAD];     /* the chord's notes (MIDI), the piano's hand: with the root, its name */
 extern volatile uint8_t en_chord_root;         /* the chord's root (not always its bass), MIDI pitch class 0..11 */
 extern volatile uint8_t en_chord_n;            /* its distinct tones, with the root: 2 .. 5 */
@@ -123,6 +137,7 @@ void en_arr_first(en_arr_t *a, uint32_t seed, int style, int energy);
 void en_arr_next(en_arr_t *a, uint32_t seed, int style, int energy);
 void en_arr_range(int style, int section, int energy, int *lo_bars, int *hi_bars);
 void en_arr_part(const en_arr_t *a, uint32_t bar_in, int style, int energy, en_part_t *out);   /* a bar of the section */
+void en_hands_part(int style, int energy, en_part_t *out);   /* Hands: what this Energy asks, whatever the bar */
 /* a break wanted at this bar of the song: its length in bars, 0 none, and *in how many of them are already gone. breaks:
  * the knob, 50 the style's own rate. It always ends with its phrase */
 int en_arr_break(uint32_t bar, int level, int style, int breaks, uint32_t seed, uint32_t *in);
@@ -145,6 +160,8 @@ uint32_t en_test_chord_left(void);              /* steps to the next chord */
 uint32_t en_test_section_bar(void);             /* this section's bar; how many it has */
 uint32_t en_test_section_bars(void);
 int en_test_silent(void);                       /* since en_panic */
+float en_test_mute_gain(int layer);             /* a layer's gain as it is now: 0 off .. 1 on */
+float en_test_duck(void);                       /* the duck the melodic bus last had */
 int en_test_bass_down(void);                    /* notes the engine thinks are down, by layer: what MIDI should say */
 int en_test_bells_on(void);                     /* the melody's notes MIDI has been told are down: one at most */
 int en_test_bell_voices(void);                  /* its voices sounding, tails too */

@@ -1,5 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
- * Copyright (C) 2026 Charles Vestal */
+/* SPDX-License-Identifier: MPL-2.0 */
 /* What a flash write asks of the engine, and the system's voice. The volume's duck: the same engine rendered twice from the same start, once under a duck,
  * so that the duck is measured against the very samples it was given: a line down, zero, a line back, and after it the same samples, bit for bit: the music
  * under it went on and did not know. The voice: its notes, sung from the chord as it stands, rising, none of it on MIDI, and when it has rung out, nothing

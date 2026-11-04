@@ -1,5 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
- * Copyright (C) 2026 Charles Vestal */
+/* SPDX-License-Identifier: MPL-2.0 */
 /* The player's arrangement: layers on and off, and the modes, Auto and Hands. A layer off is a gain: nothing that composes or plays hears of it, so
  * what MIDI says is the same to the sample, and a dry mix comes back the same to the sample; only drums and bass wait for a bar, and nothing
  * clicks. Hands is the player's: the switches say what plays, Energy how densely, and nothing comes by itself. Auto, untouched, is the approved sound: its hashes. */

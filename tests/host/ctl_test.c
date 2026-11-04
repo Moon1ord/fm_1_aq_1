@@ -1,5 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
- * Copyright (C) 2026 Charles Vestal */
+/* SPDX-License-Identifier: MPL-2.0 */
 /* The buttons and what MIDI says about them. A ledger keeps every note-on and note-off, channel by channel, and after every block it is held
  * against what the engine says is down: a note left hanging or a note-off gone missing shows at once, in any of the five layers. On top of
  * it: the rest, the hold, the next section, the break asked for, the panic and its restore, the shed, MIDI Start, MIDI out off; what the out

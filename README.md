@@ -1,67 +1,78 @@
-# AMB-1 for the M-VAVE FM-1
+# AQ-1 for the M-VAVE FM-1
 
-AMB-1 turns the M-VAVE FM-1 into a generative ambient machine, inspired by Brian Eno's
-*Music for Airports*. It plays itself from the moment it's switched on: breathing voices, soft
-bells on tape loops of unequal length, a gliding bass and quiet Euclidean percussion, all through
-a tape echo, a long tape loop and a plate reverb. You don't perform it, you tend it: pick a piece
-and a scale, take notes out, put them back, and let it grow.
+AQ-1 turns the M-VAVE FM-1 into a generative light drum & bass instrument, in the mood of console menus and
+loading screens from the 2000s: warm, calm and hopeful, as if something is about to begin. It composes chords,
+rhythms and melodies without end, and you decide what plays. It powers on with only the keys and the pad; you
+bring in the melody, the bass, the drums and the hats by hand, shape them with the knobs and call breaks. If
+you'd rather have the piece play itself, switch it to Auto.
 
-![AMB-1's screen: the garden](docs/img/screen-garden.png) ![Voices](docs/img/screen-voices.png) ![Frozen](docs/img/screen-frozen.png)
+![AQ-1's Home screen: the face, the ring of notes, the chord, the layers and four knobs](docs/img/screen-home.png) ![The Melody page](docs/img/screen-melody.png) ![Degrees: the notes chords may stand on](docs/img/screen-degrees.png)
 
-- **Try it in your browser** (no FM-1 needed): <https://charlesvestal.github.io/fm1-amb/emu/>
-- **Install it** (Chrome or Edge, with the FM-1 plugged in): <https://charlesvestal.github.io/fm1-amb/install/>
-- **Read the manual**: <https://charlesvestal.github.io/fm1-amb/manual/> (source: [docs/MANUAL.md](docs/MANUAL.md))
-- **Download the firmware file**: [releases](https://github.com/charlesvestal/fm1-amb/releases)
+- **Read the manual:** [docs/MANUAL.md](docs/MANUAL.md)
+- **Build it from source:** [BUILDING.md](BUILDING.md)
 
-Installing it is at your own risk, though it's hard to get stuck: the web installer can put
-M-VAVE's own firmware back, and an FM-1 that fails to start twice comes up in a safe mode the
-installer can reach.
+## Install
+
+There's no published AQ-1 release yet, so you need a package file, `aq1.fwsc`. Build it as described in
+[BUILDING.md](BUILDING.md) (`app/build/aq1.fwsc`), or use a file you got from someone who did.
+
+Installing other firmware is at your own risk. Before you start, read how to get back, below.
+
+1. Install Python 3, then `pip3 install mido python-rtmidi`.
+2. Connect the FM-1 with a USB data cable and switch it on.
+3. Run this from the source tree:
+
+   ```
+   python3 base/tools/fm1_install.py app/build/aq1.fwsc
+   ```
+
+4. Don't unplug it while it writes. When it finishes, the FM-1 restarts into AQ-1.
+
+An FM-1 running M-VAVE's "Open" firmware must go back to the stock firmware first; the installer tells you so.
+
+## Back to the stock firmware
+
+Download M-VAVE's FM-1 firmware
+([FM-1.fwsc](https://yms-file-store.oss-cn-hongkong.aliyuncs.com/software/firmware/FM-1.fwsc)) and install it
+the same way:
+
+```
+python3 base/tools/fm1_install.py FM-1.fwsc
+```
+
+M-VAVE's own updater, M-UPGRADE, can also do it. What AQ-1 saved may be lost.
+
+An FM-1 that fails to start twice comes up in a safe mode with USB working, so the same command can reach it.
+If it no longer starts at all, see "Recovering an FM-1 that won't start" in the [manual](docs/MANUAL.md).
 
 ## In short
 
 | | |
 |---|---|
 | Keys | The scale: each key adds its note or takes it out |
-| PLAY · REC · EDIT | Grow / rest · freeze · the next chord |
-| HOME · ENV · ARP · LFO · SEQ · FX · GLO | The pages: Garden, Pad, Bells, Bass, Pulse, Space, Setup; KNOB 1–4 set their values, a layer's level on KNOB 1 |
-| SELECT | The previous or next page; with HOME held, the tempo |
+| SELECT + a key | Whether chords may stand on that note |
+| SELECT + ENV · ARP · LFO · SEQ · FX | Keys and pad · melody · bass · kick and snare · hats, on or off |
+| SELECT + HOME | Hands (you lead) or Auto (the arranger leads) |
+| PLAY · REC | Play / rest · hold the chord |
+| EDIT · SELECT + EDIT | The next section · a break, each on the next bar |
+| HOME · ENV · ARP · LFO · SEQ · FX · GLO | The pages: Home, Keys, Melody, Bass, Drums, Space, Setup; KNOB 1–4 set their values |
+| SELECT | Turn: the previous or next page; with HOME held, the tempo. Hold it alone: the Degrees screen |
 | ALGORITHM · PRESETS | The mode · the piece (eight of them) |
-| OCT− / OCT+ | The bells' octave |
-| SAVE | Saves; held, puts the piece back to its recipe |
+| OCT− / OCT+ | The melody's octave |
+| SAVE | Saves; held for 1.5 s, puts the piece back to its recipe |
 
-Hold any button for a second and a card says what it does.
-
-AMB-1 also tells the [FM-1 Screen Reader](https://charlesvestal.github.io/fm1-reader/) what its screen
-shows, over USB: the page and its knobs, a knob's value as it turns, the piece, the chord as it moves,
-and what each button did.
-
-The [manual](https://charlesvestal.github.io/fm1-amb/manual/) has the rest.
-
-## Building and testing
-
-AMB-1 is an app on [fm1-base](https://github.com/charlesvestal/fm1-base) (`base/`, a git submodule); clone with
-`--recursive`. The toolchain and prerequisites are in [BUILDING.md](BUILDING.md):
-
-```
-sh tests/run_tests.sh                                  # the instrument, the app in a simulator, the web builds
-./build.sh                                             # app/build/amb.fwsc
-python3 base/tools/fm1_install.py app/build/amb.fwsc   # install it over USB
-```
-
-`app/build/host/amb_host SCRIPT OUTDIR` runs the whole app on a computer from a script
-(`tests/scenarios/*.amb`), with audio and screenshots coming out. `./build.sh --web` builds the same code for the
-browser (the emulator); `web/app/build.sh` builds the engine alone into a web app for phone and desktop.
+Hold a button for a second and a card says what it does (not PLAY or SELECT).
 
 ## Credits
 
-The idea comes from Brian Eno's generative music: *Music for Airports*' tape loops of unequal
-length, and the echo chain of *Discreet Music*. The reverb is Jon Dattorro's plate ("Effect Design,
-Part 1", JAES 1997), as in [FoMni-1](https://github.com/charlesvestal/fm1-fomni); the Euclidean
-rhythms are Godfried Toussaint's reading of Bjorklund's algorithm. AMB-1 is built on
-[fm1-base](https://github.com/charlesvestal/fm1-base) and [felucca-bsp](https://github.com/hugelton/felucca-bsp),
-from [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita (Hügelton Instruments). The idea of running
-FM-1 firmware in the browser comes from [Groove OS](https://www.groove-os.com/). MPL-2.0 (0.9 and earlier:
-GPL-3.0-only); see [LICENSING.md](LICENSING.md).
+AQ-1 is a fork of [AMB-1](https://github.com/charlesvestal/fm1-amb) by Charles Vestal, and keeps its form (it
+plays by itself, with the scale on the keys), its echoes and its reverb. The reverb is Jon Dattorro's plate
+("Effect Design, Part 1", JAES 1997), by way of [FoMni-1](https://github.com/charlesvestal/fm1-fomni). AQ-1 is built
+on [fm1-base](https://github.com/charlesvestal/fm1-base) and [felucca-bsp](https://github.com/hugelton/felucca-bsp),
+from [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita (Hügelton Instruments).
 
-M-VAVE and FM-1 are trademarks of their owners. AMB-1 is not affiliated with M-VAVE, Brian Eno or
-Hügelton Instruments.
+The code is under MPL-2.0. The licence of the screen's art has not been decided and the MPL doesn't cover it; see
+[LICENSING.md](LICENSING.md).
+
+M-VAVE and FM-1 are trademarks of their owners. AQ-1 isn't affiliated with M-VAVE, Charles Vestal or Hügelton
+Instruments.

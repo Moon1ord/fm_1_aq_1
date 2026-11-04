@@ -1,21 +1,44 @@
-# AMB-1 licensing
+# AQ-1 licensing
 
-AMB-1 is free software under the **Mozilla Public License 2.0** (`MPL-2.0`, full text in `LICENSE`), file by file.
-If you change one of its files and share the result, share that file's source under the MPL. It is built on
-[fm1-base](https://github.com/charlesvestal/fm1-base) and [felucca-bsp](https://github.com/hugelton/felucca-bsp)
-(`base/`, a git submodule), both MPL-2.0.
+AQ-1's code is free software under the **Mozilla Public License 2.0** (`MPL-2.0`, full text in `LICENSE`), file by
+file. If you change one of its files and share the result, share that file's source under the MPL.
 
-Until 0.9, AMB-1 was GPL-3.0-only, built on Felucca's platform layer. That code is gone from this tree: the platform
-is fm1-base's now, and AMB-1's own code (the engine, the UI, the pieces) is relicensed by its author. AMB-1 0.9 and
-earlier stay under the GPL.
+**The art is the exception.** The licence of the screen's art has not been decided. The art is not covered by the
+MPL until its owner states a licence here. Until then, no licence to copy or reuse it is granted. See
+[The art](#the-art).
 
 ## Where the code comes from
 
+AQ-1 is a fork of AMB-1 by Charles Vestal ([fm1-amb](https://github.com/charlesvestal/fm1-amb), MPL-2.0), taken at
+commit `62a588a`.
+
 | What | Origin | Licence |
 | --- | --- | --- |
-| The platform: `base/` (boot, USB and USB audio, the TRS jack, storage, the update path, screen, panel, the screen reader, the host simulator and the browser emulator, build and install tools) | [fm1-base](https://github.com/charlesvestal/fm1-base) and [felucca-bsp](https://github.com/hugelton/felucca-bsp), from [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita (@kurogedelic), Hügelton Instruments, under MPL-2.0 with his permission ([felucca-bsp#4](https://github.com/hugelton/felucca-bsp/issues/4)) | MPL-2.0 |
-| `app/` (`app.c`, `app.h`, `ui.c`, `project.c`, `host.c`, `dsp/amb.c` with its Dattorro plate from FoMni-1), `web/app/`, `tests/`, `tools/` | AMB-1, Charles Vestal | MPL-2.0 |
+| The platform: `base/`, a git submodule (boot, USB and USB audio, the TRS jack, storage, the update path, screen, panel, the screen reader, the host simulator and the browser emulator, build and install tools) | [fm1-base](https://github.com/charlesvestal/fm1-base) and [felucca-bsp](https://github.com/hugelton/felucca-bsp), from [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita (@kurogedelic), Hügelton Instruments, under MPL-2.0 with his permission ([felucca-bsp#4](https://github.com/hugelton/felucca-bsp/issues/4)). Not changed by AQ-1. | MPL-2.0 |
+| Files that came from fm1-amb, most of them changed for AQ-1: `app/app.c`, `app/app.h`, `app/ui.c`, `app/project.c`, `app/host.c`, `app/dsp/amb.c` (with its Dattorro plate from FoMni-1), `app/dsp/amb.h`, `app/fm1.toml`, `app/words.*`, `build.sh`, `.github/workflows/release.yml`, `tests/run_tests.sh`, `tests/host/amb_test.c`, `tests/host/emu_test.mjs`, some of `tests/scenarios/`, `docs/MANUAL.md`, `docs/img/fm1-panel.svg` | Charles Vestal, with AQ-1's changes | MPL-2.0 |
+| Files new in AQ-1: `app/art.h`, `app/dsp/brk.c`, `app/dsp/brk.h`, `app/dsp/brk_data.h`, `app/dsp/midi_gate.h`, `tools/gen_art.py`, `tools/gen_breaks.c`, the other tests in `tests/` | AQ-1 | MPL-2.0 |
 | The idea of a browser emulator for FM-1 firmware (fm1-base's emulator) | [Groove OS](https://www.groove-os.com/) by Peter Gombos, whose site runs its firmware in the browser; no code from it | credit only |
+
+The file headers follow this table. A file from upstream keeps its `Copyright (C) 2026 Charles Vestal` line, which
+stays true of what it inherited, and its changes are in this repository's history. A file new in AQ-1 carries only its
+`SPDX-License-Identifier`, because Charles Vestal did not write it.
+
+Versions of AMB-1 up to 0.9 were GPL-3.0-only. That code is not in this tree. AQ-1 comes from fm1-amb's later MPL-2.0
+code.
+
+The drums are AQ-1's own. Their sounds are synthesised by `tools/gen_breaks.c` with no recordings in them, and
+`app/dsp/brk.c` composes the patterns. Nothing was copied from X0X's `breaks.c`.
+
+## The art
+
+`app/art_data.h` is generated data: the screen's pictures (the face, the page chapters, the break's frame and the
+title), made by `tools/gen_art.py` from the owner's source pictures, which are not in this repository. The screenshots
+`docs/img/screen-*.png` show the same art.
+
+**The licence of the art is undecided. It is not covered by the MPL until stated here.**
+
+The MPL does cover `tools/gen_art.py`, the code that generates the header, and `app/art.h`, the code that reads it. The
+built firmware contains the art, so sharing a built package also depends on this decision.
 
 ## Third-party material
 
@@ -27,9 +50,9 @@ earlier stay under the GPL.
 ## Trademarks
 
 "Felucca" and "Hügelton Instruments" are names of Hügelton Instruments. "M-VAVE" and "FM-1" are trademarks of their
-respective owners, used here only to say what hardware AMB-1 runs on. AMB-1 is independent firmware; it is not
-affiliated with, endorsed by or supported by any of them.
+respective owners, used here only to say what hardware AQ-1 runs on. AQ-1 is independent firmware; it is not
+affiliated with, endorsed by or supported by any of them, or by Charles Vestal.
 
 ## Radio
 
-AMB-1 never enables the Bluetooth / Wi-Fi radio of the hardware.
+AQ-1 never enables the Bluetooth / Wi-Fi radio of the hardware.

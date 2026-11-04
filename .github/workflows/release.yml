@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MPL-2.0
-# AMB-1's release: built from source on GitHub by the shared FM-1 builder, its packages signed with build
+# AQ-1's release: built from source on GitHub by the shared FM-1 builder, its packages signed with build
 # provenance (BUILDING.md, Publishing a release). From fm1-base's template, as LOOM-8's; after X0X's
 # (charlesvestal/fm1-x0x#25, by Kerem Kilic) and Melodee's (keremimo/melodee 4f5fb6d).
 name: Build and attest firmware
@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: amb-release-${{ github.ref }}
+  group: aq1-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -26,7 +26,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TITLE: AMB-1
+          TITLE: AQ-1
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF" != refs/tags/* ]]; then exit 0; fi
@@ -55,7 +55,7 @@ jobs:
       tests-block: true
       build: |
         set -euo pipefail
-        pkg=amb
+        pkg=aq1
         # the builder checks out without submodules: fm1-base (base/) and its felucca-bsp (base/bsp/), at the
         # commits this one links
         git submodule update --init --recursive
@@ -78,7 +78,7 @@ jobs:
         fi
       test: |
         set -euo pipefail
-        pkg=amb
+        pkg=aq1
         [ -f "app/build/$pkg.fwsc" ]
         sh tests/run_tests.sh
       packages: build/release-assets/*

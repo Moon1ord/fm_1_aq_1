@@ -1,5 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
- * Copyright (C) 2026 Charles Vestal */
+/* SPDX-License-Identifier: MPL-2.0 */
 /* The knobs, one at a time and all at once: each does what its page says at both ends of its range, the first piece at its
  * defaults is still the sound that was approved, nothing at any extreme gives a NaN or runs into full scale, a level at 0 is
  * silence. Audio where the claim is about sound, MIDI and counters where it is about notes. */

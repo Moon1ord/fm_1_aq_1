@@ -1,5 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
- * Copyright (C) 2026 Charles Vestal */
+/* SPDX-License-Identifier: MPL-2.0 */
 /* What keeps a note from hanging when MIDI's out queue fills (plat.h, plat_midi_out_room: "a sequencer keeps room for the note-offs it
  * owes before it sends a note-on"). A note-off that is owed and an all-notes-off always go; anything else goes only if, after it, the queue
  * still has room for every note-off owed and for the five all-notes-off of notes_off. A note-on that does not go is not owed. Pure, for the

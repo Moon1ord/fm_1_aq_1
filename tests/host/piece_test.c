@@ -1,5 +1,4 @@
-/* SPDX-License-Identifier: MPL-2.0
- * Copyright (C) 2026 Charles Vestal */
+/* SPDX-License-Identifier: MPL-2.0 */
 /* The eight pieces: what each recipe says, what each is heard to do, and the change from one to another. It stays in the owner's bounds, a piece has the
  * character its name promises and no two sound alike, measured over minutes of the real engine, and a new piece comes in over the song without a cut: the
  * chord sounding plays out and the next is in the new key, by a new seed. */

@@ -1,7 +1,7 @@
 #!/bin/sh
 # SPDX-License-Identifier: MPL-2.0
 # Copyright (C) 2026 Charles Vestal
-# Build AMB-1 with fm1-base (base/, a git submodule).
+# Build AQ-1 with fm1-base (base/, a git submodule).
 #   ./build.sh [--release X.Y] [--host | --web]
 #   JIELI_TOOLCHAIN  JieLi Linux toolchain (default: ~/.jieli/toolchain)
 #   AC79_SDK         JieLi AC79 SDK checkout (default: ~/fw-AC79_AIoT_SDK)

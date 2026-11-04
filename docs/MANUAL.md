@@ -112,12 +112,17 @@ another button puts the card away; letting go after it does nothing else.
 
 ### Arranging it yourself
 
-Hold SELECT and press a layer's button to take that layer out, or bring it back:
+The piece is yours. It powers on in **Hands**, with only the keys and the pad playing. You bring in the
+rest and take it away; AQ-1 goes on composing the chords, the rhythms and the melody, and leaves what
+plays, and when, to you.
+
+Hold SELECT and press a layer's button. It's a real switch: what's off comes on, what's on goes off.
+Layers work at any Energy and in every style:
 
 | Hold SELECT, press | Layer | When |
 |---|---|---|
 | ENV | Keys and pad | Over about a second |
-| ARP | Melody | Over about a second |
+| ARP | Melody | Over about a second, with a phrase within a few bars |
 | LFO | Bass | On the next bar line |
 | SEQ | Kick and snare, with the ghosts, rim and tom | On the next bar line |
 | FX | Hats | On the next bar line |
@@ -125,43 +130,48 @@ Hold SELECT and press a layer's button to take that layer out, or bring it back:
 (While resting there is no bar to wait for: it happens at once.)
 
 A layer that's off only stops being heard. Its level stays where it was, its echoes and reverb ring
-out, its MIDI goes on as at level 0, and everything goes on composing unheard, so it comes back in
-the right place in the song, with the same notes it would have played anyway. With the drums off the
-kick no longer pulls the keys down. The screen says `BASS OFF` or `BASS ON`, and so on; the layer's
-meter reads empty, and its button loses its glow, unless it's the page you're on. All the layers come
-back on with a new piece, when a piece goes back to its recipe, and at power-on; they stay off through
-everything else.
+out, its MIDI goes on as at level 0, and everything goes on composing unheard, so it comes in at the
+right place in the song. With the drums off the kick no longer pulls the keys down. The screen says
+`BASS ON` or `BASS OFF`, and so on; a layer that's off reads empty on its meter, and its button loses
+its glow, unless it's the page you're on.
 
-SELECT + HOME switches the piece between two ways of arranging, and the screen says `AUTO` or `HANDS`.
-The piece keeps its choice when saved.
+The layers you have on stay on when you change piece, when a piece goes back to its recipe, and through
+rests. Power-on goes back to the keys and the pad.
 
-- **Auto:** the arranger leads the sections, as always, with what you've taken out staying out.
-- **Hands:** no section comes by itself, however long you wait. Switching to it holds what is playing
-  right now. Then turn **Energy**: from the next bar it alone sets the drums, and the bass, the piano's
-  touch, the harmony and the melody follow it:
+**Energy** is how much the drums you have on play, and the character of the harmony. It never turns
+a layer on or off, and the whole range is a beat, in every style:
 
-  | Energy | Drums |
-  |---|---|
-  | 0 | None |
-  | 1–9 | Hats |
-  | 10–34 | Half time |
-  | 35–59 | Light |
-  | 60–79 | Full |
-  | 80–100 | Full, and the harmony at its peak |
+| Energy | Drums | Harmony |
+|---|---|---|
+| 0–9 | Half time, sparse | Alone |
+| 10–34 | Half time | Drifting |
+| 35–59 | Light | Grown |
+| 60–79 | Full | Grown |
+| 80–100 | Full | At its peak |
 
-  The higher the Energy, the busier the rhythm within each step too. The bass plays at every step, long
-  roots until there's a beat, so taking it out is up to you. The Style still counts: its rhythm, its bass
-  figures, how often it breaks (the Breaks knob), and the most its drums ever play, so Drift goes no higher
-  than half time. A piece saved in Hands starts straight away from its Energy.
+The higher the Energy, the busier the rhythm within each step too, the heavier the bass and the firmer the
+piano. The Style still counts: its rhythm and its bass figures. Drift's full rhythm is still a sparse thing.
 
-  EDIT still steps to the next section. The last hand wins: the section plays through as written and stays
-  on its last phrase, with Energy as its ceiling, until you turn Energy, and then Energy has it again.
-  SELECT + EDIT calls a break.
+**EDIT** steps to the next section, on the next bar, and there it stays; no section comes by itself, however
+long you wait. A section doesn't say what plays. It brings a new chord at once, a new groove for the drums at
+the density Energy asks, how busy the melody is (the Full section busiest, the Intro and Out sparest), and a
+step in the harmony's colour: down in the Intro, the Breakdown and Out, up in Full.
 
-  Back in Auto, the arranger goes on from where you are: from the section that plays what you've been
-  playing, and on round from there.
+**SELECT + EDIT** calls a break on the next bar, if the drums are on, and no break comes any other way. In Hands
+the **Breaks** knob is how long it is: up to 33 one bar, up to 66 two, above that four.
 
----
+#### Auto
+
+SELECT + HOME switches the piece to **Auto** and back, and the screen says `AUTO` or `HANDS`. The piece keeps
+its choice when saved. In Auto the arranger leads the sections by itself, through all of them, with Energy
+as a ceiling, and all the layers on: this is the piece playing itself, the original sound of Load Screen.
+Auto and Hands each keep their own set of layers, so switching takes you to that mode's set, and on from the
+section you were in.
+
+In Auto a press on a layer that's playing takes it out, and it stays out whatever section comes. A press on a
+layer the arranger has absent right now brings it: the next bar goes to the first place it plays (`DRUMS ON`,
+and you're in the Light section, say). Under Energy 10 Auto has no drums anywhere to go to, and the screen
+says `DRUMS ON` `ENERGY UP`.
 
 ## 4. The screen
 

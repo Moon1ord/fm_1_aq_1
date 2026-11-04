@@ -2,7 +2,7 @@
  * Copyright (C) 2026 Charles Vestal */
 /* The player's arrangement: layers on and off, and the modes, Auto and Hands. A layer off is a gain: nothing that composes or plays hears of it, so
  * what MIDI says is the same to the sample, and a dry mix comes back the same to the sample; only drums and bass wait for a bar, and nothing
- * clicks. In Hands no section comes by itself and Energy is the drums. */
+ * clicks. Hands is the player's: the switches say what plays, Energy how densely, and nothing comes by itself. Auto, untouched, is the approved sound: its hashes. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,7 +16,7 @@ static int fails;
 
 /* ---- MIDI: a hash of everything with its time, counts by channel and note, and a ledger against the engine */
 static uint64_t frames;
-static uint32_t mhash, midi_n, ons[16], drum_on[128];
+static uint32_t mhash, midi_n, ons[16], drum_on[128], drum_sig;
 static int down[16][128], nd[16];
 static uint32_t led_bad;
 void en_midi_out(uint32_t st, uint32_t d1, uint32_t d2)
@@ -31,8 +31,10 @@ void en_midi_out(uint32_t st, uint32_t d1, uint32_t d2)
         return;
     if (k == 0x90 && d2) {
         ons[c]++;
-        if (c == 9)
+        if (c == 9) {
             drum_on[d1]++;
+            drum_sig += (d1 + 1u) * (en_test_song() % 16u + 1u) * (en_test_song() % 16u + 7u);   /* (what, and where in the bar) */
+        }
         down[c][d1]++;
         nd[c]++;
     } else if (k == 0x80 || k == 0x90) {
@@ -126,41 +128,62 @@ static int mute_of(int l)
 {
     return l == EN_L_KEYS ? en_mute_keys : l == EN_L_MEL ? en_mute_mel : l == EN_L_BASS ? en_mute_bass : l == EN_L_DRUMS ? en_mute_drums : en_mute_hats;
 }
+/* the melody's first phrase at its first chance, as a hand has it: it is told it has been pressed */
+static void en_mel_soon(void)
+{
+    en_render(buf, 16u, GAIN);
+    en_layer(EN_L_MEL, 0);
+    en_render(buf, 16u, GAIN);
+    en_layer_press(EN_L_MEL);
+}
+static void hands_all(void)                      /* Hands with all of it on: what a layer test wants to hear */
+{
+    int l;
+    en_arrange(EN_HANDS);
+    for (l = 0; l < EN_NLAYERS; l++)
+        en_layer(l, 1);
+    en_mel_soon();
+}
 static const char *const LNAME[EN_NLAYERS] = {"keys", "melody", "bass", "drums", "hats"};
 static const int LCH[EN_NLAYERS] = {0, 1, 2, 9, 9};
 
-/* ---- Energy, as a table: every style, every value */
+/* ---- Energy, as a table: every style, every section, every value. A beat all the way, in every style alike */
 static void test_hands_part(void)
 {
-    int st, e;
+    int st, e, sec;
     static const uint8_t RANK[5] = {0, 1, 3, 4, 2};
-    for (st = 0; st < EN_NSTYLES; st++) {
-        int last_rank = -1, last_char = -1, last_bass = -1;
-        for (e = 0; e <= 100; e++) {
-            en_part_t p;
-            int want = e == 0 ? 0 : e < 10 ? 1 : e < 35 ? 4 : e < 60 ? 2 : 3;
-            if (st == EN_ST_DRIFT && want != 0 && want != 1)
-                want = 4;                        /* its peak is half time: its own numbers */
-            en_hands_part(st, e, &p);
-            CHECK(p.level == want, "style %d energy %d: level %d, wanted %d", st, e, p.level, want);
-            CHECK(RANK[p.level] >= last_rank && p.character >= last_char && p.bass >= last_bass, "style %d energy %d goes down somewhere", st, e);
-            CHECK(p.bass > 0u, "style %d energy %d: no bass for the player to have", st, e);
-            CHECK(p.ramp == 1u, "style %d energy %d: drums take %d bars", st, e, p.ramp);
-            CHECK(p.character == (e == 0 ? 0 : e < 35 ? 1 : e < 80 ? 2 : 3), "style %d energy %d: character %d", st, e, p.character);
-            CHECK(p.section == (e == 0 ? EN_SEC_INTRO : e < 10 ? EN_SEC_HATS : e < 35 ? EN_SEC_DOWN : e < 60 ? EN_SEC_LIGHT : EN_SEC_FULL), "style %d energy %d: section %d", st, e, p.section);
-            if (e < 60)
-                CHECK(p.character < 3u, "style %d energy %d: the peak under the full rhythm", st, e);
-            last_rank = RANK[p.level];
-            last_char = p.character;
-            last_bass = p.bass;
+    static const int COLOUR[EN_NSECTIONS] = {-1, 0, 0, -1, 1, -1};
+    for (st = 0; st < EN_NSTYLES; st++)
+        for (sec = 0; sec < EN_NSECTIONS; sec++) {
+            int last_rank = -1, last_char = -1, last_bass = -1;
+            for (e = 0; e <= 100; e++) {
+                en_part_t p;
+                const int want = e < 35 ? 4 : e < 60 ? 2 : 3, base = e < 10 ? 0 : e < 35 ? 1 : e < 80 ? 2 : 3;
+                int c = base + COLOUR[sec];
+                c = c < 0 ? 0 : c > 3 ? 3 : c;
+                if (e < 60 && c == 3)
+                    c = 2;
+                en_hands_part(st, e, sec, &p);
+                CHECK(p.level == want, "style %d section %d energy %d: level %d, wanted %d", st, sec, e, p.level, want);
+                CHECK(p.level >= 2u, "style %d section %d energy %d: no beat", st, sec, e);
+                CHECK(RANK[p.level] >= last_rank && p.character >= last_char && p.bass >= last_bass, "style %d energy %d goes down somewhere", st, e);
+                CHECK(p.bass > 0u, "style %d energy %d: no bass for the player to have", st, e);
+                CHECK(p.ramp == 1u, "style %d energy %d: drums take %d bars", st, e, p.ramp);
+                CHECK(p.character == c, "style %d section %d energy %d: character %d, wanted %d", st, sec, e, p.character, c);
+                CHECK(p.section == sec, "style %d energy %d: section %d", st, e, p.section);
+                last_rank = RANK[p.level];
+                last_char = p.character;
+                last_bass = p.bass;
+            }
         }
-        {
-            en_part_t a, b;
-            en_hands_part(st, 0, &a);
-            en_hands_part(st, 100, &b);
-            CHECK(a.character == 0u && b.character == 3u, "style %d: its character runs from %d to %d", st, a.character, b.character);
-        }
+    {
+        en_part_t a, b;
+        en_hands_part(EN_ST_LIQUID, 0, EN_SEC_LIGHT, &a);
+        en_hands_part(EN_ST_LIQUID, 100, EN_SEC_LIGHT, &b);
+        CHECK(a.character == 0u && b.character == 3u, "its character runs from %d to %d", a.character, b.character);
     }
+    for (e = 0; e <= 100; e++)
+        CHECK(en_hands_break(e) == (e < 34 ? 1 : e < 67 ? 2 : 4), "Breaks %d: a break of %d", e, en_hands_break(e));
 }
 
 /* ---- a layer off: silent in the audio, its MIDI going on */
@@ -171,7 +194,7 @@ static void test_silent(void)
         double on, off;
         uint32_t n0;
         start(1001u, EN_ST_LIQUID);
-        en_arrange(EN_HANDS, 1);
+        hands_all();
         en_set(P_ENERGY, 75);
         only(l);
         en_play(1);
@@ -262,14 +285,16 @@ static void test_same_notes(void)
             for (m = 0; m < 2; m++) {
                 uint32_t a, b, sa, sb, t;
                 start(SEEDS[s], st);
-                en_arrange(m, 1);
+                if (m)
+                    hands_all();
                 en_play(1);
                 for (t = 0u; t < 150u; t++)
                     run(SEC(1.0f), 256u, 0, 0);
                 a = mhash;
                 sa = music_sig();
                 start(SEEDS[s], st);
-                en_arrange(m, 1);
+                if (m)
+                    hands_all();
                 en_play(1);
                 for (t = 0u; t < 150u; t++) {
                     if (rnd16() & 1u) {
@@ -298,7 +323,7 @@ static void rec_block(const int32_t *b, uint32_t n, void *arg)
 static void dry_start(uint32_t seed, int style)
 {
     start(seed, style);
-    en_arrange(EN_HANDS, 1);
+    hands_all();
     en_set(P_ENERGY, 80);
     en_set(P_ECHO, 0);
     en_set(P_REVERB, 0);
@@ -479,24 +504,24 @@ static void click_block(const int32_t *b, uint32_t n, void *arg)
 }
 static void test_no_click(void)
 {
-    static const int L[3] = {EN_L_KEYS, EN_L_MEL, EN_L_BASS};
+    static const int L[4] = {EN_L_KEYS, EN_L_MEL, EN_L_BASS, EN_L_DRUMS};
     int l, dir;
     int32_t *a = malloc(2u * SEC(26.0f) * sizeof(int32_t));
-    for (l = 0; l < 3; l++)
+    for (l = 0; l < 4; l++)
         for (dir = 0; dir < 2; dir++) {
             uint32_t at = 0u, k;
             click_t c;
             memset(&c, 0, sizeof c);
             rec_a = a;
             start(1001u, EN_ST_LIQUID);
-            en_arrange(EN_HANDS, 1);
+            hands_all();
             en_set(P_ENERGY, 75);
             only(L[l]);
             en_play(1);
             run(SEC(26.0f), 256u, rec_block, &at);
             c.other = a;
             start(1001u, EN_ST_LIQUID);
-            en_arrange(EN_HANDS, 1);
+            hands_all();
             en_set(P_ENERGY, 75);
             only(L[l]);
             en_play(1);
@@ -515,13 +540,74 @@ static void test_no_click(void)
     free(a);
 }
 
+/* a layer entering on the bar, as a player brings it in, in a beat already running: its first moments move no faster than the same layer does when it has long been on */
+static uint32_t step_most;
+static int32_t step_prev;
+static void step_block(const int32_t *b, uint32_t n, void *arg)
+{
+    uint32_t i;
+    (void)arg;
+    for (i = 0u; i < 2u * n; i += 2u) {
+        const int32_t d = b[i] - step_prev;
+        const uint32_t m = (uint32_t)(d < 0 ? -d : d);
+        if (m > step_most)
+            step_most = m;
+        step_prev = b[i];
+    }
+}
+static void test_entry_click(void)
+{
+    static const int L[3] = {EN_L_BASS, EN_L_DRUMS, EN_L_HATS}, STY[3] = {EN_ST_LIQUID, EN_ST_DRIFT, EN_ST_ROLLER}, E[3] = {0, 45, 100};
+    int l, st, e;
+    for (l = 0; l < 3; l++)
+        for (st = 0; st < 3; st++)
+            for (e = 0; e < 3; e++) {
+                uint32_t entry, steady, k;
+                start(58u + (uint32_t)e, STY[st]);
+                en_arrange(EN_HANDS);
+                en_set(P_ENERGY, E[e]);
+                only(L[l]);
+                en_layer(EN_L_KEYS, 0);
+                en_set(P_REVERB, 0);
+                en_set(P_ECHO, 0);
+                en_play(1);
+                run(SEC(1.0f), 256u, 0, 0);
+                bars(2u);
+                while (en_test_song() % 16u != 5u)
+                    run(16u, 16u, 0, 0);
+                step_most = 0u;
+                step_prev = 0;
+                run(16u, 16u, step_block, 0);
+                CHECK(step_most == 0u, "layer %s off, and not silent: %u", LNAME[L[l]], step_most);
+                en_layer_press(L[l]);
+                /* over the bar line, and 30 ms past it */
+                step_most = 0u;
+                while (en_test_song() & 15u)
+                    run(16u, 16u, step_block, 0);
+                for (k = 0u; k < SEC(0.03f); k += 16u)
+                    run(16u, 16u, step_block, 0);
+                entry = step_most;
+                bars(1u);
+                step_most = 0u;
+                bars(16u);
+                run(256u, 256u, step_block, 0);
+                for (k = 0u; k < 16u; k++) {
+                    const uint32_t bar = en_test_song() / 16u;
+                    while (en_test_song() / 16u == bar)
+                        run(16u, 16u, step_block, 0);
+                }
+                steady = step_most;
+                CHECK(entry <= steady + steady / 20u + 200u, "%s style %d Energy %d: its entry steps %u, its own steady %u", LNAME[L[l]], STY[st], E[e], entry, steady);
+            }
+}
+
 /* a kick nobody hears pulls nothing down */
 static void test_duck(void)
 {
     float most = 0.0f;
     uint32_t i;
     start(7u, EN_ST_LIQUID);
-    en_arrange(EN_HANDS, 1);
+    hands_all();
     en_set(P_ENERGY, 80);
     en_play(1);
     for (i = 0u; i < 400u; i++) {
@@ -595,7 +681,8 @@ static void test_resting(void)
         CHECK(en_test_mute_gain(l) == 0.0f, "%s, resting: waits", LNAME[l]);
         CHECK(en_test_song() == song, "resting, the grid moved");
     }
-    en_layers_on();
+    for (l = 0; l < EN_NLAYERS; l++)
+        en_layer(l, 1);
     run(SEC(0.1f), 256u, 0, 0);
     for (l = 0; l < EN_NLAYERS; l++)
         CHECK(!mute_of(l), "%s, all on: still off", LNAME[l]);
@@ -609,7 +696,8 @@ static void test_resting(void)
     CHECK(en_test_mute_gain(EN_L_DRUMS) == 0.0f, "growing: the drums off on the bar");
     while (en_test_song() % 16u != 4u)
         run(16u, 16u, 0, 0);
-    en_layers_on();
+    for (l = 0; l < EN_NLAYERS; l++)
+        en_layer(l, 1);
     run(SEC(0.05f), 256u, 0, 0);
     CHECK(en_test_mute_gain(EN_L_DRUMS) == 0.0f, "all on, growing: the drums do not wait for the bar");
     bars(1u);
@@ -620,25 +708,35 @@ static void test_resting(void)
 /* ---- Hands: nothing moves by itself, for as long as you like */
 static void test_hands_stays(void)
 {
-    int st, as_saved;
+    int st, e;
+    static const int EE[2] = {0, 70};
     for (st = 0; st < EN_NSTYLES; st++)
-        for (as_saved = 0; as_saved < 2; as_saved++) {
-            const uint32_t HOURS = 16u * 8u * 2000u;    /* 16000 bars */
-            uint32_t i, sec, lev;
+        for (e = 0; e < 2; e++) {
+            const uint32_t BARS = 16000u;
+            uint32_t i, sec, lev, gens;
             start(1001u + (uint32_t)st, st);
+            en_set(P_BREAKS, 100);
+            en_set(P_ENERGY, EE[e]);
             en_play(1);
             run(SEC(40.0f), 256u, 0, 0);
-            en_arrange(EN_HANDS, as_saved);
+            en_arrange(EN_HANDS);
             run(SEC(3.0f), 256u, 0, 0);
             CHECK(en_mode == EN_HANDS, "the mode");
+            bars(1u);
             sec = en_section;
             lev = en_drum_level;
-            for (i = 0u; i < HOURS / 256u; i++) {
-                en_test_ticks(256u);
-                CHECK(en_section == sec, "style %d: a section came by itself, at %u", st, en_test_song());
-                CHECK(en_drum_level == lev, "style %d: the drums moved by themselves, at %u", st, en_test_song());
+            gens = en_test_gens;
+            for (i = 0u; i < BARS; i++) {
+                en_test_ticks(16u);
+                if (en_section != sec || en_drum_level != lev || en_break_bars) {
+                    CHECK(en_section == sec, "style %d: a section came by itself, at %u", st, en_test_song());
+                    CHECK(en_drum_level == lev, "style %d: the drums moved by themselves, at %u", st, en_test_song());
+                    CHECK(!en_break_bars, "style %d: a break came by itself, at %u", st, en_test_song());
+                    break;
+                }
                 CHECK(en_test_section_bar() < en_test_section_bars(), "style %d: past its section: %u of %u", st, en_test_section_bar(), en_test_section_bars());
             }
+            CHECK(en_test_gens > gens + 1000u, "style %d: the chords stopped being composed: %u", st, en_test_gens - gens);
         }
     /* and Auto, as a control, does move */
     {
@@ -658,7 +756,7 @@ static void test_hands_stays(void)
 static uint32_t count_at(uint32_t seed, int style, int energy, uint32_t *kick, uint32_t *snare, uint32_t *hat)
 {
     start(seed, style);
-    en_arrange(EN_HANDS, 1);
+    en_arrange(EN_HANDS);
     en_set(P_ENERGY, energy);
     en_set(P_BREAKS, 0);
     en_set(P_EVOLVE, 50);
@@ -684,25 +782,19 @@ static void test_energy_range(void)
             for (s = 0; s < 4; s++)
                 count_at(SEEDS[s], st, E[i], &k, &n, &h);
             sum[i] = k + n + h;
-            if (i == 0)
-                CHECK(sum[i] == 0u, "style %d, Energy 0: %u drums", st, sum[i]);
-            if (i == 1) {
-                CHECK(h > 0u, "style %d, low Energy: no hats", st);
-                CHECK(k + n == 0u, "style %d, low Energy: %u kicks and snares", st, k + n);
-            }
-            if (i >= 2)
-                CHECK(k > 0u && n > 0u, "style %d, Energy %d: kicks %u, snares %u", st, E[i], k, n);
+            CHECK(k > 0u && n > 0u && h > 0u, "style %d, Energy %d: kicks %u, snares %u, hats %u", st, E[i], k, n, h);
+            CHECK(k >= 4u * 32u, "style %d, Energy %d: under a kick a bar: %u", st, E[i], k);
             if (i)
                 CHECK(sum[i] >= sum[i - 1], "style %d: Energy %d has fewer drums (%u) than Energy %d (%u)", st, E[i], sum[i], E[i - 1], sum[i - 1]);
         }
-        if (st != EN_ST_DRIFT)
-            CHECK(sum[5] > sum[2], "style %d: Energy does not raise the density: %u, %u", st, sum[5], sum[2]);
+        /* a range, in every style: Drift's and Loading's too */
+        CHECK(sum[5] > sum[0], "style %d: Energy does not raise the density: %u, %u", st, sum[5], sum[0]);
     }
     /* the level on the bar, whatever bar the knob moves in */
     for (i = 0; i < 6; i++) {
         uint32_t b;
         start(7u, EN_ST_LIQUID);
-        en_arrange(EN_HANDS, 1);
+        en_arrange(EN_HANDS);
         en_set(P_ENERGY, E[i]);
         en_play(1);
         run(1024u, 256u, 0, 0);
@@ -713,7 +805,7 @@ static void test_energy_range(void)
             const int was = en_drum_level, now = E[(i + 3) % 6] == E[i] ? E[0] : E[(i + 3) % 6];
             en_part_t p;
             en_set(P_ENERGY, now);
-            en_hands_part(EN_ST_LIQUID, now, &p);
+            en_hands_part(EN_ST_LIQUID, now, en_section, &p);
             b = en_test_song() / 16u;
             while (en_test_song() / 16u == b || !(en_test_song() & 15u)) {
                 CHECK(en_drum_level == was, "Energy %d: the level moved before the bar", now);
@@ -739,7 +831,7 @@ static void test_character(void)
     en_trace_chord = trace_c;
     for (i = 0; i < 4; i++) {
         start(58u, EN_ST_LIQUID);
-        en_arrange(EN_HANDS, 1);
+        en_arrange(EN_HANDS);
         en_set(P_ENERGY, E[i]);
         en_play(1);
         hat_char = 0;
@@ -753,50 +845,57 @@ static void test_character(void)
 static void test_switching(void)
 {
     uint32_t i;
-    int sec, lev;
+    int l;
     start(7u, EN_ST_LIQUID);
     en_set(P_ENERGY, 90);
     en_play(1);
-    /* into the light section, by way of EDIT: not what Energy 90 would ask, so that a hold can be told from Energy */
     while (en_section != EN_SEC_LIGHT) {
         en_next();
         bars(1u);
     }
     bars(4u);
-    sec = en_section;
-    lev = en_drum_level;
-    CHECK(lev == 2, "the light section at Energy 90: level %d", lev);
-    en_arrange(EN_HANDS, 0);
+    CHECK(en_drum_level == 2, "the light section at Energy 90: level %d", en_drum_level);
+    /* to Hands: the section stays, Energy has the drums from the next bar. Its own set of layers: the start */
+    en_arrange(EN_HANDS);
+    bars(2u);
+    CHECK(en_section == EN_SEC_LIGHT && en_drum_level == 3, "Hands: section %d level %d", en_section, en_drum_level);
+    CHECK(!en_mute_keys && en_mute_mel && en_mute_bass && en_mute_drums && en_mute_hats, "Hands' first set");
     for (i = 0u; i < 400u; i++) {
         bars(1u);
-        CHECK(en_section == sec && en_drum_level == lev, "the switch did not hold: section %d level %d at %u", en_section, en_drum_level, i);
+        CHECK(en_section == EN_SEC_LIGHT && en_drum_level == 3, "section %d level %d at %u", en_section, en_drum_level, i);
     }
-    /* a level kept does not fall with an Energy unmoved: the same value told again is no turn */
-    en_set(P_ENERGY, 90);
-    bars(2u);
-    CHECK(en_section == sec && en_drum_level == lev, "the same Energy again took over");
-    /* Energy turned: it is the drums now */
     en_set(P_ENERGY, 20);
     bars(2u);
-    CHECK(en_drum_level == 4, "Energy 20 after the hold: level %d", en_drum_level);
-    CHECK(en_section == EN_SEC_DOWN, "Energy 20: section %d", en_section);
-    /* back to Auto: it is that section, at the phase that has that level, and from there it goes on */
-    en_arrange(EN_AUTO, 0);
+    CHECK(en_drum_level == 4 && en_section == EN_SEC_LIGHT, "Energy 20: level %d section %d", en_drum_level, en_section);
+    /* each mode its own set, both ways */
+    en_layer_press(EN_L_DRUMS);
+    run(1024u, 256u, 0, 0);
+    CHECK(!en_mute_drums, "Hands: the switch");
+    en_arrange(EN_AUTO);
     run(1024u, 256u, 0, 0);
     CHECK(en_mode == EN_AUTO, "the mode");
+    for (l = 0; l < EN_NLAYERS; l++)
+        CHECK(!mute_of(l), "Auto's set: %s off", LNAME[l]);
+    en_layer(EN_L_KEYS, 0);
+    en_arrange(EN_HANDS);
+    run(1024u, 256u, 0, 0);
+    CHECK(!en_mute_keys && en_mute_mel && en_mute_bass && !en_mute_drums && en_mute_hats, "back in Hands: its set as it was left");
+    en_arrange(EN_AUTO);
+    run(1024u, 256u, 0, 0);
+    CHECK(en_mute_keys && !en_mute_mel && !en_mute_bass && !en_mute_drums && !en_mute_hats, "back in Auto: its set as it was left");
+    en_layer(EN_L_KEYS, 1);
+    /* back to Auto: it goes on from the section it was in, to the next */
     bars(1u);
-    CHECK(en_section == EN_SEC_DOWN && en_drum_level == 4, "back in Auto: section %d, level %d", en_section, en_drum_level);
+    CHECK(en_section == EN_SEC_LIGHT, "back in Auto: section %d", en_section);
     CHECK(en_test_section_bar() < en_test_section_bars(), "back in Auto: bar %u of %u", en_test_section_bar(), en_test_section_bars());
     {
         int went = 0;
-        const uint32_t pos = en_test_song() / 16u % 8u;
-        (void)pos;
         for (i = 0u; i < 400u && !went; i++) {
             bars(1u);
-            went = en_section != EN_SEC_DOWN;
+            went = en_section != EN_SEC_LIGHT;
         }
         CHECK(went, "back in Auto: the section never ends");
-        CHECK(en_section == EN_SEC_FULL || en_section == EN_SEC_OUT, "back in Auto: from the breakdown to section %d", en_section);
+        CHECK(en_section == EN_SEC_DOWN, "back in Auto: from the light to section %d", en_section);
         CHECK(en_test_song() % (16u * 8u) < 32u, "back in Auto: a section starts away from a phrase: %u", en_test_song());
     }
     /* every place, every style, back to Auto: it goes all the way round */
@@ -807,14 +906,13 @@ static void test_switching(void)
             for (e = 0; e < 6; e++) {
                 uint32_t seen = 0u;
                 start(11u, st);
-                en_set(P_ENERGY, 100);
-                en_arrange(EN_HANDS, 1);
+                en_arrange(EN_HANDS);
                 en_set(P_ENERGY, E[e]);
                 en_play(1);
                 run(1024u, 256u, 0, 0);
                 bars(3u);
                 en_set(P_ENERGY, 100);
-                en_arrange(EN_AUTO, 0);
+                en_arrange(EN_AUTO);
                 run(1024u, 256u, 0, 0);
                 for (i = 0u; i < 2000u; i++) {
                     en_test_ticks(16u * 8u);
@@ -826,85 +924,408 @@ static void test_switching(void)
     }
 }
 
-/* EDIT in Hands: the next section, and it stays, Energy still its ceiling; turn Energy and Energy is the drums again */
+/* EDIT in Hands: the next section, and it stays; the drums' level is still Energy's; a new chord at once, a new groove, the harmony's colour and the melody's pace */
+static int chord_count, chord_last_char;
+static uint32_t chord_last_step;
+static void trace_e(uint32_t step, const en_gchord_t *g, int character)
+{
+    (void)g;
+    chord_count++;
+    chord_last_char = character;
+    chord_last_step = step;
+}
 static void test_edit(void)
 {
     int k;
     start(7u, EN_ST_LIQUID);
-    en_arrange(EN_HANDS, 1);
-    en_set(P_ENERGY, 100);
+    en_arrange(EN_HANDS);
+    en_set(P_ENERGY, 70);
     en_play(1);
     run(1024u, 256u, 0, 0);
     bars(2u);
-    CHECK(en_section == EN_SEC_FULL && en_drum_level == 3, "Energy 100: section %d, level %d", en_section, en_drum_level);
+    CHECK(en_section == EN_SEC_LIGHT && en_drum_level == 3, "the start: section %d, level %d", en_section, en_drum_level);
+    en_trace_chord = trace_e;
     for (k = 0; k < 8; k++) {
-        const int want = (EN_SEC_FULL + 1 + k) % EN_NSECTIONS;
+        const int want = (EN_SEC_LIGHT + 1 + k) % EN_NSECTIONS;
+        en_part_t p;
         uint32_t i;
+        const int before = chord_count;
         en_next();
         bars(1u);
+        en_hands_part(EN_ST_LIQUID, 70, want, &p);
         CHECK(en_section == want, "EDIT %d: section %d, wanted %d", k, en_section, want);
+        CHECK(en_drum_level == 3, "EDIT %d: the drums are Energy's: level %d", k, en_drum_level);
+        CHECK(chord_count > before, "EDIT %d: no new chord on the bar", k);
+        CHECK(chord_last_char == p.character, "EDIT %d: the chord's character %d, wanted %d", k, chord_last_char, p.character);
         CHECK(en_test_song() % (16u * 8u) < 16u + 1u, "EDIT: a section starts a phrase: %u", en_test_song());
         for (i = 0u; i < 300u; i++) {
             en_test_ticks(16u);
-            CHECK(en_section == want, "EDIT %d: section %d by itself after %u bars", k, en_section, i);
+            CHECK(en_section == want && en_drum_level == 3 && !en_break_bars, "EDIT %d: section %d level %d by itself after %u bars", k, en_section, en_drum_level, i);
         }
         CHECK(en_test_section_bar() < en_test_section_bars(), "EDIT %d: past its end", k);
     }
-    /* the light, as written: its first phrase without a bass, then with it, and there it stays */
-    while (en_section != EN_SEC_LIGHT) {
-        en_next();
-        bars(1u);
-    }
-    bars(1u);
+    en_trace_chord = 0;
+    /* Energy moves nothing but the density and the colour: the section stands */
     {
-        uint32_t i;
-        for (i = 0u; i < 300u; i++)
-            en_test_ticks(16u);
-        CHECK(en_drum_level == 2 && en_section == EN_SEC_LIGHT, "the light stays: level %d", en_drum_level);
-        CHECK(en_test_section_bar() + 8u >= en_test_section_bars(), "the light stays on its last phrase: %u of %u", en_test_section_bar(), en_test_section_bars());
+        const int sec = en_section;
+        en_set(P_ENERGY, 10);
+        bars(2u);
+        CHECK(en_section == sec && en_drum_level == 4, "Energy after EDIT: section %d, level %d", en_section, en_drum_level);
     }
-    /* the last touch: Energy */
-    en_set(P_ENERGY, 75);
-    bars(2u);
-    CHECK(en_section == EN_SEC_FULL && en_drum_level == 3, "Energy after EDIT: section %d, level %d", en_section, en_drum_level);
-    /* Energy is the ceiling while a section stands */
-    en_next();
-    bars(1u);
-    en_next();
-    bars(1u);
-    en_next();
-    bars(1u);
-    CHECK(en_section == EN_SEC_HATS, "section %d", en_section);
-    en_next();
-    bars(1u);
-    CHECK(en_section == EN_SEC_LIGHT && en_drum_level == 2, "section %d, level %d", en_section, en_drum_level);
+    /* the drums, section to section, on one seed, the same place in a phrase: another groove, the same level */
+    {
+        uint32_t sig[EN_NSECTIONS];
+        int a;
+        for (a = 0; a < EN_NSECTIONS; a++) {
+            int t;
+            start(7u, EN_ST_LIQUID);
+            en_arrange(EN_HANDS);
+            en_set(P_ENERGY, 70);
+            en_set(P_EVOLVE, 0);
+            en_play(1);
+            run(1024u, 256u, 0, 0);
+            for (t = 0; t < (a + EN_NSECTIONS - EN_SEC_LIGHT) % EN_NSECTIONS; t++) {
+                en_next();
+                bars(1u);
+            }
+            en_next();                               /* (a phrase's top, each of them, by way of the one before) */
+            bars(1u);
+            for (t = 0; t < EN_NSECTIONS - 1; t++) {
+                en_next();
+                bars(1u);
+            }
+            CHECK(en_section == a, "section %d, wanted %d", en_section, a);
+            drum_sig = 0u;
+            bars(2u);
+            sig[a] = drum_sig;
+            CHECK(sig[a] != 0u, "section %d: no drums", a);
+        }
+        for (a = 0; a < EN_NSECTIONS; a++)
+            CHECK(sig[a] != sig[(a + 1) % EN_NSECTIONS], "EDIT, sections %d and %d: the same groove", a, (a + 1) % EN_NSECTIONS);
+    }
+    /* EDIT asked on a phrase's last bar: the song does not jump, the next phrase comes anyway: the section alone has to be the new groove. Against no EDIT, same seed, same bars */
+    {
+        uint32_t sig[2];
+        int e;
+        for (e = 0; e < 2; e++) {
+            start(7u, EN_ST_LIQUID);
+            en_arrange(EN_HANDS);
+            en_set(P_ENERGY, 70);
+            en_set(P_EVOLVE, 0);
+            en_play(1);
+            run(1024u, 256u, 0, 0);
+            while (en_test_song() / 16u % 8u != 15u % 8u || !(en_test_song() & 15u))
+                run(256u, 256u, 0, 0);
+            if (e)
+                en_next();
+            bars(1u);
+            CHECK(en_test_song() / 16u % 8u == 0u, "the phrase's top, at %u", en_test_song());
+            CHECK(en_section == (e ? EN_SEC_DOWN : EN_SEC_LIGHT), "EDIT %d: section %d", e, en_section);
+            drum_sig = 0u;
+            bars(2u);
+            sig[e] = drum_sig;
+        }
+        CHECK(sig[0] != sig[1], "EDIT on a phrase's last bar: the same groove");
+    }
 }
 
-/* a break asked for, in Hands: it comes, ends with its phrase, and the place is as it was */
+/* a break called, in Hands: when asked, the Breaks knob's length, ending with its phrase, wherever the phrase is; and the place is as it was */
 static void test_break(void)
 {
-    int k;
-    start(7u, EN_ST_JUNGLE);
-    en_arrange(EN_HANDS, 1);
-    en_set(P_ENERGY, 75);
-    en_set(P_BREAKS, 0);
-    en_play(1);
-    run(1024u, 256u, 0, 0);
-    bars(2u);
-    for (k = 0; k < 6; k++) {
-        int got = 0;
-        uint32_t i;
-        en_break();
-        run(256u, 256u, 0, 0);
-        for (i = 0u; i < 16u; i++) {
-            bars(1u);
-            if (en_break_bars)
-                got++;
-            CHECK(en_section == EN_SEC_FULL && en_drum_level == 3, "a break moved the place: section %d level %d", en_section, en_drum_level);
+    static const int KNOB[3] = {0, 50, 100}, LEN[3] = {1, 2, 4};
+    int st, n;
+    for (st = 0; st < EN_NSTYLES; st++)
+        for (n = 0; n < 3; n++) {
+            int k;
+            start(7u + (uint32_t)n, st);
+            en_arrange(EN_HANDS);
+            en_layer(EN_L_DRUMS, 1);
+            en_set(P_ENERGY, st == EN_ST_DRIFT ? 10 : 75);
+            en_set(P_BREAKS, KNOB[n]);
+            en_play(1);
+            run(1024u, 256u, 0, 0);
+            bars(2u);
+            for (k = 0; k < 9; k++) {
+                const int level = en_drum_level;
+                int got = 0, before;
+                uint32_t i;
+                /* every place in a phrase, in turn */
+                while ((en_test_song() + 8u) / 16u % 8u != (uint32_t)k % 8u)
+                    bars(1u);
+                en_break();
+                bars(1u);
+                before = en_break_bars;
+                CHECK(before == LEN[n], "style %d, Breaks %d: the break on the bar is %d", st, KNOB[n], before);
+                for (i = 0u; i < 12u; i++) {
+                    if (en_break_bars)
+                        got++;
+                    CHECK(en_section == EN_SEC_LIGHT && en_drum_level == level, "a break moved the place: section %d level %d", en_section, en_drum_level);
+                    if (en_break_bars)
+                        CHECK(en_test_song() / 16u % 8u + (uint32_t)en_break_bars >= 8u - 1u + 0u, "style %d: a break away from its phrase's end", st);
+                    bars(1u);
+                }
+                CHECK(got == LEN[n], "style %d, Breaks %d: lasted %d bars, the knob says %d", st, KNOB[n], got, LEN[n]);
+                CHECK(!en_break_bars, "the break %d did not end", k);
+            }
         }
-        CHECK(got > 0, "the break %d did not come", k);
-        CHECK(!en_break_bars, "the break %d did not end", k);
+}
+
+/* ---- the switches. Hands' start; each layer on and off at any Energy, in any style, heard and not */
+static void test_start_state(void)
+{
+    en_init();
+    en_arrange(EN_HANDS);
+    en_play(1);
+    run(256u, 256u, 0, 0);
+    CHECK(en_mode == EN_HANDS, "the mode");
+    CHECK(!en_mute_keys && en_mute_mel && en_mute_bass && en_mute_drums && en_mute_hats, "the start: %d %d %d %d %d", en_mute_keys, en_mute_mel, en_mute_bass, en_mute_drums, en_mute_hats);
+    CHECK(en_test_mute_gain(EN_L_KEYS) == 1.0f && en_test_mute_gain(EN_L_MEL) == 0.0f && en_test_mute_gain(EN_L_BASS) == 0.0f && en_test_mute_gain(EN_L_DRUMS) == 0.0f &&
+              en_test_mute_gain(EN_L_HATS) == 0.0f, "the start's gains: no fade from all on");
+    /* nothing of it reaches the mix: the keys' and pad's at level 0 is the room's silence from the first sample */
+    {
+        double r;
+        en_init();
+        en_set(P_KEYS, 0);
+        en_arrange(EN_HANDS);
+        en_play(1);
+        r = rms_of(SEC(30.0f));
+        CHECK(r == 0.0, "the start with the keys at 0 is not silent: %f", r);
     }
+    /* a start from nothing in Hands: the place a player starts */
+    en_init();
+    en_arrange(EN_HANDS);
+    en_play(1);
+    run(SEC(1.0f), 256u, 0, 0);
+    CHECK(en_section == EN_SEC_LIGHT, "the start's section: %d", en_section);
+    /* and a switch to Auto, before or after: Auto's own set, all on */
+    en_arrange(EN_AUTO);
+    run(256u, 256u, 0, 0);
+    CHECK(!en_mute_keys && !en_mute_mel && !en_mute_bass && !en_mute_drums && !en_mute_hats, "Auto, from the start: all on");
+}
+
+static double layer_rms(uint32_t seconds)
+{
+    return rms_of(SEC((float)seconds));
+}
+static void test_switches(void)
+{
+    static const int E[6] = {0, 9, 20, 45, 70, 100};
+    int st, e, l;
+    for (st = 0; st < EN_NSTYLES; st++)
+        for (e = 0; e < 6; e++)
+            for (l = 0; l < EN_NLAYERS; l++) {
+                double on, off;
+                int a;
+                start(1001u + (uint32_t)st * 7u + (uint32_t)e, st);
+                en_arrange(EN_HANDS);
+                en_set(P_ENERGY, E[e]);
+                only(l);
+                en_layer(EN_L_KEYS, 0);
+                en_play(1);
+                run(SEC(2.0f), 256u, 0, 0);
+                a = en_layer_press(l);
+                if (l == EN_L_KEYS)                  /* (it has been pressed off by hand above: the switch turns it back) */
+                    CHECK(a == 1, "the keys: off, the press says %d", a);
+                else
+                    CHECK(a == 1, "style %d Energy %d: %s, off, the press says %d", st, E[e], LNAME[l], a);
+                run(1024u, 256u, 0, 0);
+                CHECK(!mute_of(l), "style %d Energy %d: %s did not come on", st, E[e], LNAME[l]);
+                bars(1u);
+                on = layer_rms(l == EN_L_MEL ? 8u : 6u);    /* the bar has come: it is heard, not some time */
+                CHECK(on > 0.0008, "style %d Energy %d: %s on, hardly there: %f", st, E[e], LNAME[l], on);
+                a = en_layer_press(l);
+                CHECK(a == 0, "style %d Energy %d: %s, on, the press says %d", st, E[e], LNAME[l], a);
+                run(1024u, 256u, 0, 0);
+                CHECK(mute_of(l), "style %d Energy %d: %s did not go off", st, E[e], LNAME[l]);
+                run(SEC(3.0f), 256u, 0, 0);
+                en_set(P_ECHO, 0);
+                en_set(P_REVERB, 0);
+                run(SEC(2.0f), 256u, 0, 0);
+                off = layer_rms(4u);
+                CHECK(off < on * 0.02, "style %d Energy %d: %s off: %f, on %f", st, E[e], LNAME[l], off, on);
+            }
+}
+
+/* the melody pressed on is not half a minute off */
+static void test_melody_soon(void)
+{
+    int sec;
+    uint32_t sd;
+    for (sec = 0; sec < EN_NSECTIONS; sec++)
+        for (sd = 0u; sd < 12u; sd++) {
+            uint32_t i, t;
+            start(424242u + sd * 31u + (uint32_t)sec, EN_ST_LIQUID);
+            en_arrange(EN_HANDS);
+            en_play(1);
+            run(SEC(0.5f), 256u, 0, 0);
+            for (t = 0u; t < (uint32_t)(sec + EN_NSECTIONS - EN_SEC_LIGHT) % EN_NSECTIONS; t++) {
+                en_next();
+                bars(1u);
+            }
+            bars(10u + sd);
+            en_layer_press(EN_L_MEL);
+            clear_counts();
+            for (i = 0u; i < 6u; i++)
+                bars(1u);
+            CHECK(ons[1] > 0u, "section %d seed %u: the melody pressed on, no note in 6 bars", sec, sd);
+        }
+}
+
+/* the Energy knob, swept with the drums on: at no point do they fall silent: every bar has its kick */
+static void test_energy_sweep(void)
+{
+    static const int STYLES[EN_NSTYLES] = {EN_ST_LIQUID, EN_ST_ROLLER, EN_ST_JUNGLE, EN_ST_HALF, EN_ST_DRIFT, EN_ST_LOADING};
+    int st, e;
+    for (st = 0; st < EN_NSTYLES; st++) {
+        start(58u, STYLES[st]);
+        en_arrange(EN_HANDS);
+        only(EN_L_DRUMS);
+        en_layer(EN_L_KEYS, 0);
+        en_layer(EN_L_DRUMS, 1);
+        en_set(P_ENERGY, 100);
+        en_play(1);
+        run(SEC(1.0f), 256u, 0, 0);
+        bars(2u);
+        for (e = 100; e >= -100; e -= 4) {
+            const int v = e < 0 ? -e : e;
+            uint32_t kicks;
+            double r;
+            en_set(P_ENERGY, v);
+            bars(1u);
+            CHECK(en_drum_level >= 2u, "style %d Energy %d: level %d", st, v, en_drum_level);
+            clear_counts();
+            e_sum = 0.0;
+            e_n = 0u;
+            bars(1u);
+            r = sqrt(e_sum / (double)(e_n ? e_n : 1u));
+            kicks = drum_on[36] + drum_on[38];
+            CHECK(kicks > 0u, "style %d Energy %d: a bar with no kick or snare", st, v);
+            CHECK(r > 0.0005, "style %d Energy %d: the drums are silent: %f", st, v, r);
+            CHECK(!en_mute_drums, "style %d Energy %d: Energy turned the drums off", st, v);
+        }
+    }
+}
+
+/* ---- Auto: a switch on what the arranger has absent goes there; on what is playing it mutes */
+static int part_has(int l)
+{
+    return l == EN_L_DRUMS ? en_drum_level >= 2u : l == EN_L_HATS ? en_drum_level >= 1u : l == EN_L_BASS ? en_test_bass_song() > 0.0f : 1;
+}
+static void test_auto_seek(void)
+{
+    static const int LAY[3] = {EN_L_DRUMS, EN_L_BASS, EN_L_HATS};
+    static const int E[3] = {12, 45, 90};
+    int st, e, l;
+    for (st = 0; st < EN_NSTYLES; st++)
+        for (e = 0; e < 3; e++)
+            for (l = 0; l < 3; l++) {
+                uint32_t bar;
+                int a;
+                start(1001u + (uint32_t)st, st);
+                en_set(P_ENERGY, E[e]);
+                en_play(1);
+                run(SEC(1.0f), 256u, 0, 0);
+                bars(1u);
+                CHECK(en_section == EN_SEC_INTRO, "style %d: the top is the intro", st);
+                CHECK(en_layers_absent >> LAY[l] & 1u, "style %d Energy %d: %s not absent in the intro: %02x", st, E[e], LNAME[LAY[l]], en_layers_absent);
+                a = en_layer_press(LAY[l]);
+                CHECK(a == 1, "style %d Energy %d: %s, absent: the press says %d", st, E[e], LNAME[LAY[l]], a);
+                run(256u, 256u, 0, 0);
+                CHECK(!mute_of(LAY[l]), "%s muted by a press that should bring it", LNAME[LAY[l]]);
+                bar = en_test_song() / 16u;
+                bars(1u);
+                (void)bar;
+                run(SEC(1.5f), 256u, 0, 0);
+                CHECK(part_has(LAY[l]), "style %d Energy %d: %s pressed, not there: section %d level %d", st, E[e], LNAME[LAY[l]], en_section, en_drum_level);
+                CHECK(en_test_section_bar() < en_test_section_bars(), "style %d: past its section", st);
+                /* it goes on from there as ever */
+                a = en_layer_press(LAY[l]);
+                CHECK(a == 0, "style %d Energy %d: %s playing: the press says %d", st, E[e], LNAME[LAY[l]], a);
+                run(256u, 256u, 0, 0);
+                CHECK(mute_of(LAY[l]), "%s playing, a press: not muted", LNAME[LAY[l]]);
+            }
+    /* muted and absent: it comes on and goes there; a mute on what is playing moves no section */
+    {
+        int sec;
+        start(7u, EN_ST_LIQUID);
+        en_set(P_ENERGY, 70);
+        en_play(1);
+        run(SEC(1.0f), 256u, 0, 0);
+        bars(1u);
+        en_layer(EN_L_DRUMS, 0);
+        run(256u, 256u, 0, 0);
+        en_layer_press(EN_L_DRUMS);
+        run(256u, 256u, 0, 0);
+        bars(2u);
+        CHECK(!en_mute_drums && en_drum_level >= 2u, "muted and absent, pressed: mute %d, level %d", en_mute_drums, en_drum_level);
+        sec = en_section;
+        en_layer_press(EN_L_KEYS);
+        en_layer_press(EN_L_MEL);
+        run(256u, 256u, 0, 0);
+        bars(2u);
+        CHECK(en_section == sec && en_mute_keys && en_mute_mel, "keys and melody are never absent: section %d, was %d", en_section, sec);
+        en_layer_press(EN_L_MEL);
+        en_layer_press(EN_L_KEYS);
+    }
+    /* two asked for on one bar: the first place with both */
+    {
+        start(7u, EN_ST_LIQUID);
+        en_set(P_ENERGY, 70);
+        en_play(1);
+        run(SEC(1.0f), 256u, 0, 0);
+        bars(1u);
+        en_layer_press(EN_L_DRUMS);
+        en_layer_press(EN_L_BASS);
+        run(256u, 256u, 0, 0);
+        bars(1u);
+        run(SEC(2.0f), 256u, 0, 0);
+        CHECK(en_drum_level >= 2u && en_test_bass_song() > 0.0f, "two asked for: level %d, bass %f", en_drum_level, (double)en_test_bass_song());
+    }
+    /* under Energy 10 the drums are nowhere: on, and it stays where it is, and nothing hangs */
+    {
+        start(7u, EN_ST_LIQUID);
+        en_set(P_ENERGY, 5);
+        en_play(1);
+        run(SEC(1.0f), 256u, 0, 0);
+        bars(1u);
+        en_layer_press(EN_L_DRUMS);
+        run(256u, 256u, 0, 0);
+        bars(3u);
+        CHECK(en_section == EN_SEC_INTRO, "no drums anywhere, and it moved: section %d", en_section);
+    }
+}
+
+/* ---- Auto is what it was: 597e477's hashes: sound and MIDI, every style, Energy across the range */
+static void test_auto_hashes(void)
+{
+    static const uint32_t WANT[EN_NSTYLES * 6][2] = {
+        {0x82e2961fu, 0xdbb6e935u}, {0x82e2961fu, 0xdbb6e935u}, {0x82e2961fu, 0xdbb6e935u}, {0x82e2961fu, 0xdbb6e935u}, {0x82e2961fu, 0xdbb6e935u}, {0x0b175ea9u, 0xc7eedc3du},
+        {0xae2e9a25u, 0xc6fa1e98u}, {0x1ba96a80u, 0x46925b6du}, {0xc54faae0u, 0x9bada793u}, {0x1784c579u, 0xa5f61bb4u}, {0x11b9d7e9u, 0x55ba6969u}, {0xd8e3853cu, 0xec039ee4u},
+        {0xe5a5efb8u, 0x6069fc80u}, {0xe5a5efb8u, 0x6069fc80u}, {0xe5a5efb8u, 0x6069fc80u}, {0xe5a5efb8u, 0x6069fc80u}, {0xe5a5efb8u, 0x6069fc80u}, {0x4d8fbfdcu, 0x6c11d853u},
+        {0xbb816107u, 0xf8236156u}, {0xbb816107u, 0xf8236156u}, {0xbb816107u, 0xf8236156u}, {0xbb816107u, 0xf8236156u}, {0xbb816107u, 0xf8236156u}, {0xbb816107u, 0xf8236156u},
+        {0x09af36b6u, 0xb35f12c4u}, {0x09af36b6u, 0xb35f12c4u}, {0x09af36b6u, 0xb35f12c4u}, {0x09af36b6u, 0xb35f12c4u}, {0x09af36b6u, 0xb35f12c4u}, {0x09af36b6u, 0xb35f12c4u},
+        {0x777b6240u, 0xd57d8ff5u}, {0x777b6240u, 0xd57d8ff5u}, {0x777b6240u, 0xd57d8ff5u}, {0x777b6240u, 0xd57d8ff5u}, {0x777b6240u, 0xd57d8ff5u}, {0x87a11f4bu, 0x37437f56u},
+    };
+    static const int E[6] = {0, 5, 20, 45, 70, 100};
+    int st, e;
+    for (st = 0; st < EN_NSTYLES; st++)
+        for (e = 0; e < 6; e++) {
+            uint32_t t;
+            en_init();
+            frames = 0u;
+            mhash = 2166136261u;
+            ahash = 2166136261u;
+            memset(down, 0, sizeof down);
+            memset(nd, 0, sizeof nd);
+            en_set(P_STYLE, st);
+            en_set(P_ENERGY, E[e]);
+            en_seed(1001u + (uint32_t)st);
+            en_play(1);
+            for (t = 0u; t < 44100u * 30u; t += 256u)
+                run(256u, 256u, hash_block, 0);
+            CHECK(ahash == WANT[st * 6 + e][0], "Auto, style %d Energy %d: the sound moved: %08x", st, E[e], ahash);
+            CHECK(mhash == WANT[st * 6 + e][1], "Auto, style %d Energy %d: MIDI moved: %08x", st, E[e], mhash);
+        }
 }
 
 /* ---- the ledger: every combination, both modes, Energy moving, EDIT and breaks, and rests; and MIDI out off at the end of it, all let go */
@@ -915,9 +1336,13 @@ static void test_ledger(void)
     for (m = 0; m < 2; m++)
         for (c = 0; c < 1 << EN_NLAYERS; c++) {
             start(1001u + (uint32_t)c, c % EN_NSTYLES);
-            en_arrange(m, 1);
+            en_arrange(m);
             en_play(1);
             run(SEC(1.0f), 256u, 0, 0);
+            for (l = 0; l < EN_NLAYERS; l++)
+                if (mute_of(l) != !(c >> l & 1))     /* (each through the hand's switch: to this combination) */
+                    en_layer_press(l);
+            run(SEC(6.0f), 256u, 0, 0);
             for (l = 0; l < EN_NLAYERS; l++)
                 en_layer(l, !(c >> l & 1));
             run(SEC(6.0f), 256u, 0, 0);
@@ -956,14 +1381,14 @@ static void test_careless(void)
         const uint32_t r = rnd16();
         switch (r % 12u) {
         case 0: case 1: case 2: en_layer((int)(r >> 4) % EN_NLAYERS, (int)(r >> 8 & 1u)); break;
-        case 3: en_arrange((int)(r >> 4 & 1u), (int)(r >> 5 & 1u)); break;
+        case 3: en_arrange((int)(r >> 4 & 1u)); break;
         case 4: en_set(P_ENERGY, (int)(r >> 4) % 101); break;
         case 5: en_next(); break;
         case 6: en_break(); break;
         case 7: en_set(P_STYLE, (int)(r >> 4) % EN_NSTYLES); break;
         case 8: en_hold((int)(r >> 4 & 1u)); break;
         case 9: en_play((int)(r >> 4 & 3u) != 0); break;
-        case 10: en_layers_on(); break;
+        case 10: en_layer_press((int)(r >> 4) % EN_NLAYERS); break;
         default: break;
         }
         run(SEC(1.0f), 256u, 0, 0);
@@ -984,9 +1409,16 @@ int main(void)
     test_on_the_bar();
     test_ramps();
     test_no_click();
+    test_entry_click();
     test_duck();
     test_auto_keeps();
     test_resting();
+    test_start_state();
+    test_switches();
+    test_melody_soon();
+    test_energy_sweep();
+    test_auto_seek();
+    test_auto_hashes();
     test_hands_stays();
     test_energy_range();
     test_character();

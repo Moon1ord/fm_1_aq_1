@@ -1,6 +1,13 @@
 # Five minutes of Liquid, D Lydian: all on for a minute, then the chords kept off A and B, then only on E, F# and A, then
 # all on again. Not one of the tests. The chords in the trace: never on a note that is off.
 #   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/degrees.amb app/build/listen
+# (in Auto, saved, as it boots: this is the arranger's, from the top. Hands is the power-on's: hands.amb, preset_*.amb)
+press SEL
+tap HOME
+release SEL
+tap SAVE
+wait 800
+reboot
 master 2430
 tap PLAY
 wait 200

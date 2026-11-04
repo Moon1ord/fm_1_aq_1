@@ -1,4 +1,4 @@
-# every save through the duck: SAVE any time, growing or resting; autosave in a rest, what cancels it; presses queued; a panic; the system's voice
+# every save through the duck: SAVE any time, growing or resting; autosave in a rest, what cancels it; presses queued, but for PLAY, at once; a panic; the system's voice
 # (sysnotes counts what it has sung since the engine started; writepeak: the most in the two blocks before the last write, the DMA's ring: 0 is nothing to cut)
 wait 700
 # the boot's five rising notes have sung, and only those
@@ -176,8 +176,6 @@ expect saving 1
 tap ARP
 expect view 1
 tap LFO
-tap PLAY
-tap PLAY
 expect view 1
 expect playing 1
 wait 700
@@ -185,7 +183,6 @@ expect saving 0
 expect store_writes 4
 # the last page pressed, not the highest: ARP then SEQ would not tell, so LFO after ARP does (B_ARP > B_LFO)
 expect view 3
-# PLAY twice is PLAY twice
 expect playing 1
 tap SAVE
 expect saving 1
@@ -199,13 +196,14 @@ expect store_writes 5
 tap SAVE
 wait 300
 expect saving 2
-tap PLAY
-expect playing 1
+tap REC
+expect held 0
 wait 300
 expect saving 0
-expect playing 0
-tap PLAY
+expect held 1
+tap REC
 wait 100
+expect held 0
 expect store_writes 6
 # a knob works through a duck; what it changed before the write is saved, what it changed after it waits
 tap ARP
@@ -430,3 +428,171 @@ expect sysnotes 14
 wait 100
 # none of it comes to MIDI: the ledger is the engine's alone
 expect midion1 >0
+
+# ---- PLAY does not wait for a duck: at once, whatever point it is at. SAVE's save goes on and is written; nothing is left down
+reboot
+wait 700
+expect playing 1
+# in the fade: a rest, there and then; it still writes, comes back, sings
+spin K1 1
+expect dirty 1
+tap SAVE
+expect saving 1
+wait 50
+tap PLAY
+wait 10
+expect playing 0
+expect saving >0
+wait 200
+expect dirty 0
+expect writepeak 0
+expect saving 2
+wait 500
+expect saving 0
+expect ducked 0
+expect sysnotes >5
+expect playing 0
+# the rest is a rest, with the sound back: the hand and the pad
+peakreset
+wait 3000
+expect peak_db_min -40
+# in the fade, from a rest: growing, there and then
+spin K1 1
+tap SAVE
+wait 50
+expect saving 1
+tap PLAY
+wait 10
+expect playing 1
+wait 800
+expect saving 0
+expect dirty 0
+expect ducked 0
+expect writepeak 0
+expect playing 1
+# twice in a fade is twice
+spin K1 1
+tap SAVE
+tap PLAY
+wait 10
+expect playing 0
+tap PLAY
+wait 10
+expect playing 1
+wait 800
+expect saving 0
+expect dirty 0
+# around the zero, each side of the write, a frame or two apart: never a noise under the write, never mute after
+spin K1 1
+tap SAVE
+wait 130
+tap PLAY
+wait 10
+expect playing 0
+wait 800
+expect saving 0
+expect dirty 0
+expect writepeak 0
+expect ducked 0
+spin K1 1
+tap SAVE
+wait 150
+tap PLAY
+wait 10
+expect playing 1
+wait 800
+expect saving 0
+expect dirty 0
+expect writepeak 0
+expect ducked 0
+spin K1 1
+tap SAVE
+wait 170
+tap PLAY
+wait 10
+expect playing 0
+wait 800
+expect saving 0
+expect dirty 0
+expect writepeak 0
+expect ducked 0
+spin K1 1
+tap SAVE
+wait 190
+tap PLAY
+wait 10
+expect playing 1
+wait 800
+expect saving 0
+expect dirty 0
+expect writepeak 0
+expect ducked 0
+peakreset
+wait 5000
+expect peak_db_min -40
+# on its way back: at once, and it arrives
+spin K1 1
+tap SAVE
+wait 300
+expect saving 2
+tap PLAY
+wait 10
+expect playing 0
+expect saving 2
+wait 500
+expect saving 0
+expect ducked 0
+peakreset
+wait 3000
+expect peak_db_min -40
+spin K1 1
+tap SAVE
+wait 300
+expect saving 2
+tap PLAY
+wait 10
+expect playing 1
+wait 500
+expect saving 0
+expect ducked 0
+# the others wait still, and in their order, and PLAY goes past them
+tap SAVE
+wait 20
+expect saving 1
+tap LFO
+tap ARP
+tap PLAY
+wait 10
+expect playing 0
+expect view 0
+wait 800
+expect saving 0
+expect view 2
+expect playing 0
+# an autosave's fade: the press cancels it, nothing written, growing at once
+spin K2 1
+wait 4030
+expect saving 1
+tap PLAY
+wait 10
+expect playing 1
+expect saving 0
+expect ducked 0
+expect dirty 1
+tap PLAY
+wait 10
+expect playing 0
+# an autosave's way back, the write done: at once, and no notes
+wait 4300
+expect dirty 0
+expect saving 2
+tap PLAY
+wait 10
+expect playing 1
+expect saving 2
+wait 500
+expect saving 0
+expect ducked 0
+peakreset
+wait 5000
+expect peak_db_min -40

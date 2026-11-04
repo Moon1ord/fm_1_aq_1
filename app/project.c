@@ -15,7 +15,7 @@ static void recipe(int i, slot_t *s)
 {
     en_piece(i, s->par, &s->pool);
     s->mask = EN_MASK_ALL;
-    s->arrange = EN_AUTO;
+    s->arrange = EN_HANDS;
 }
 
 static void take(const slot_t *s)                /* a piece's settings into play, the globals kept */
@@ -125,5 +125,5 @@ void project_apply(void)
         en_set(i, proj.par[i]);
     en_mask(proj.mask);
     en_pool(proj.pool);
-    en_arrange(proj.arrange, 1);
+    en_arrange(proj.arrange);
 }

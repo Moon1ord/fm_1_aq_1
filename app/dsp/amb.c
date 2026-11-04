@@ -231,7 +231,7 @@ static float knob_curve(int v, int mid, float lo, float base, float hi)
 }
 
 /* ------------------------------------------------------------ commands --- */
-enum { C_SET, C_POOL, C_MASK, C_PLAY, C_NEXT, C_BREAK, C_HOLD, C_SEED, C_PANIC, C_RESTORE, C_CLOCK, C_REGROW, C_LAYER, C_LAYERS_ON, C_ARRANGE, C_DUCK, C_SYS };
+enum { C_SET, C_POOL, C_MASK, C_PLAY, C_NEXT, C_BREAK, C_HOLD, C_SEED, C_PANIC, C_RESTORE, C_CLOCK, C_REGROW, C_LAYER, C_SEEK, C_ARRANGE, C_DUCK, C_SYS };
 #define QN 64u
 static uint32_t q[QN];
 static volatile uint32_t q_w, q_r;
@@ -265,14 +265,22 @@ void en_restore(void) { post(C_RESTORE, 0, 0); }
 void en_clock(int msg) { post(C_CLOCK, msg, 0); }
 void en_regrow(void) { post(C_REGROW, 0, 0); }
 void en_layer(int layer, int on) { post(C_LAYER, layer, on); }
-void en_layers_on(void) { post(C_LAYERS_ON, 0, 0); }
-void en_arrange(int mode, int as_saved) { post(C_ARRANGE, mode, as_saved); }
+void en_arrange(int mode) { post(C_ARRANGE, mode, 0); }
+int en_layer_press(int layer)                   /* (a hand's: from the main loop) */
+{
+    const int off = layer == EN_L_KEYS ? en_mute_keys : layer == EN_L_MEL ? en_mute_mel : layer == EN_L_BASS ? en_mute_bass : layer == EN_L_DRUMS ? en_mute_drums : en_mute_hats;
+    const int on = off || (en_mode == EN_AUTO && (en_layers_absent >> layer & 1u));
+    en_layer(layer, on);
+    if (on)
+        post(C_SEEK, layer, 0);
+    return on;
+}
 void en_duck(int on) { post(C_DUCK, on, 0); }
 void en_sys(int kind) { post(C_SYS, kind, 0); }
 
 /* -------------------------------------------------------------- state --- */
 volatile uint8_t en_playing, en_held, en_ext;
-volatile uint8_t en_mute_keys, en_mute_mel, en_mute_bass, en_mute_drums, en_mute_hats, en_mode;
+volatile uint8_t en_mute_keys, en_mute_mel, en_mute_bass, en_mute_drums, en_mute_hats, en_mode, en_layers_absent;
 volatile uint8_t en_chord[EN_NPAD], en_chord_root, en_chord_n, en_chord_bars;
 volatile float en_drift, en_pad_level, en_bass_level;
 volatile uint8_t en_loop_pos[EN_NLOOP];
@@ -486,38 +494,41 @@ void en_arr_part(const en_arr_t *a, uint32_t bar_in, int style, int energy, en_p
         o->character = 2u;
 }
 
-/* Hands: Energy says it all, in the steps its ceiling has: nothing, hats, half time, light, full, and at the top the peak. Each step is the place in the
- * song that plays so, and what the section does there, but for the bass: it is always there to be had, long roots until there is a beat, since which
- * layers play is the player's now. Ramps of a bar: asked for, it comes. A style's numbers still count: its rhythm, its figures, its breaks, and the
- * most its drums ever play (Drift's peak is half time; the harmony rises all the same) */
-void en_hands_part(int style, int energy, en_part_t *o)
+/* Hands. The whole of Energy is a beat, whichever layers are on, and it says nothing about which are: half time to 34, light to 59, full above, in every style, each by
+ * its own numbers (Drift's full is a sparse half-time thing: its density). Energy also sets the harmony's character, the bass's weight and the piano's touch. The
+ * section is the player's (EDIT): it colours the harmony by a step, and it is the melody's pace (MEL_SEC) and the groove (a seed of its own, song_step). No bass of 0: on,
+ * it is heard. Ramps of a bar */
+void en_hands_part(int style, int energy, int section, en_part_t *o)
 {
     static const struct {
-        uint8_t from, section, character, bass, touch;
-    } STEP[6] = {
-        {0, EN_SEC_INTRO, 0, 75, 92},
-        {1, EN_SEC_HATS, 1, 75, 95},
-        {10, EN_SEC_DOWN, 1, 75, 96},
-        {35, EN_SEC_LIGHT, 2, 100, 100},
-        {ENERGY_FULL, EN_SEC_FULL, 2, 112, 108},
-        {80, EN_SEC_FULL, 3, 112, 114},
+        uint8_t from, character, bass, touch;
+    } STEP[5] = {
+        {0, 0, 75, 92},
+        {10, 1, 75, 96},
+        {35, 2, 100, 100},
+        {ENERGY_FULL, 2, 112, 108},
+        {80, 3, 112, 114},
     };
-    const style_t *st = &STYLE[(unsigned)style < EN_NSTYLES ? style : 0];
-    int i = 5, top = 0, s, ph;
+    static const int8_t COLOUR[EN_NSECTIONS] = {-1, 0, 0, -1, 1, -1};   /* intro, hats, light, breakdown, full, out */
+    int i = 4, c;
+    (void)style;
+    section = (unsigned)section < EN_NSECTIONS ? section : 0;
     while (energy < STEP[i].from)
         i--;
-    for (s = 0; s < EN_NSECTIONS; s++)
-        for (ph = 0; ph < 2; ph++)
-            if (LV_RANK[st->lv[s][ph]] > top)
-                top = LV_RANK[st->lv[s][ph]];
-    ph = i ? energy_rank(energy) : 0;
-    o->section = STEP[i].section;
-    o->level = RANK_LV[ph < top ? ph : top];
-    o->character = STEP[i].character;
+    c = STEP[i].character + COLOUR[section];
+    c = c < 0 ? 0 : c > 3 ? 3 : c;
+    if (energy < ENERGY_FULL && c == 3)
+        c = 2;
+    o->section = (uint8_t)section;
+    o->level = energy < 35 ? 4u : energy < ENERGY_FULL ? 2u : 3u;
+    o->character = (uint8_t)c;
     o->ramp = 1u;
     o->bass = STEP[i].bass;
     o->touch = STEP[i].touch;
 }
+
+/* the length of a break called in Hands: the Breaks knob, in thirds. There are no others there */
+int en_hands_break(int breaks) { return breaks < 34 ? 1 : breaks < 67 ? 2 : 4; }
 
 int en_arr_break(uint32_t bar, int level, int style, int breaks, uint32_t seed, uint32_t *in)
 {
@@ -2794,6 +2805,17 @@ static void layer_set(int l, int off)
     }
 }
 
+/* before anything has played there is nothing to fade: it starts as it is asked to */
+static void mutes_snap(void)
+{
+    const uint8_t off[EN_NLAYERS] = {en_mute_keys, en_mute_mel, en_mute_bass, en_mute_drums, en_mute_hats};
+    int l;
+    for (l = 0; l < EN_NLAYERS; l++) {
+        mute_pos[l] = mute_to[l] = mg[l] = off[l] ? 0.0f : 1.0f;
+        mgd[l] = 0.0f;
+    }
+}
+
 static void mutes_step(uint32_t n)
 {
     int l;
@@ -2809,6 +2831,12 @@ static void mutes_step(uint32_t n)
         mgd[l] = (p * p - g0) * (1.0f / (float)n);
     }
 }
+
+/* Hands: the player's. The arranger only keeps the place, for EDIT and for Auto to go on from */
+static uint8_t hands;
+/* each mode has its own set of layers off: Auto's starts with all on, the approved sound; Hands' with the keys and the pad. layers_other: the mode not playing */
+#define LAYERS_HANDS_START (1u << EN_L_MEL | 1u << EN_L_BASS | 1u << EN_L_DRUMS | 1u << EN_L_HATS)
+static uint8_t layers_other, seek_due;
 
 static int song_level;
 static float brk_fc, brk_fc_t, pad_fc, pad_fc_t, duck, duck_s, lift, lift_t;
@@ -2829,7 +2857,7 @@ static void level_set(const en_part_t *p, int first)
     pad_fc_t = PAD_FC[p->level];
     bass_song_t = (float)p->bass * 0.01f;
     song_touch = (float)p->touch * 0.01f;
-    lift_t = p->character == 3 || (p->level == 3 && lift_t > 0.0f) ? 1.0f : 0.0f;
+    lift_t = p->character == 3 || (!hands && p->level == 3 && lift_t > 0.0f) ? 1.0f : 0.0f;
 }
 
 /* where the arranger has got to: this section and the next, which is known only as far ahead as anyone needs to ask */
@@ -2848,20 +2876,12 @@ void (*en_trace_chord)(uint32_t step, const en_gchord_t *chord, int character);
 
 static uint32_t song;                            /* the next step */
 
-/* Hands. Energy's (hands_energy): en_hands_part, and the arranger only keeps the place, for Auto to go on from. A section left to itself: the phrase it
- * is in comes round, as held; after EDIT (hands_run) it plays on as written first, to its last phrase, and that comes round */
-static uint8_t hands, hands_energy, hands_run;
-
 /* a step's bar of the section. A section is whole phrases from a phrase's start, so held, the phrase it is in simply comes round
  * again: what is asked of a later bar is that bar of this phrase */
 static uint32_t bars_in(uint32_t s)
 {
     uint32_t in = (s - arr_start) / 16u;
-    if (hands && hands_run && !en_held) {
-        const uint32_t last = (uint32_t)arr_cur.bars - EN_ARR_PHRASE;
-        if (in >= arr_cur.bars)
-            in = last + (in - last) % EN_ARR_PHRASE;
-    } else if (en_held || hands) {
+    if (en_held) {
         const uint32_t base = (song - arr_start) / 16u / EN_ARR_PHRASE * EN_ARR_PHRASE;
         if (in >= base + EN_ARR_PHRASE)
             in = base + (in - base) % EN_ARR_PHRASE;
@@ -2872,8 +2892,8 @@ static uint32_t bars_in(uint32_t s)
 static void part_at(uint32_t s, en_part_t *o)
 {
     uint32_t in;
-    if (hands && hands_energy) {
-        en_hands_part(arr_style, par[P_ENERGY], o);
+    if (hands) {
+        en_hands_part(arr_style, par[P_ENERGY], arr_cur.section, o);
         return;
     }
     in = bars_in(s);
@@ -2883,28 +2903,16 @@ static void part_at(uint32_t s, en_part_t *o)
         en_arr_part(&arr_nxt, in - arr_cur.bars, arr_style, par[P_ENERGY], o);
 }
 
+/* the layers a part does not have, as bits of EN_L_*: it is the arranger's to say; a melody and keys it always has */
+static uint32_t part_lacks(const en_part_t *p)
+{
+    return (p->level < 2u ? 1u << EN_L_DRUMS : 0u) | (!p->level ? 1u << EN_L_HATS : 0u) | (!p->bass ? 1u << EN_L_BASS : 0u);
+}
+
 static void arr_follow(void)                     /* what comes after this section, as things stand */
 {
     arr_nxt = arr_cur;
     en_arr_next(&arr_nxt, song_seed, arr_style, par[P_ENERGY]);
-}
-
-/* Energy's section, kept for Auto to go on from: the place that plays what Energy asks, this bar of the phrase */
-static void hands_place(uint32_t s)
-{
-    en_part_t p;
-    en_hands_part(arr_style, par[P_ENERGY], &p);
-    if (p.section != arr_cur.section) {
-        const uint32_t phrase = 16u * EN_ARR_PHRASE;
-        uint32_t before = 0u;
-        arr_enter(&arr_cur, p.section, song_seed, arr_style, par[P_ENERGY]);
-        if (p.section == EN_SEC_DOWN || p.section == EN_SEC_LIGHT) {
-            const uint32_t phrases = arr_cur.bars / EN_ARR_PHRASE, first = phase_one(p.section, phrases);
-            before = first < phrases ? first : phrases - 1u;
-        }
-        arr_start = s - s % phrase - before * phrase;   /* (early in the song it wraps, and a difference from it is still right) */
-        arr_follow();
-    }
 }
 
 static void arr_bar(uint32_t s)                  /* on the bar */
@@ -2913,16 +2921,18 @@ static void arr_bar(uint32_t s)                  /* on the bar */
     arr_style = par[P_STYLE];
     if (s == 0u) {
         en_arr_first(&arr_cur, song_seed, arr_style, par[P_ENERGY]);
+        if (hands)                               /* (the intro's melody would be half a minute off: a player starts where it answers) */
+            arr_enter(&arr_cur, EN_SEC_LIGHT, song_seed, arr_style, par[P_ENERGY]);
         arr_start = 0u;
         arr_follow();
-        if (hands && hands_energy)
-            hands_place(s);
         return;
     }
-    if (s != arr_start && !(s % (16u * EN_ARR_PHRASE)) && (en_held || (hands && (!hands_run || (s - arr_start) / 16u >= arr_cur.bars))))
+    if (hands) {                                 /* this section, for as long as it takes: at Auto's return, the top of it */
+        arr_start = s - s % (16u * EN_ARR_PHRASE);
+        return;
+    }
+    if (s != arr_start && !(s % (16u * EN_ARR_PHRASE)) && en_held)
         arr_start += 16u * EN_ARR_PHRASE;        /* held: this phrase again, no time gone from the section */
-    if (hands && hands_energy)
-        hands_place(s);
     in = (s - arr_start) / 16u;
     if (in >= arr_cur.bars) {
         arr_cur = arr_nxt;
@@ -3194,7 +3204,8 @@ static void song_step(uint32_t s)
         part_now = p;
         part_at(s + 16u, &part_nxt);
         en_drum_next = part_nxt.level;
-        want = en_arr_break(bar, song_level, arr_style, par[P_BREAKS], song_seed, &in);
+        en_layers_absent = hands ? 0u : part_lacks(&part_nxt);
+        want = hands ? 0 : en_arr_break(bar, song_level, arr_style, par[P_BREAKS], song_seed, &in);
         if (want) {                              /* a break leads to a downbeat: not when the next phrase has none */
             en_part_t after;
             part_at((bar + EN_ARR_PHRASE - bar % EN_ARR_PHRASE) * 16u, &after);
@@ -3211,7 +3222,7 @@ static void song_step(uint32_t s)
         if (!s)
             brk_gen_start(&rhythm_gen);
         /* (half time has breaks only when asked for: at the full rhythm's numbers, as a break is, and back again after) */
-        brk_gen_bar(&rhythm_gen, en_style_rhythm(arr_style), brk_asked_now && song_level == 4 ? 3 : song_level, par[P_ENERGY], par[P_EVOLVE], song_seed, bar, want, in, &brk_bar);
+        brk_gen_bar(&rhythm_gen, en_style_rhythm(arr_style), brk_asked_now && song_level == 4 ? 3 : song_level, par[P_ENERGY], par[P_EVOLVE], hands ? song_seed + (uint32_t)p.section * 977u : song_seed, bar, want, in, &brk_bar);
         en_section = p.section;
         en_drum_level = p.level;
         en_break_bars = (uint8_t)want;
@@ -3323,8 +3334,6 @@ static void section_next(void)
     next_due = 0u;
     brk_asked = 0u;
     arr_style = par[P_STYLE];
-    hands_energy = 0u;
-    hands_run = hands;
     arr_follow();
     arr_cur = arr_nxt;
     if (song % phrase)
@@ -3347,7 +3356,13 @@ static void break_now(void)
     part_at(song, &p);
     if (brk_asked || p.level < 2u)
         return;
-    len = en_arr_break_now(song / 16u, par[P_STYLE], song_seed, &skip);
+    if (hands) {                                 /* the knob's length, whole: if it no longer fits this phrase, it is the next one's end */
+        const uint32_t pos = song / 16u % EN_ARR_PHRASE;
+        len = en_hands_break(par[P_BREAKS]);
+        skip = (2u * EN_ARR_PHRASE - (uint32_t)len - pos) % EN_ARR_PHRASE;
+    } else {
+        len = en_arr_break_now(song / 16u, par[P_STYLE], song_seed, &skip);
+    }
     song += skip * 16u;
     bar = song / 16u;
     left = (EN_ARR_PHRASE - bar % EN_ARR_PHRASE) * 16u;
@@ -3365,11 +3380,54 @@ static void break_now(void)
     brk_asked_len = (uint32_t)len;
 }
 
+/* Auto, a layer switched on that the arranger has absent: on the bar, the first place from here where all that was asked for plays: a later phase of this section, or
+ * the sections ahead, up to two passes. It starts there as EDIT starts a section. Where none has it (the drums under Energy 10) it stays where it is */
+static void arr_seek(void)
+{
+    const uint32_t phrase = 16u * EN_ARR_PHRASE, want = seek_due;
+    en_arr_t a = arr_cur;
+    en_part_t p;
+    uint32_t in, at = 0u;
+    int i, ph, found = 0;
+    seek_due = 0u;
+    arr_style = par[P_STYLE];
+    part_at(song, &p);
+    if (!(part_lacks(&p) & want))
+        return;
+    in = bars_in(song);
+    for (i = 0; i < 2 * EN_NSECTIONS + 2 && !found; i++) {
+        uint32_t phrases, first;
+        if (i)
+            en_arr_next(&a, song_seed, arr_style, par[P_ENERGY]);
+        phrases = a.bars / EN_ARR_PHRASE;
+        first = phase_one(a.section, phrases);
+        for (ph = i ? 0 : in < first * EN_ARR_PHRASE ? 1 : 2; ph < 2 && !found; ph++) {
+            if (ph && first >= phrases)
+                break;
+            at = ph ? first * EN_ARR_PHRASE : 0u;
+            en_arr_part(&a, at, arr_style, par[P_ENERGY], &p);
+            found = !(part_lacks(&p) & want);
+        }
+    }
+    if (!found)
+        return;
+    brk_asked = 0u;
+    arr_cur = a;
+    if (song % phrase)
+        song = (song / phrase + 1u) * phrase;
+    arr_start = song - at * 16u;
+    arr_follow();
+    ch_left = 0u;
+    prep_due = 1u;
+}
+
 static void tick(void)
 {
     if (song && !(song & 15u)) {
         if (next_due)
             section_next();
+        if (seek_due)
+            arr_seek();
         if (break_due)
             break_now();
     }
@@ -3622,6 +3680,7 @@ uint32_t en_test_section_bar(void) { return (song - arr_start) / 16u; }
 uint32_t en_test_section_bars(void) { return arr_cur.bars; }
 int en_test_silent(void) { return silent; }
 float en_test_mute_gain(int l) { return mute_pos[l] * mute_pos[l]; }
+float en_test_bass_song(void) { return bass_song_t; }
 float en_test_duck(void) { return fm_maxf(duck0, duck1); }
 int en_test_bass_down(void) { return bass.hold > 0; }
 int en_test_pad_sent(void)
@@ -3736,10 +3795,6 @@ static void apply(int p, int v)
         v = pi->hi;
     if (p == P_MIDI && !v && par[P_MIDI])
         notes_off();                             /* while it can still be said */
-    if (p == P_ENERGY && hands && v != par[p]) { /* turned: from the next bar it is Energy's */
-        hands_energy = 1u;
-        hands_run = 0u;
-    }
     par[p] = (int16_t)v;
     switch (p) {
     case P_KEYS: ep_vol = pad_vol = (float)(v * v) * 0.0001f; break;   /* the pad follows the piano's level, one to one */
@@ -3938,7 +3993,8 @@ void en_init(void)
     en_playing = en_held = en_ext = 0u;
     started = silent = restore_due = 0u;
     next_due = break_due = brk_asked = brk_asked_now = 0u;
-    hands = hands_energy = hands_run = en_mode = 0u;
+    hands = en_mode = en_layers_absent = seek_due = 0u;
+    layers_other = LAYERS_HANDS_START;
     en_mute_keys = en_mute_mel = en_mute_bass = en_mute_drums = en_mute_hats = 0u;
     for (i = 0; i < EN_NLAYERS; i++) {
         mute_pos[i] = mute_to[i] = mg[i] = 1.0f;
@@ -4202,21 +4258,28 @@ static void drain(void)
             break;
         case C_LAYER:
             layer_set(a, !b);
+            if (!started)
+                mutes_snap();
             break;
-        case C_LAYERS_ON:
-            for (a = 0; a < EN_NLAYERS; a++)
-                layer_set(a, 0);
+        case C_SEEK:                             /* the layer has just been switched on, by hand */
+            if (!hands)
+                seek_due |= (uint8_t)(1u << a);
+            else if (a == EN_L_MEL && mel_force < 0)
+                mel_due = song / 16u;            /* (the melody should not be half a minute off: when the phrase under way is over, the next at once) */
             break;
         case C_ARRANGE:
-            if (a && !hands) {
-                hands = 1u;
-                hands_energy = b != 0;
-                hands_run = 0u;
-            } else if (a) {
-                hands_energy = hands_energy || b;
-            } else if (hands) {                  /* on from where it is: the place has been kept */
-                hands = hands_energy = hands_run = 0u;
-                if (started)
+            if (!a != !hands) {                  /* to the other mode's set; Back in Auto it goes on from where it is */
+                const uint8_t now = (uint8_t)(en_mute_keys << EN_L_KEYS | en_mute_mel << EN_L_MEL | en_mute_bass << EN_L_BASS | en_mute_drums << EN_L_DRUMS | en_mute_hats << EN_L_HATS);
+                int l;
+                for (l = 0; l < EN_NLAYERS; l++)
+                    layer_set(l, layers_other >> l & 1u);
+                layers_other = now;
+                hands = a != 0;
+                seek_due = 0u;
+                en_layers_absent = 0u;
+                if (!started)
+                    mutes_snap();
+                else if (!hands)
                     arr_follow();
             }
             en_mode = hands;

@@ -1,0 +1,19 @@
+# Three minutes of Load Screen as the arranger plays it, the approved sound: in Auto (SELECT + HOME), saved, from the top, with a fixed seed. Not one of the tests.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/preset_load_screen_auto.amb app/build/listen
+press SEL
+tap HOME
+release SEL
+wait 100
+tap SAVE
+wait 800
+reboot
+seed 3001
+master 2430
+trace app/build/listen/preset_load_screen_auto.trace
+wav preset_load_screen_auto.wav
+wait 180000
+wavstop
+trace off
+expect piece 0
+expect mode 0
+expect seed 3001

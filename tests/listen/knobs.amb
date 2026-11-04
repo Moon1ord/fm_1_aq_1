@@ -2,6 +2,13 @@
 # 1:30 Bloom 0, 2:00 Bloom 100, 2:30 Bright 0, 3:00 Bright 100, 3:30 Rate 100 Tone 100, 4:00 Tone 0, 4:30 Move 0, 5:00 Move 100,
 # 5:30 Hats 100 Kit Moss, 6:00 Notes 0. The piece's parameters by number: amb.h.
 #   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/knobs.amb app/build/listen
+# (in Auto, saved, as it boots: this is the arranger's, from the top. Hands is the power-on's: hands.amb, preset_*.amb)
+press SEL
+tap HOME
+release SEL
+tap SAVE
+wait 800
+reboot
 master 2430
 tap PLAY
 wait 200

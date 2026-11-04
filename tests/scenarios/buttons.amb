@@ -1,4 +1,11 @@
 # the buttons, as a hand has them: PLAY, REC, EDIT, SEL + EDIT; what MIDI says through them on all five channels
+# (Auto: the arranger leads, saved with the piece, as it boots: the top of the song. Hands, the default, is hands.amb's)
+press SEL
+tap HOME
+release SEL
+tap SAVE
+wait 800
+reboot
 listen
 wait 200
 expect playing 1

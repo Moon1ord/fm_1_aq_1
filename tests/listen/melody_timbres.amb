@@ -1,6 +1,13 @@
 # One motif, one statement in each timbre, softest to brightest, ten seconds each, alone: to pick favourites. Not one of the tests. Evolve 0: the
 # same motif each time. Which timbre at which time: "mel" lines in the trace, a bar is 1.41 s.
 #   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/melody_timbres.amb app/build/listen
+# (in Auto, saved, as it boots: this is the arranger's, from the top. Hands is the power-on's: hands.amb, preset_*.amb)
+press SEL
+tap HOME
+release SEL
+tap SAVE
+wait 800
+reboot
 master 2430
 tap PLAY
 wait 200

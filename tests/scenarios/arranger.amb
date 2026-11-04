@@ -1,4 +1,11 @@
 # The arranger in the simulator: a fixed seed, a style, the energy held down, and all of it repeats.
+# (Auto: the arranger leads, saved with the piece, as it boots: the top of the song. Hands, the default, is hands.amb's)
+press SEL
+tap HOME
+release SEL
+tap SAVE
+wait 800
+reboot
 master 2430
 expect style 0
 expect section 0

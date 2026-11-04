@@ -83,8 +83,7 @@ static void take_piece(int i, uint32_t seed)
         en_set(p, v[p]);
     en_mask(EN_MASK_ALL);
     en_pool(pl);
-    en_arrange(EN_AUTO, 1);
-    en_layers_on();
+    en_arrange(EN_AUTO);       /* (what makes each piece what it is, as the arranger plays it) */
     en_seed(seed);
     en_regrow();
 }

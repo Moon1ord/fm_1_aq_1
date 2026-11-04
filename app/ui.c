@@ -5,8 +5,8 @@
  *
  *   keys           the scale: each key adds or removes its note from the pool (the root stays)
  *   SEL + a key    whether chords may stand on that note; it stays in the scale either way (two roots stay, besides the tonic)
- *   SEL + ENV ARP LFO SEQ FX   keys and pad, melody, bass, kick and snare, hats: on or off (off until the next piece or power-on; levels untouched)
- *   SEL + HOME     the arrangement: Auto, or Hands (Energy is the drums, no section comes by itself), kept with the piece
+ *   SEL + ENV ARP LFO SEQ FX   keys and pad, melody, bass, kick and snare, hats: switches (kept through the pieces; power-on: keys and pad; levels untouched)
+ *   SEL + HOME     the arrangement: Hands (the switches and Energy are yours, no section or break comes by itself), or Auto (the arranger leads), kept with the piece
  *   PLAY           it grows / rests: drums, bass and motifs stop and ring out, the hand and the pad stay on the chord
  *   REC            hold: no new chord, no new section; the drums, the bass and the motifs play on over the chord
  *   EDIT           the next section, on the next bar    SEL + EDIT   a break, on the next bar, if there are drums then
@@ -157,7 +157,7 @@ static struct {
     uint8_t ok;                        /* the write went well */
     uint8_t failed;                    /* the last write failed: no autosave until something changes (no breathing every few seconds) */
     uint8_t hushed;                    /* a panic, and no ui_init yet: nothing saves itself */
-    uint8_t n, q[SAVE_QUEUE];          /* buttons pressed during it, in order: played after it. A knob or a key is not held up */
+    uint8_t n, q[SAVE_QUEUE];          /* buttons pressed during it, in order: played after it. A knob, a key or PLAY is not held up */
     uint32_t t;
 } sv;
 
@@ -356,7 +356,6 @@ static void set_piece(int i)                    /* the piece playing kept as it 
 {
     project_piece(i);
     project_apply();
-    en_layers_on();
 #if defined PLAT_HOST && !defined PLAT_WEB
     host_pieces++;
 #endif
@@ -403,14 +402,16 @@ static int sel_button(int b)                     /* 1: it was a page's */
     int v, i;
     for (i = 0; i < EN_NLAYERS; i++)
         if (LAYER_BTN[i].btn == b) {
-            const int off = layer_off(LAYER_BTN[i].layer);
-            en_layer(LAYER_BTN[i].layer, off);
-            say(LAYER_BTN[i].name, off ? "ON" : "OFF");
+            const int on = en_layer_press(LAYER_BTN[i].layer);
+            if (on && proj.arrange == EN_AUTO && LAYER_BTN[i].layer == EN_L_DRUMS && proj.par[P_ENERGY] < 10)
+                warn("DRUMS ON", "ENERGY UP");   /* (under 10 the arranger has no drums anywhere to go to) */
+            else
+                say(LAYER_BTN[i].name, on ? "ON" : "OFF");
             return 1;
         }
     if (b == B_HOME) {
         proj.arrange = proj.arrange == EN_AUTO ? EN_HANDS : EN_AUTO;
-        en_arrange(proj.arrange, 0);
+        en_arrange(proj.arrange);
         say(proj.arrange == EN_HANDS ? "HANDS" : "AUTO", 0);
         mark_dirty();
         return 1;
@@ -433,9 +434,11 @@ static void save_begin(int manual)
     }
 }
 
-/* a button pressed during a save, or while those pressed before it are still going: 1 if it waits. An autosave's fade waits for nobody: a press cancels it (save_tick) */
+/* a button pressed during a save, or while those pressed before it are still going: 1 if it waits, in order; PLAY never does. An autosave's fade waits for nobody: a press cancels it (save_tick) */
 static int save_holds(int b)
 {
+    if (b == B_PLAY)                   /* the transport does not wait, ever: the save goes on over it (what it says is the engine's: a duck, a write, the way back know nothing of it), and an autosave's fade is cancelled by the press, as by any */
+        return 0;
     if (sv.st == SV_IDLE ? !sv.n : sv.st == SV_FADE && (!sv.manual || b == B_SAVE))
         return 0;
     if (b == B_SAVE && sv.st == SV_RETURN && !ui.dirty && sv.ok) {   /* written just now, and nothing since: what it asked for is done */
@@ -620,7 +623,6 @@ static void input(void)
         ui.help = 0;
         project_piece_reset();
         project_apply();
-        en_layers_on();
         en_regrow();
         say("RESET", piece_name(proj.piece));
         mark_dirty();

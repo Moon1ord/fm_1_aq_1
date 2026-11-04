@@ -1,14 +1,59 @@
-# Three minutes of Afterglow, from the top, with a fixed seed: the piece taken up, saved and booted, so that it starts in its own key and style. Not one of the tests.
+# Three minutes of Afterglow, played as a player would, from power-on with a fixed seed: the keys and the pad, then the layers brought in by hand, a section, a break, some taken away. Chords, rhythms and melody composed, as ever. Not one of the tests.
 #   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/preset_afterglow.amb app/build/listen
 wait 100
 turn PRESET 7
 tap SAVE
+wait 800
 reboot
 seed 3008
 master 2430
 trace app/build/listen/preset_afterglow.trace
 wav preset_afterglow.wav
-wait 180000
+# 0:00 the keys and the pad
+wait 20000
+# 0:20 the melody
+press SEL
+tap ARP
+release SEL
+wait 15000
+# 0:35 the bass
+press SEL
+tap LFO
+release SEL
+wait 15000
+# 0:50 the hats
+press SEL
+tap FX
+release SEL
+wait 10000
+# 1:00 the drums, at the piece's Energy
+press SEL
+tap SEQ
+release SEL
+wait 40000
+# 1:40 EDIT: the next section
+tap EDIT
+wait 20000
+# 2:00 a break
+press SEL
+tap EDIT
+release SEL
+wait 15000
+# 2:15 EDIT again
+tap EDIT
+wait 15000
+# 2:30 the drums out; the rest carries it
+press SEL
+tap SEQ
+release SEL
+wait 15000
+# 2:45 the bass and the hats out: the keys, the pad and the melody
+press SEL
+tap LFO
+tap FX
+release SEL
+wait 15000
+# 3:00
 wavstop
 trace off
 expect piece 7

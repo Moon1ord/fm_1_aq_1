@@ -4,14 +4,14 @@
  * "expect", its command, a reboot and the screen reader's dump.
  *
  * AMB-1's checks: playing held silent midionN keysdown bellson bassdown keyson breakbars barpos stepofbar bars chordhash view piece pool dirty sixteenths ext pad_level bass_level chordroot chordN loopnotes
- * parN battery section style level mask enmask keyslit help ringN mode arrange absent sysnotes sysnote ducked saving writepeak mutekeys mutemel mutebass mutedrums mutehats gainN meterN dimN litN screen eye smile blinks wipes wiping drawrows drawbytes drawpx artbytes stale (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
+ * parN battery section style level mask enmask keyslit help ringN mode arrange enagree absent sysnotes sysnote ducked saving writepeak mutekeys mutemel mutebass mutedrums mutehats gainN meterN dimN litN screen eye smile blinks wipes wiping drawrows drawbytes drawpx artbytes stale (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
  * values, help lines and messages wider than their places. Its commands:
  * storeamb (what AMB-1 leaves in the store: its magic and format, nothing of ours); storeold (the project as it is, whole, but
  * for the format before this one); battery N (the battery read as N,
  * plat.h's plat_battery: -1..4; "battery off" the simulator's own, full); seed N (the musical seed, from the next choice on;
  * until told it is EN_HARM_SEED); melhear T (a statement in this timbre at the next chance: an audition); setpar P V (parameter P to V, as a knob would); style NAME; energy N; breaks N; trace FILE
  * (a line for each bar: step section level character break's bars; a line for each chord: "chord" step name bars character key tones bass, the last two above the key)
- * and trace off; drawreset (the screen's counters); panic and uiinit (what the platform does around an update); overload (blocks too heavy, twice). */
+ * and trace off; drawreset (the screen's counters); panic and uiinit (what the platform does around an update); overload (blocks too heavy, twice); flood N (more values than the engine's queue holds, all at once). */
 #include <stdio.h>
 #include <strings.h>
 static FILE *trace_f;
@@ -54,6 +54,12 @@ int app_expect(const char *what, int *got)
         g = en_mode;
     else if (!strcmp(what, "arrange"))
         g = proj.arrange;
+    else if (!strcmp(what, "enagree")) {          /* what the project and the engine disagree on: parameters, the scale, the degrees, the arrangement */
+        int i;
+        g = (proj.pool != en_test_pool()) + (proj.mask != en_test_degrees()) + (proj.arrange != en_mode);
+        for (i = 0; i < P_NPARAMS; i++)
+            g += proj.par[i] != en_test_par(i);
+    }
     else if (!strcmp(what, "sysnotes"))           /* the system's voice: its notes since the engine started, the last */
         g = (int)en_sys_notes;
     else if (!strcmp(what, "sysnote"))
@@ -219,6 +225,12 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
         app_overload();
         return 1;
     }
+    if (!strcmp(cmd, "flood")) {                  /* flood N: N values at the engine at once, no render between, none of them the project's: more than its queue holds */
+        int i;
+        for (i = 0; i < atoi(a); i++)
+            en_set(P_BLOOM, (proj.par[P_BLOOM] + 1 + i % 2) % 100);
+        return 1;
+    }
     if (!strcmp(cmd, "seed")) {
         en_seed((uint32_t)strtoul(a, 0, 0));
         return 1;
@@ -277,6 +289,7 @@ void app_host_reboot(void)
 {
     memset(&proj, 0, sizeof proj);
     memset(&midi_owed, 0, sizeof midi_owed);
+    owed = 0u;
 }
 
 void app_speak_dump(void) { speak_dump(); }

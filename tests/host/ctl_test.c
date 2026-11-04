@@ -1768,6 +1768,83 @@ static void t_voice_lead(void)
     }
 }
 
+/* the commands' queue, with no block to take them: what can be said again may be refused, and says so; what only a hand asks for, and the duck, may not */
+static void flood(void)
+{
+    int i;
+    for (i = 0; i < 200; i++)
+        en_set(P_BLOOM, 10 + i % 2);
+}
+static void t_commands(void)
+{
+    static int32_t b[512];
+    int i;
+    int32_t pk;
+    en_init();
+    en_restore();
+    for (i = 0; i < 200; i++)
+        en_render(b, 256, GAIN);
+    CHECK(en_room() == EN_ROOM_MAX && !en_dropped(), "an empty queue: room %u", en_room());
+    en_set(P_BLOOM, 50);
+    CHECK(en_room() == EN_ROOM_MAX - 1u, "one taken: room %u", en_room());
+    en_render(b, 256, GAIN);
+    CHECK(en_room() == EN_ROOM_MAX && !en_dropped(), "drained: room %u", en_room());
+    flood();
+    CHECK(!en_room() && en_dropped(), "full: no room, and it says a value was refused");
+    CHECK(!en_dropped(), "it says so once");
+    en_render(b, 256, GAIN);
+    /* the duck, on a full queue, both ways */
+    flood();
+    en_duck(1);
+    for (i = 0; i < 60; i++)
+        en_render(b, 256, GAIN);
+    CHECK(en_ducked, "the duck went in over a full queue");
+    flood();
+    en_duck(0);
+    for (i = 0; i < 60; i++)
+        en_render(b, 256, GAIN);
+    pk = 0;
+    en_render(b, 256, GAIN);
+    for (i = 0; i < 512; i++)
+        pk = abs(b[i]) > pk ? abs(b[i]) : pk;
+    CHECK(!en_ducked && pk > 1000, "the way back went in over a full queue: not mute (%d)", (int)pk);
+    /* a hand's, over a full queue */
+    flood();
+    en_play(0);
+    en_render(b, 256, GAIN);
+    CHECK(!en_playing, "PLAY over a full queue");
+    flood();
+    en_hold(1);
+    en_render(b, 256, GAIN);
+    CHECK(en_held, "REC over a full queue");
+    en_hold(0);
+    en_play(1);
+    en_render(b, 256, GAIN);
+    flood();
+    en_layer(EN_L_BASS, 0);
+    en_render(b, 256, GAIN);
+    CHECK(en_mute_bass, "a layer's switch over a full queue");
+    en_layer(EN_L_BASS, 1);
+    flood();
+    en_play(0);
+    en_panic();
+    en_render(b, 256, GAIN);
+    CHECK(en_test_silent() && !en_playing, "the panic over a full queue");
+    flood();
+    en_restore();
+    for (i = 0; i < 4000 && en_test_silent(); i++)
+        en_render(b, 256, GAIN);
+    CHECK(!en_test_silent(), "the way back from a panic over a full queue: not silent for good");
+    /* and the room kept for them is theirs: at QN they too stop, nothing is overwritten */
+    for (i = 0; i < 200; i++)
+        en_hold(i & 1);
+    CHECK(!en_room(), "still no room");
+    en_render(b, 256, GAIN);
+    CHECK(en_held == 1, "the last that fitted of 64 is the 64th: an odd one (%d)", en_held);
+    en_hold(0);
+    en_render(b, 256, GAIN);
+}
+
 int main(int ac, char **av)
 {
     const int quick = ac > 1 && !strcmp(av[1], "quick");      /* ctl_test quick: no long holds. ctl_test long M: only those, M minutes each */
@@ -1789,6 +1866,7 @@ int main(int ac, char **av)
     T(t_midi_costs_nothing);
     T(t_midi_off);
     T(t_queue);
+    T(t_commands);
     T(t_rest);
     T(t_rest_same_song);
     T(t_rest_sound);

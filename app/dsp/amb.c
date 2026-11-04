@@ -231,18 +231,46 @@ static float knob_curve(int v, int mid, float lo, float base, float hi)
 }
 
 /* ------------------------------------------------------------ commands --- */
-enum { C_SET, C_POOL, C_MASK, C_PLAY, C_NEXT, C_BREAK, C_HOLD, C_SEED, C_PANIC, C_RESTORE, C_CLOCK, C_REGROW, C_LAYER, C_SEEK, C_ARRANGE, C_DUCK, C_SYS };
+enum { C_SET, C_POOL, C_MASK, C_PLAY, C_NEXT, C_BREAK, C_HOLD, C_SEED, C_PANIC, C_RESTORE, C_CLOCK, C_REGROW, C_LAYER, C_SEEK, C_ARRANGE, C_SYS };
+/* The main loop runs between blocks, and a whole piece is 34 of these, so the queue can fill. What is lost of the two kinds costs differently:
+ *   post: values the project can say again (en_dropped: the app says them all once there is room), and what does not matter once its moment has gone (a clock, a blip);
+ *   post_hand: what a hand or the platform asked for only once (PLAY, a break, a layer, the panic and the way back). The last EN_ROOM_KEPT places are theirs.
+ * The volume's duck is not here at all: it is one word (en_duck) */
 #define QN 64u
+#define EN_ROOM_KEPT (QN - EN_ROOM_MAX)
 static uint32_t q[QN];
 static volatile uint32_t q_w, q_r;
-static void post(uint32_t c, int a, int b)
+static uint8_t q_dropped;                         /* (the main loop's alone) */
+static void q_put(uint32_t c, int a, int b)
 {
-    uint32_t w = q_w;
-    if (w - q_r >= QN)
-        return;                                   /* full: dropped (never, at the UI's rate) */
+    const uint32_t w = q_w;
     q[w % QN] = c << 24 | ((uint32_t)a & 0xFFu) << 16 | ((uint32_t)b & 0xFFFFu);
     BARRIER();
     q_w = w + 1;
+}
+static void post(uint32_t c, int a, int b)
+{
+    if (q_w - q_r >= EN_ROOM_MAX) {
+        q_dropped = 1u;
+        return;
+    }
+    q_put(c, a, b);
+}
+static void post_hand(uint32_t c, int a, int b)
+{
+    if (q_w - q_r < QN)
+        q_put(c, a, b);
+}
+uint32_t en_room(void)
+{
+    const uint32_t used = q_w - q_r;
+    return used >= EN_ROOM_MAX ? 0u : EN_ROOM_MAX - used;
+}
+int en_dropped(void)
+{
+    const int d = q_dropped;
+    q_dropped = 0u;
+    return d;
 }
 void en_set(int p, int v)
 {
@@ -251,20 +279,20 @@ void en_set(int p, int v)
 }
 void en_pool(uint32_t pool) { post(C_POOL, 0, (int)(pool & 0xFFFu)); }
 void en_mask(uint32_t m) { post(C_MASK, 0, (int)(m & 0xFFFu)); }
-void en_play(int on) { post(C_PLAY, on, 0); }
-void en_next(void) { post(C_NEXT, 0, 0); }
-void en_break(void) { post(C_BREAK, 0, 0); }
-void en_hold(int on) { post(C_HOLD, on, 0); }
+void en_play(int on) { post_hand(C_PLAY, on, 0); }
+void en_next(void) { post_hand(C_NEXT, 0, 0); }
+void en_break(void) { post_hand(C_BREAK, 0, 0); }
+void en_hold(int on) { post_hand(C_HOLD, on, 0); }
 void en_seed(uint32_t s)
 {
     s ^= s >> 24;                                /* what the command has no room for */
     post(C_SEED, (int)(s >> 16 & 0xFFu), (int)(s & 0xFFFFu));
 }
-void en_panic(void) { post(C_PANIC, 0, 0); }
-void en_restore(void) { post(C_RESTORE, 0, 0); }
+void en_panic(void) { post_hand(C_PANIC, 0, 0); }
+void en_restore(void) { post_hand(C_RESTORE, 0, 0); }
 void en_clock(int msg) { post(C_CLOCK, msg, 0); }
 void en_regrow(void) { post(C_REGROW, 0, 0); }
-void en_layer(int layer, int on) { post(C_LAYER, layer, on); }
+void en_layer(int layer, int on) { post_hand(C_LAYER, layer, on); }
 void en_arrange(int mode) { post(C_ARRANGE, mode, 0); }
 int en_layer_press(int layer)                   /* (a hand's: from the main loop) */
 {
@@ -272,10 +300,12 @@ int en_layer_press(int layer)                   /* (a hand's: from the main loop
     const int on = off || (en_mode == EN_AUTO && (en_layers_absent >> layer & 1u));
     en_layer(layer, on);
     if (on)
-        post(C_SEEK, layer, 0);
+        post_hand(C_SEEK, layer, 0);
     return on;
 }
-void en_duck(int on) { post(C_DUCK, on, 0); }
+/* one word, written whole by the main loop and read whole by the render: a count of the calls and the last one's wish in its low bit. It cannot be dropped, however full the queue */
+static volatile uint32_t duck_word;
+void en_duck(int on) { duck_word = ((duck_word >> 1) + 1u) << 1 | (uint32_t)(on != 0); }
 void en_sys(int kind) { post(C_SYS, kind, 0); }
 
 /* -------------------------------------------------------------- state --- */
@@ -3673,6 +3703,8 @@ static uint32_t ext_age;
 volatile uint32_t en_test_nans;
 float en_test_peak_in;
 uint32_t en_test_degrees(void) { return degrees; }
+uint32_t en_test_pool(void) { return pool; }
+int en_test_par(int p) { return par[p]; }
 uint32_t en_test_song(void) { return song; }
 uint32_t en_test_seed(void) { return song_seed; }
 uint32_t en_test_chord_left(void) { return ch_left; }
@@ -3841,6 +3873,7 @@ static void apply(int p, int v)
 static float vol = 1.0f, vol_t = 1.0f;
 static uint32_t vol_zero;                        /* samples at zero, in a row */
 volatile uint8_t en_ducked;
+static uint32_t duck_seen;                       /* the last of en_duck's words taken */
 #define VOL_DOWN (1.0f / (0.15f * EN_SR))
 #define VOL_UP (1.0f / (0.30f * EN_SR))
 #define VOL_RING (2u * 256u)
@@ -4005,6 +4038,8 @@ void en_init(void)
     hat[0].lp1 = hat[0].lp2 = hat[1].lp1 = hat[1].lp2 = 0.0f;
     bass.ph = bass.inc = bass.inc_t = 0.0f;
     q_r = q_w = 0;
+    q_dropped = 0u;
+    duck_seen = duck_word;
     vol_reset();
     sys.amp = 0.0f;
     sys.left = 0u;
@@ -4169,6 +4204,13 @@ static void silence_over(void)                   /* en_restore: it grows, from w
 
 static void drain(void)
 {
+    const uint32_t dw = duck_word;
+    if (dw != duck_seen) {                       /* (before the queue: a panic asked for after it ends it) */
+        duck_seen = dw;
+        vol_t = dw & 1u ? 0.0f : 1.0f;
+        vol_zero = 0u;
+        en_ducked = 0u;
+    }
     while (q_r != q_w) {
         uint32_t c = q[q_r % QN];
         int a = (int)(c >> 16 & 0xFFu), b = (int)(int16_t)(c & 0xFFFFu);
@@ -4283,11 +4325,6 @@ static void drain(void)
                     arr_follow();
             }
             en_mode = hands;
-            break;
-        case C_DUCK:
-            vol_t = a ? 0.0f : 1.0f;
-            vol_zero = 0u;
-            en_ducked = 0u;
             break;
         case C_SYS:
             if (!silent)

@@ -1,0 +1,215 @@
+# A quick turn of PRESET: input() runs between frames, so several detents can come between two audio blocks, each a whole piece's worth of commands. Whatever the
+# moment, nothing is lost that matters: an autosave's fade cancelled by the turn does not leave it mute, and the project and the engine end up agreeing on every value
+# (enagree counts what they disagree on). Every case is run at six offsets, because a block is 5.8 ms and "turn PRESET n 1" is n ms: the same moves at each place in it.
+wait 3000
+# ---- resting, a knob, the autosave's fade under way, two detents: the fade is cancelled and the sound comes back
+tap PLAY
+wait 200
+expect playing 0
+# offset 0
+wait 0
+spin K2 1
+wait 4030
+expect saving 1
+turn PRESET 2 1
+wait 60
+expect saving 0
+expect ducked 0
+expect enagree 0
+peakreset
+wait 500
+expect ducked 0
+expect peak_db_max >-40
+# offset 1
+wait 1
+spin K2 1
+wait 4030
+expect saving 1
+turn PRESET -2 1
+wait 60
+expect saving 0
+expect ducked 0
+expect enagree 0
+peakreset
+wait 500
+expect ducked 0
+expect peak_db_max >-40
+# offset 2
+wait 2
+spin K2 1
+wait 4030
+expect saving 1
+turn PRESET 2 1
+wait 60
+expect saving 0
+expect ducked 0
+expect enagree 0
+peakreset
+wait 500
+expect ducked 0
+expect peak_db_max >-40
+# offset 3
+wait 3
+spin K2 1
+wait 4030
+expect saving 1
+turn PRESET -2 1
+wait 60
+expect saving 0
+expect ducked 0
+expect enagree 0
+peakreset
+wait 500
+expect ducked 0
+expect peak_db_max >-40
+# offset 4
+wait 4
+spin K2 1
+wait 4030
+expect saving 1
+turn PRESET 2 1
+wait 60
+expect saving 0
+expect ducked 0
+expect enagree 0
+peakreset
+wait 500
+expect ducked 0
+expect peak_db_max >-40
+# offset 5
+wait 5
+spin K2 1
+wait 4030
+expect saving 1
+turn PRESET -2 1
+wait 60
+expect saving 0
+expect ducked 0
+expect enagree 0
+peakreset
+wait 500
+expect ducked 0
+expect peak_db_max >-40
+tap PLAY
+wait 200
+expect playing 1
+# ---- two and three detents in a gap, from a piece in Auto to pieces in Hands and back: the mode goes with the last piece
+press SEL
+tap HOME
+release SEL
+wait 100
+expect piece 0
+expect arrange 0
+expect mode 0
+# offset 0: 2 detents, and back
+turn PRESET 2 1
+wait 30
+expect piece 2
+expect arrange 1
+expect mode 1
+expect enagree 0
+turn PRESET -2 1
+wait 30
+expect piece 0
+expect arrange 0
+expect mode 0
+expect enagree 0
+# offset 1: 3 detents, and back
+turn PRESET 3 1
+wait 31
+expect piece 3
+expect arrange 1
+expect mode 1
+expect enagree 0
+turn PRESET -3 1
+wait 31
+expect piece 0
+expect arrange 0
+expect mode 0
+expect enagree 0
+# offset 2: 2 detents, and back
+turn PRESET 2 1
+wait 32
+expect piece 2
+expect arrange 1
+expect mode 1
+expect enagree 0
+turn PRESET -2 1
+wait 32
+expect piece 0
+expect arrange 0
+expect mode 0
+expect enagree 0
+# offset 3: 3 detents, and back
+turn PRESET 3 1
+wait 33
+expect piece 3
+expect arrange 1
+expect mode 1
+expect enagree 0
+turn PRESET -3 1
+wait 33
+expect piece 0
+expect arrange 0
+expect mode 0
+expect enagree 0
+# offset 4: 2 detents, and back
+turn PRESET 2 1
+wait 34
+expect piece 2
+expect arrange 1
+expect mode 1
+expect enagree 0
+turn PRESET -2 1
+wait 34
+expect piece 0
+expect arrange 0
+expect mode 0
+expect enagree 0
+# offset 5: 3 detents, and back
+turn PRESET 3 1
+wait 35
+expect piece 3
+expect arrange 1
+expect mode 1
+expect enagree 0
+turn PRESET -3 1
+wait 35
+expect piece 0
+expect arrange 0
+expect mode 0
+expect enagree 0
+# ---- a whole quick turn: the last piece, whatever the gaps
+turn PRESET 7 2
+wait 50
+expect piece 7
+expect enagree 0
+turn PRESET 1 1
+wait 50
+expect piece 0
+expect enagree 0
+# the piece is still heard as the piece: the seed moved, the card says it
+expect screen 4
+# ---- a piece, then SAVE held back to the recipe in the same breath: the recipe, in the engine too
+spin K2 3
+turn PRESET 2 1
+press SAVE
+wait 1600
+release SAVE
+wait 50
+expect enagree 0
+# ---- a knob turned while a piece waits for room: the knob's value stays
+turn PRESET 3 1
+spin K1 2
+wait 50
+expect enagree 0
+# ---- more than the queue holds of anything: dropped values come back once there is room, not on the next change. Nothing is left to the next write
+flood 200
+wait 60
+expect enagree 0
+flood 200
+turn PRESET 1 1
+wait 60
+expect enagree 0
+wait 5000
+expect ducked 0

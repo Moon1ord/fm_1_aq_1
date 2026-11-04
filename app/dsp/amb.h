@@ -78,6 +78,12 @@ void en_arrange(int mode);
 /* The volume's duck, for a flash write: the whole output, after everything, down to nothing in 150 ms or back in 300 ms. Nothing under it knows: it plays on.
  * en_ducked: at zero, and has been for a whole DMA ring of samples, so a write now cuts nothing (a panic ends a duck; silence is at zero already) */
 void en_duck(int on);
+/* The commands' queue: en_room, how many of the values' commands fit now (en_set, en_pool, en_mask, en_arrange, en_seed, en_regrow, en_sys, en_clock): at most EN_ROOM_MAX.
+ * en_dropped: 1 once if one of them found no room since it was last asked. The app, which has them all in the project, says them again. PLAY and the other things only a hand
+ * asks for have places of their own, and en_duck is no command */
+#define EN_ROOM_MAX 56u
+uint32_t en_room(void);
+int en_dropped(void);
 extern volatile uint8_t en_ducked;
 /* The system's voice: one FM bell of its own, its notes from the chord as it stands when each is struck, rising; into the mix and the reverb, never to MIDI.
  * A blip does not break into the boot's or the save's notes; nothing sings in a panic's silence */
@@ -169,6 +175,8 @@ extern volatile uint32_t en_hat_hits;           /* hats struck */
 extern int en_test_pad_off;                     /* the pad out of the mix: to hear the piano by itself */
 extern float en_test_peak_in;                   /* the most that has gone into the limiter (1: its knee, about) */
 uint32_t en_test_degrees(void);                 /* the degrees the engine has been told */
+uint32_t en_test_pool(void);                    /* the scale and a parameter, likewise */
+int en_test_par(int p);
 uint32_t en_test_song(void);                    /* the next step of the song */
 uint32_t en_test_seed(void);                    /* the seed all of it follows */
 uint32_t en_test_chord_left(void);              /* steps to the next chord */

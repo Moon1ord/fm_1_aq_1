@@ -358,21 +358,43 @@ static uint32_t seed_now(void)
 #endif
 }
 
+/* What the engine is owed. A piece is a whole queue's worth of commands, and the detents of a quick turn can come faster than the blocks that take them, so: the project now,
+ * and the commands when they all fit, read from the project as it is by then. A piece that went by in the meantime never reaches the engine; the last one does. The same way back for
+ * values the queue refused (en_dropped): they are all said again once there is room, and being after whatever is still queued, they are what stays. So the two cannot stay apart,
+ * whatever the timing. With room, as there is but for a quick turn, it all goes at once */
+enum { OWE_APPLY = 1, OWE_REGROW = 2, OWE_PIECE = 4 };
+#define OWED_POSTS (P_NPARAMS + 6u)              /* project_apply's, the seed, the new key, the blip */
+typedef char queue_holds_a_piece[OWED_POSTS <= EN_ROOM_MAX ? 1 : -1];
+static uint8_t owed;
+static void owed_tick(void)
+{
+    if (en_dropped())
+        owed |= OWE_APPLY;
+    if (!owed || en_room() < OWED_POSTS)
+        return;
+    project_apply();
+    if (owed & OWE_PIECE)
+        en_seed(seed_now());
+    if (owed & (OWE_PIECE | OWE_REGROW))
+        en_regrow();
+    if (owed & OWE_PIECE)
+        en_sys(EN_SYS_BLIP);
+    owed = 0u;
+}
+
 static void set_piece(int i)                    /* the piece playing kept as it is; piece i as it was left */
 {
     project_piece(i);
-    project_apply();
 #if defined PLAT_HOST && !defined PLAT_WEB
     host_pieces++;
 #endif
-    en_seed(seed_now());
-    en_regrow();
     say_as("PIECE", piece_name(proj.piece), 0);
     sp_piece();                                  /* a screen reader: the piece with its key and tempo */
     scr.card_t = plat_ms();
     scr.card_until = scr.card_t + PIECE_CARD_MS;
     mark_dirty();
-    en_sys(EN_SYS_BLIP);
+    owed |= OWE_APPLY | OWE_PIECE;
+    owed_tick();
 }
 
 /* ------------------------------------------------------------ buttons --- */
@@ -563,6 +585,7 @@ static void input(void)
 {
     uint32_t btn = plat_buttons(), keys = plat_keys(), ch, i;
     int32_t e;
+    owed_tick();
     ch = btn ^ ui.btn;
     ui.btn = btn;
     for (i = 0; i < NB; i++) {
@@ -637,8 +660,8 @@ static void input(void)
         ui.btn_used |= 1u << B_SAVE;
         ui.help = 0;
         project_piece_reset();
-        project_apply();
-        en_regrow();
+        owed |= OWE_APPLY | OWE_REGROW;
+        owed_tick();
         say("RESET", piece_name(proj.piece));
         mark_dirty();
     }
@@ -1999,7 +2022,6 @@ static void save_tick(void)
         break;
     default:                           /* SV_RETURN: its notes when the sound is back */
         if (now - sv.t >= SAVE_BACK) {
-            en_duck(0);                /* (again: a dropped command must not leave it mute) */
             if (sv.manual && sv.ok)
                 en_sys(EN_SYS_SAVE);
             sv.st = SV_IDLE;

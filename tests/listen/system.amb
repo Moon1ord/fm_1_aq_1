@@ -1,4 +1,4 @@
-# The system's voice and the save's breath, to listen to: the boot's five notes; blips on the pages and a piece; SAVE growing, with its three notes; SAVE
+# The system's voice and the save's breath, to listen to: the boot's five notes; the pages, silent, and a blip on a piece; SAVE growing, with its three notes; SAVE
 # and an autosave resting, the autosave without notes. Not one of the tests.
 #   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/system.amb app/build/listen
 # (in Auto, saved, as it boots: this is the arranger's, from the top. Hands is the power-on's: hands.amb, preset_*.amb)

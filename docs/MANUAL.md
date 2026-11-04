@@ -446,7 +446,7 @@ a page, the chord in the top line goes to ice.
 AQ-1 has one small voice of its own, taken from the chord playing:
 
 - **Power-on:** five notes going up. It doesn't sing when it comes back from a cancelled update.
-- **A page's button, a new piece:** one quiet blip.
+- **A new piece:** one quiet blip. The page buttons make no sound.
 - **SAVE:** three notes going up, once the sound has come back. An autosave has none.
 
 They don't go out over MIDI.

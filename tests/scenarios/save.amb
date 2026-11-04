@@ -6,7 +6,7 @@ expect sysnotes 5
 
 # ---- SAVE, growing: it fades, then it writes, then it comes back, then its three notes
 tap ENV
-expect sysnotes 6
+expect sysnotes 5
 wait 300
 spin K1 -10
 expect par4 50
@@ -26,12 +26,12 @@ expect saving 2
 expect playing 1
 wait 150
 expect saving 2
-expect sysnotes 6
+expect sysnotes 5
 wait 200
 expect saving 0
-expect sysnotes >6
+expect sysnotes >5
 wait 500
-expect sysnotes 9
+expect sysnotes 8
 expect ducked 0
 expect playing 1
 
@@ -53,7 +53,7 @@ expect writepeak 0
 expect dirty 0
 wait 800
 expect saving 0
-expect sysnotes 9
+expect sysnotes 8
 # nothing changed, nothing written, however long it rests
 wait 8000
 expect store_writes 2
@@ -297,13 +297,13 @@ expect playing 1
 wait 1000
 flash_fail 1
 spin K2 1
-expect sysnotes 38
+expect sysnotes 35
 tap SAVE
 wait 1500
 expect saving 0
 expect dirty 1
 expect store_tries 14
-expect sysnotes 38
+expect sysnotes 35
 tap PLAY
 wait 100
 expect playing 0
@@ -376,25 +376,29 @@ uiinit
 wait 300
 expect silent 0
 
-# ---- the voice's other buttons: the pages and the pieces blip, and nothing else
+# ---- the voice's other button: a piece blips, and nothing else; the pages, at the owner's word, say nothing
 reboot
 wait 700
 expect sysnotes 5
 expect silent 0
 tap ENV
-expect sysnotes 6
+wait 40
+expect sysnotes 5
+expect view 1
 tap ARP
 tap LFO
 tap SEQ
 tap FX
 tap GLO
 tap HOME
-expect sysnotes 12
+wait 40
+expect sysnotes 5
+expect view 0
 # the piece: a note for each step of it
 turn PRESET 1
-expect sysnotes 13
+expect sysnotes 6
 turn PRESET -1
-expect sysnotes 14
+expect sysnotes 7
 # not a knob, not SELECT stepping pages, not a key, not the transport, not EDIT, REC, the octaves, not SELECT by itself
 spin K1 1
 turn SELECT 1
@@ -409,12 +413,12 @@ tap REC
 tap OCT+
 tap OCT-
 tap SEL
-expect sysnotes 14
+expect sysnotes 7
 # SELECT + a page's button: a layer, not a page; no blip
 press SEL
 tap ARP
 release SEL
-expect sysnotes 14
+expect sysnotes 7
 press SEL
 tap ARP
 release SEL
@@ -424,7 +428,7 @@ wait 1000
 release ENV
 wait 40
 expect help 0
-expect sysnotes 14
+expect sysnotes 7
 wait 100
 # none of it comes to MIDI: the ledger is the engine's alone
 expect midion1 >0

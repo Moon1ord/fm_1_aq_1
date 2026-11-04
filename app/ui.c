@@ -541,7 +541,6 @@ static void button_now(int b, int edit_sel)
     for (v = 0; v < NVIEWS; v++)                 /* a page's button: its page */
         if (VIEW_BTN[v] == b) {
             set_view(v);
-            en_sys(EN_SYS_BLIP);
             return;
         }
     switch (b) {

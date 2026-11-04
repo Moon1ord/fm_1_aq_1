@@ -3,7 +3,7 @@
 wait 200
 listen
 wait 100
-said Home page: Tempo 170, Energy 70, Evolve 50, Style Liquid. Piece Aqua, D Lydian, growing
+said Home page: Tempo 170, Energy 70, Evolve 50, Style Liquid. Piece Load Screen, D Lydian, growing
 # (the garden follows, queued: the chord, how far to the next, the scale from the root up)
 listen
 where
@@ -60,11 +60,11 @@ said MODE Mixolyd
 turn ALGO -1
 said MODE Lydian
 turn PRESET 1
-said PIECE Skyline, G Ionian, tempo 172
+said PIECE Aqua, A Ionian, tempo 172
 wait 300
 unsaid Level
 turn PRESET -1
-said PIECE Aqua, D Lydian, tempo 172
+said PIECE Load Screen, D Lydian, tempo 172
 wait 300
 # the buttons' messages, said once
 tap REC
@@ -122,4 +122,4 @@ wait 1000
 said Tempo 172
 # WHERE: everything again
 where
-said Home page: Tempo 172, Energy 70, Evolve 50, Style Jungle. Piece Aqua, D Lydian, resting
+said Home page: Tempo 172, Energy 70, Evolve 50, Style Jungle. Piece Load Screen, D Lydian, resting

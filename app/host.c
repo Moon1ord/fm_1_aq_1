@@ -118,6 +118,8 @@ int app_expect(const char *what, int *got)
         g = en_style;
     else if (!strcmp(what, "level"))
         g = en_drum_level;
+    else if (!strcmp(what, "seed"))               /* the seed the engine is following */
+        g = (int)en_test_seed();
     else if (!strcmp(what, "sixteenths"))
         g = (int)en_bars;
     else if (!strcmp(what, "ext"))

@@ -156,6 +156,7 @@ extern int en_test_pad_off;                     /* the pad out of the mix: to he
 extern float en_test_peak_in;                   /* the most that has gone into the limiter (1: its knee, about) */
 uint32_t en_test_degrees(void);                 /* the degrees the engine has been told */
 uint32_t en_test_song(void);                    /* the next step of the song */
+uint32_t en_test_seed(void);                    /* the seed all of it follows */
 uint32_t en_test_chord_left(void);              /* steps to the next chord */
 uint32_t en_test_section_bar(void);             /* this section's bar; how many it has */
 uint32_t en_test_section_bars(void);

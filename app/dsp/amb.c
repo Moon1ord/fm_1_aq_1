@@ -34,21 +34,23 @@ static const en_param_t PARAMS[P_NPARAMS] = {
 };
 const en_param_t *en_param_info(int i) { return (i >= 0 && i < P_NPARAMS) ? &PARAMS[i] : &PARAMS[0]; }
 
-/* the pieces: eight recipes for the whole instrument (the FM-1's PRESETS). Tune and MIDI out are taken from here by neither:
- * they belong to the player, not the piece */
-/*                     Tem  En Evo St  Key Blo Bri No  Mot Rat Ton Oc  Bas Mov Gli BO  Drm Brk Hat Ki  Ech ET Rev Siz  Rt Tun MI  Md */
+/* the pieces: eight recipes for the whole instrument (the FM-1's PRESETS). The first is the defaults, whatever else moves. They stay where the owner has put
+ * the sound by ear: Breaks at or under the style's own (50) and Jungle's lower still, the hats no louder to speak of, Move at or under the style's own so that
+ * the bass stays long, lone notes down and bloom up for chords that flow. Tune and MIDI out are taken from here by neither: they belong to the player, not
+ * the piece */
+/*                       Tem  En Evo St            Key Blo Bri No  Mot Rat Ton Oc  Bas Mov Gli BO  Drm Brk Hat Ki  Ech ET Rev Siz  Rt Tun MI  Md */
 static const struct {
     const char *name;
     int16_t v[P_NPARAMS];
 } PIECES[EN_NPIECES] = {
-    {"Aqua",      {170, 70, 50, 0,  60, 50, 50, 3,  60, 50, 50, 0,  50, 50, 10, 0,  45, 50, 50, 0,  40, 3, 65, 80,  2, 0, 1,  3}},
-    {"Skyline",   {172, 70, 40, 0,  50, 50, 50, 3,  65, 50, 50, 0,  50, 50, 10, 0,  50, 50, 50, 0,  40, 3, 60, 75,  7, 0, 1,  0}},
-    {"Bubble",    {174, 70, 45, 0,  50, 50, 50, 3,  80, 50, 50, 1,  45, 50, 10, 0,  45, 50, 50, 0,  45, 3, 60, 75,  9, 0, 1,  6}},
-    {"Rainfall",  {165, 70, 30, 0,  70, 50, 50, 3,  45, 50, 50, 0,  45, 50, 15, 0,  35, 50, 50, 0,  45, 4, 70, 85,  5, 0, 1,  0}},
-    {"Aurora",    {168, 70, 35, 0,  80, 50, 50, 3,  50, 50, 50, 0,  45, 50, 15, 0,  40, 50, 50, 1,  50, 4, 80, 95,  4, 0, 1,  3}},
-    {"Lagoon",    {170, 70, 40, 0,  60, 50, 50, 3,  55, 50, 50, 0,  60, 50, 20, 0,  45, 50, 50, 1,  40, 3, 65, 80,  0, 0, 1,  4}},
-    {"Dawn",      {160, 70, 25, 0,  80, 50, 50, 3,  40, 50, 50, 0,  35, 50, 20, 0,  25, 50, 50, 0,  45, 4, 80, 90, 10, 0, 1,  0}},
-    {"Afterglow", {165, 70, 40, 0,  65, 50, 50, 3,  55, 50, 50, 0,  50, 50, 15, 0,  40, 50, 50, 1,  45, 4, 70, 85,  5, 0, 1,  1}},
+    {"Load Screen", {170, 70, 50, EN_ST_LIQUID,   60, 50, 50, 3,  60, 50, 50, 0,  50, 50, 10, 0,  45, 50, 50, 0,  40, 3, 65, 80,  2, 0, 1,  MODE_LYDIAN}},
+    {"Aqua",        {172, 70, 55, EN_ST_LIQUID,   58, 40, 72, 3,  66, 60, 72, 0,  46, 50, 10, 0,  45, 40, 55, 0,  46, 3, 58, 70,  9, 0, 1,  MODE_IONIAN}},
+    {"Skyline",     {180, 70, 55, EN_ST_ROLLER,   50, 45, 62, 2,  62, 55, 60, 0,  48, 25, 10, 0,  46, 20, 50, 0,  35, 1, 55, 88,  7, 0, 1,  MODE_MIXOLYDIAN}},
+    {"Rainfall",    {160, 50, 40, EN_ST_DRIFT,    64, 65, 44, 2,  48, 35, 38, 0,  42, 50, 15, 0,  36, 20, 40, 1,  50, 2, 78, 88,  0, 0, 1,  MODE_DORIAN}},
+    {"Aurora",      {164, 55, 40, EN_ST_LOADING,  72, 85, 35, 1,  46, 40, 30, 0,  42, 40, 15, 0,  36, 25, 38, 1,  48, 4, 92, 98,  4, 0, 1,  MODE_LYDIAN}},
+    {"Lagoon",      {168, 70, 45, EN_ST_ROLLER,   56, 60, 25, 2,  52, 45, 25, 0,  68, 30, 22, 0,  36, 30, 28, 1,  30, 3, 55, 70,  8, 0, 1,  MODE_IONIAN}},
+    {"Save Point",  {152, 25, 30, EN_ST_DRIFT,    50, 80, 30, 1,  38, 25, 25, 0,  34, 50, 20, 0,  22,  0, 30, 1,  38, 3, 62, 78, 10, 0, 1,  MODE_PENT_MAJ}},
+    {"Afterglow",   {166, 68, 50, EN_ST_JUNGLE,   62, 55, 42, 2,  58, 50, 45, 0,  50, 40, 14, 0,  42, 30, 42, 1,  44, 2, 68, 84,  5, 0, 1,  MODE_AEOLIAN}},
 };
 
 const char *en_piece_name(int i) { return PIECES[(unsigned)i < EN_NPIECES ? i : 0].name; }
@@ -1882,7 +1884,7 @@ static struct {
     int32_t hold;
     uint8_t midi_note;
 } bass;
-static float bass_vol, bass_song, bass_song_t, bass_glide = 0.0012f;
+static float bass_vol, bass_lvl, bass_song, bass_song_t, bass_glide = 0.0012f;   /* bass_lvl: bass_vol on its way there */
 static uint8_t bass_back;                        /* out of a rest: it does not wait for the figure's next note */
 volatile uint32_t en_bass_notes;
 
@@ -3612,6 +3614,7 @@ volatile uint32_t en_test_nans;
 float en_test_peak_in;
 uint32_t en_test_degrees(void) { return degrees; }
 uint32_t en_test_song(void) { return song; }
+uint32_t en_test_seed(void) { return song_seed; }
 uint32_t en_test_chord_left(void) { return ch_left; }
 uint32_t en_test_section_bar(void) { return (song - arr_start) / 16u; }
 uint32_t en_test_section_bars(void) { return arr_cur.bars; }
@@ -3928,6 +3931,7 @@ void en_init(void)
         if (i != P_TEMPO)
             apply(i, PARAMS[i].def);
     apply(P_TEMPO, PARAMS[P_TEMPO].def);
+    bass_lvl = bass_vol;
     pool = EN_MODE_POOL[par[P_MODE]];
     degrees = EN_MASK_ALL;
     fresh = 0u;
@@ -4346,12 +4350,19 @@ static void render_keys(uint32_t n)
 static void render_bass(uint32_t n)
 {
     uint32_t j;
-    const float g = bass_vol * 0.86f * bass_song, tgt = bass.hold > 0 ? bass.sus : 0.0f,
+    /* A sine has no filter after it to hide a step, and a new piece can nearly double the level: a tick. So the level goes there over about 50 ms, in straight
+     * lines; standing still it is the same number as ever */
+    const float lv_to = fm_fabsf(bass_vol - bass_lvl) < 0.0005f ? bass_vol : bass_lvl + (bass_vol - bass_lvl) * 0.25f;
+    const float tgt = bass.hold > 0 ? bass.sus : 0.0f,
                 rate = tgt > bass.amp ? 1.0f / (0.012f * EN_SR) : 1.0f / (0.022f * EN_SR);
     const float dd = (duck1 - duck0) * (1.0f / (float)n), md = mgd[EN_L_BASS];
+    const float dg = (lv_to - bass_lvl) * 0.86f * bass_song * (1.0f / (float)n);
+    float g = bass_lvl * 0.86f * bass_song;
     float dk = duck0, mv = mg[EN_L_BASS];
     float ph = bass.ph, amp = bass.amp, idx = bass.idx, inc = bass.inc, spk = bass.spk;
+    bass_lvl = lv_to;
     if (amp < 1e-5f && bass.hold <= 0) {
+        bass_lvl = bass_vol;                     /* (nothing sounding: nothing to go easy on) */
         bass.amp = 0.0f;
         en_bass_level = 0.0f;
         return;
@@ -4359,6 +4370,7 @@ static void render_bass(uint32_t n)
     for (j = 0; j < n; j++) {
         const float m = sine(ph) * idx, x = sine(ph + m + 1.0f) * amp * g * (1.0f - 0.45f * dk) * mv;
         mv += md;
+        g += dg;
         dk += dd;
         ph += inc;
         if (ph >= 1.0f)

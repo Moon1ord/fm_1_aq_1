@@ -1,0 +1,20 @@
+# Three minutes of Save Point, from the top, with a fixed seed: the piece taken up, saved and booted, so that it starts in its own key and style. Not one of the tests.
+# Drift gets to its only kick and snare after three to five minutes, so at 2:00 and 2:20 EDIT goes there, by hand: the last half minute or less is the half time it comes to.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/preset_save_point.amb app/build/listen
+wait 100
+turn PRESET 6
+tap SAVE
+reboot
+seed 3007
+master 2430
+trace app/build/listen/preset_save_point.trace
+wav preset_save_point.wav
+wait 120000
+tap EDIT
+wait 20000
+tap EDIT
+wait 40000
+wavstop
+trace off
+expect piece 6
+expect seed 3007

@@ -1,0 +1,15 @@
+# Three minutes of Skyline, from the top, with a fixed seed: the piece taken up, saved and booted, so that it starts in its own key and style. Not one of the tests.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/preset_skyline.amb app/build/listen
+wait 100
+turn PRESET 2
+tap SAVE
+reboot
+seed 3003
+master 2430
+trace app/build/listen/preset_skyline.trace
+wav preset_skyline.wav
+wait 180000
+wavstop
+trace off
+expect piece 2
+expect seed 3003

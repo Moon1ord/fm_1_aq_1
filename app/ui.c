@@ -312,11 +312,15 @@ static void set_mode(int m)
 }
 
 /* a new seed at each power-on and each new piece, from the crystal's counter (at boot it only differs by the jitter of the
- * start, so the master pot's reading goes in too). The simulator's is fixed, so that a scenario repeats: "seed N" there */
+ * start, so the master pot's reading goes in too). The simulator's is fixed at boot and moves by a fixed step with each piece, so that a scenario repeats and
+ * can see a new one: "seed N" there */
+#if defined PLAT_HOST && !defined PLAT_WEB
+static uint32_t host_pieces;                    /* the simulator's: pieces changed to since it booted */
+#endif
 static uint32_t seed_now(void)
 {
 #if defined PLAT_HOST && !defined PLAT_WEB
-    return EN_HARM_SEED;
+    return EN_HARM_SEED + host_pieces * 1009u;
 #else
     const uint32_t t = plat_ticks24();
     return (t ^ t >> 13) * 2654435761u + plat_master();
@@ -328,6 +332,9 @@ static void set_piece(int i)                    /* the piece playing kept as it 
     project_piece(i);
     project_apply();
     en_layers_on();
+#if defined PLAT_HOST && !defined PLAT_WEB
+    host_pieces++;
+#endif
     en_seed(seed_now());
     en_regrow();
     say_as("PIECE", piece_name(proj.piece), 0);
@@ -1640,6 +1647,9 @@ void ui_init(void)
     memset(&ui, 0, sizeof ui);
     ui.touched = -1;
     lcd_fill(0, 0, 240, 240, K_BG);
+#if defined PLAT_HOST && !defined PLAT_WEB
+    host_pieces = 0u;
+#endif
     en_seed(seed_now());
     en_restore();                                /* it grows: from the start at power-on, from where it was after a panic */
     sp_tp.playing = 1;

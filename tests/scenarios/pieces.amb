@@ -1,55 +1,130 @@
 # the pieces: PRESETS picks one, each remembers its settings, SAVE held resets one, all saved
 wait 500
 expect piece 0
-# Aqua's keys down (the Keys page: ENV)
+# the first: Load Screen, the defaults, and the simulator's boot seed
+expect par0 170
+expect par3 0
+expect par24 2
+expect pool 0xAD5
+expect seed 7
+expect unfit 0
+# its keys down (the Keys page: ENV)
 tap ENV
 spin K1 -10
 expect par4 50
-# the next piece: Skyline, its recipe (tempo 172, G Ionian)
+# the next piece: Aqua, its recipe (tempo 172, A Ionian, Liquid): a new seed, the song not gone back, nothing cut
+expect bars <4
 turn PRESET 1
 expect piece 1
 expect par0 172
-expect par16 50
-expect par24 7
+expect par3 0
+expect par24 9
 expect pool 0xAB5
+wait 50
+expect seed 1016
+expect style 0
 wait 8000
-shot skyline.png
-# and Bubble
+expect bars >4
+expect pad_level >10
+# and Skyline (the fastest: 180; G Mixolydian; Roller, on the bar)
 turn PRESET 1
 expect piece 2
-expect par0 174
-expect par8 80
-wait 3000
-# and Rainfall
+expect par0 180
+expect par3 1
+expect par24 7
+expect pool 0x6B5
+wait 50
+expect seed 2025
+wait 8000
+expect style 1
+shot skyline.png
+# and Rainfall (Drift; C Dorian)
 turn PRESET 1
 expect piece 3
+expect par3 4
+expect par24 0
+expect pool 0x6AD
 wait 20000
 shot rainfall.png
+expect style 4
 expect pad_level >10
 # the lone notes (the Keys page's fourth knob), kept with the piece
-expect par7 3
-spin K4 -1
 expect par7 2
-wait 3000
-# back to Aqua: as it was left
-turn PRESET -3
+spin K4 1
 expect par7 3
+wait 3000
+# all the way round and back: each new piece is a new seed
+turn PRESET 1
+expect par3 5
+turn PRESET 1
+expect par12 68
+turn PRESET 1
+expect par0 152
+expect pool 0x295
+# Afterglow: F, minor, Jungle
+turn PRESET 1
+expect piece 7
+expect par3 2
+expect par24 5
+expect pool 0x5AD
+shot afterglow.png
+wait 50
+expect seed 7070
+turn PRESET -4
+expect piece 3
+expect par7 3
+# back to Load Screen: as it was left
+turn PRESET -3
 expect piece 0
 expect par4 50
 spin K4 -2
 expect par7 1
 turn PRESET 3
-expect par7 2
+expect par7 3
 turn PRESET -3
 expect par7 1
-# SAVE held: Aqua's recipe again
+# SAVE held: its recipe again, and the engine's; the same song goes on, it is no new piece
+wait 50
+expect seed 20187
 press SAVE
 wait 1700
 release SAVE
 expect par4 60
 expect par7 3
 expect store_writes 0
+expect seed 20187
+# on any piece: Afterglow, its knobs, its style, its mode and its degrees moved; all back
+turn PRESET -1
+expect piece 7
+tap HOME
+spin K1 3
+expect par0 169
+spin K4 -2
+expect par3 0
+turn ALGO -1
+expect par27 4
+press SEL
+tapkey 2
+release SEL
+wait 100
+expect mask 0xFFB
+press SAVE
+wait 1700
+release SAVE
+wait 50
+expect par0 166
+expect par3 2
+expect par27 5
+expect par24 5
+expect pool 0x5AD
+expect mask 0xFFF
+expect enmask 0xFFF
+wait 8000
+expect style 2
+expect store_writes 0
 # a tweak, saved, survives a reboot, on the piece it was made on (the Motifs page: ARP)
+turn PRESET 1
+expect piece 0
 tap ARP
 spin K1 5
 expect par8 65
@@ -60,6 +135,7 @@ expect store_writes 1
 reboot
 wait 300
 expect piece 6
+expect seed 7
 turn PRESET 2
 expect piece 0
 expect par8 65

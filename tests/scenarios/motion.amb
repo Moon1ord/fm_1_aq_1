@@ -22,13 +22,17 @@ expect playing 0
 wait 50000
 expect pad_level >50
 shot resting.png
-# a rest sounds now: nothing saves itself under it until saving can dip the volume; SAVE does
+# a rest sounds, and saves itself under it, through the duck: once, four seconds after the last touch; nothing to save after that; SAVE still does
 wait 5000
-expect dirty 1
-expect store_writes 0
-tap SAVE
 expect dirty 0
-expect store_writes >0
+expect store_writes 1
+expect writepeak 0
+wait 5000
+expect store_writes 1
+tap SAVE
+wait 800
+expect dirty 0
+expect store_writes 2
 reboot
 wait 300
 expect par4 40

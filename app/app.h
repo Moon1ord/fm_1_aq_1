@@ -59,6 +59,7 @@ void ui_frame(void);
 void ui_input_only(void);
 int ui_dirty(void);
 void ui_say(const char *a, const char *b);
+void ui_panic(void);
 
 /* the contract: the platform calls these */
 void app_init(void);                     /* boot: the engine, then the saved project (or the defaults) */

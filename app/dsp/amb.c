@@ -231,7 +231,7 @@ static float knob_curve(int v, int mid, float lo, float base, float hi)
 }
 
 /* ------------------------------------------------------------ commands --- */
-enum { C_SET, C_POOL, C_MASK, C_PLAY, C_NEXT, C_BREAK, C_HOLD, C_SEED, C_PANIC, C_RESTORE, C_CLOCK, C_REGROW, C_LAYER, C_LAYERS_ON, C_ARRANGE };
+enum { C_SET, C_POOL, C_MASK, C_PLAY, C_NEXT, C_BREAK, C_HOLD, C_SEED, C_PANIC, C_RESTORE, C_CLOCK, C_REGROW, C_LAYER, C_LAYERS_ON, C_ARRANGE, C_DUCK, C_SYS };
 #define QN 64u
 static uint32_t q[QN];
 static volatile uint32_t q_w, q_r;
@@ -267,6 +267,8 @@ void en_regrow(void) { post(C_REGROW, 0, 0); }
 void en_layer(int layer, int on) { post(C_LAYER, layer, on); }
 void en_layers_on(void) { post(C_LAYERS_ON, 0, 0); }
 void en_arrange(int mode, int as_saved) { post(C_ARRANGE, mode, as_saved); }
+void en_duck(int on) { post(C_DUCK, on, 0); }
+void en_sys(int kind) { post(C_SYS, kind, 0); }
 
 /* -------------------------------------------------------------- state --- */
 volatile uint8_t en_playing, en_held, en_ext;
@@ -3778,6 +3780,85 @@ static void apply(int p, int v)
     }
 }
 
+/* The volume's duck (not the kick's, duck above): a line on the output, after the limiter, so it takes the time it says whatever the drive. It touches
+ * nothing that is rendered: under it the music goes on, and when it is back the samples are those there would have been. VOL_RING: a flash erase has the
+ * DMA loop its two half buffers with the interrupts off, so zero is said only when both of them, whichever blocks they are, hold nothing but zeros */
+static float vol = 1.0f, vol_t = 1.0f;
+static uint32_t vol_zero;                        /* samples at zero, in a row */
+volatile uint8_t en_ducked;
+#define VOL_DOWN (1.0f / (0.15f * EN_SR))
+#define VOL_UP (1.0f / (0.30f * EN_SR))
+#define VOL_RING (2u * 256u)
+
+static void vol_reset(void)
+{
+    vol = vol_t = 1.0f;
+    vol_zero = 0u;
+    en_ducked = 0u;
+}
+
+static void vol_render(int32_t *out, uint32_t n)
+{
+    uint32_t j;
+    for (j = 0; j < n; j++) {
+        vol += vol_t > vol ? VOL_UP : vol_t < vol ? -VOL_DOWN : 0.0f;
+        vol = vol < 0.0f ? 0.0f : vol > 1.0f ? 1.0f : vol;
+        out[2 * j] = (int32_t)((float)out[2 * j] * vol);
+        out[2 * j + 1] = (int32_t)((float)out[2 * j + 1] * vol);
+        if (vol <= 0.0f && vol_zero < VOL_RING)
+            vol_zero++;
+    }
+    if (vol_zero >= VOL_RING)
+        en_ducked = 1u;
+}
+
+/* The system's voice: phases that run on and a level that rises into each note in 2 ms: one note goes over into the next without a click. */
+volatile uint8_t en_sys_note;
+volatile uint32_t en_sys_notes;
+static struct {
+    float cph, mph, cinc, minc, amp, adec, vel;
+    uint32_t wait, rise;
+    uint8_t left;
+    int last;
+} sys;
+#define SYS_GAP ((uint32_t)(0.11f * EN_SR))
+#define SYS_RISE ((uint32_t)(0.002f * EN_SR))
+#define SYS_FIRST 72                             /* the first note: this or the chord's next above it */
+#define SYS_TOP 108
+
+static void sys_start(int kind)
+{
+    if (kind == EN_SYS_BLIP && sys.left)
+        return;                                  /* the boot's or the save's notes say more */
+    sys.last = SYS_FIRST - 1;
+    sys.left = kind == EN_SYS_BLIP ? 1u : kind == EN_SYS_BOOT ? 5u : 3u;
+    sys.vel = kind == EN_SYS_BLIP ? 0.10f : 0.22f;
+    sys.wait = 0u;
+}
+
+static void sys_note(void)                       /* in the render: the chord as it is now */
+{
+    uint32_t m = 0u;
+    int n, i;
+    for (i = 0; i < EN_NPAD; i++)
+        m |= 1u << (en_chord[i] % 12u);
+    for (n = sys.last + 1; n <= SYS_TOP && !(m >> (n % 12) & 1u); n++)
+        ;
+    sys.left--;
+    if (n > SYS_TOP) {                           /* (a chord of few notes, very high up by now: not worth a note above the piano) */
+        sys.left = 0u;
+        return;
+    }
+    sys.last = n;
+    sys.cinc = mtof((float)n) * (1.0f / EN_SR);
+    sys.minc = sys.cinc * 3.0f;
+    sys.rise = SYS_RISE;
+    sys.adec = fm_expf(-6.9f / (0.35f * EN_SR));
+    sys.wait = sys.left ? SYS_GAP : 0u;
+    en_sys_note = (uint8_t)n;
+    en_sys_notes = en_sys_notes + 1u;
+}
+
 /* Silence, now and for good, until en_restore: every voice, the pad's way back, and the room's memory: what was ringing does not come
  * back after it. The render only clears, a little a block, and says nothing */
 static uint32_t clear_at;
@@ -3801,6 +3882,10 @@ static void quiet(void)
     bass.amp = 0.0f;
     bass.hold = 0;
     en_pad_level = en_bass_level = en_break_level = 0.0f;
+    sys.amp = 0.0f;
+    sys.left = 0u;
+    sys.rise = 0u;
+    vol_reset();
     break_due = 0u;
     silent = 1u;
     restore_due = 0u;
@@ -3864,6 +3949,13 @@ void en_init(void)
     hat[0].lp1 = hat[0].lp2 = hat[1].lp1 = hat[1].lp2 = 0.0f;
     bass.ph = bass.inc = bass.inc_t = 0.0f;
     q_r = q_w = 0;
+    vol_reset();
+    sys.amp = 0.0f;
+    sys.left = 0u;
+    sys.wait = sys.rise = 0u;
+    sys.cph = sys.mph = 0.0f;
+    en_sys_note = 0u;
+    en_sys_notes = 0u;
 #if defined EN_HOST || defined PLAT_HOST
     en_test_nans = 0u;
     en_hat_hits = 0u;
@@ -4128,6 +4220,15 @@ static void drain(void)
                     arr_follow();
             }
             en_mode = hands;
+            break;
+        case C_DUCK:
+            vol_t = a ? 0.0f : 1.0f;
+            vol_zero = 0u;
+            en_ducked = 0u;
+            break;
+        case C_SYS:
+            if (!silent)
+                sys_start(a);
             break;
         case C_REGROW:                           /* a new piece: its key; the song goes on */
             harm_due = 1u;
@@ -4558,6 +4659,40 @@ static void render_hats(uint32_t n)
         en_hat_peak = (uint8_t)on;
 }
 
+static void render_sys(uint32_t n)
+{
+    uint32_t j;
+    if (!sys.left && sys.amp <= 0.0f)
+        return;
+    for (j = 0; j < n; j++) {
+        float x;
+        if (sys.left) {
+            if (sys.wait)
+                sys.wait--;
+            else
+                sys_note();
+        }
+        if (sys.rise) {
+            sys.amp += (sys.vel - sys.amp) * (1.0f / (float)sys.rise);
+            sys.rise--;
+        } else {
+            sys.amp *= sys.adec;
+        }
+        x = sine(sys.cph + sine(sys.mph) * 0.8f * sys.amp + 2.0f) * sys.amp;   /* (sine wants a phase >= 0: what the 2 is for) */
+        sys.cph += sys.cinc;
+        if (sys.cph >= 1.0f)
+            sys.cph -= 1.0f;
+        sys.mph += sys.minc;
+        if (sys.mph >= 1.0f)
+            sys.mph -= 1.0f;
+        mixl[j] += x;
+        mixr[j] += x;
+        rsend[j] += x * 0.5f;
+    }
+    if (sys.amp < 1e-5f && !sys.left && !sys.rise)
+        sys.amp = 0.0f;
+}
+
 static void render_chunk(int32_t *out, uint32_t n, float gain)
 {
     uint32_t j;
@@ -4577,6 +4712,7 @@ static void render_chunk(int32_t *out, uint32_t n, float gain)
     render_bells(n);
     render_break(n);
     render_hats(n);
+    render_sys(n);
     for (j = 0; j < n; j++) {
         float wl, wr, l, r, el, er, xl, xr;
         echoes(esend[j] * eg, &el, &er, &xl, &xr);
@@ -4595,6 +4731,8 @@ static void render_chunk(int32_t *out, uint32_t n, float gain)
         out[2 * j] = (int32_t)(fm_tanhf(l) * 8300000.0f);
         out[2 * j + 1] = (int32_t)(fm_tanhf(r) * 8300000.0f);
     }
+    if (vol < 1.0f || vol_t < 1.0f)              /* (a multiplication a sample only while it is called for) */
+        vol_render(out, n);
 }
 
 static void control(uint32_t n)                 /* once a chunk: the slow things */
@@ -4628,6 +4766,9 @@ void en_render(int32_t *out, uint32_t n, uint32_t gain_q12)
         uint32_t j;
         for (j = 0; j < 2u * n; j++)
             out[j] = 0;
+        vol = vol_t;                             /* (at zero already: a save now has nothing to wait for) */
+        vol_zero = vol_t <= 0.0f ? VOL_RING : 0u;
+        en_ducked = (uint8_t)(vol_t <= 0.0f);
         if (space_clear() && restore_due)
             silence_over();
         return;

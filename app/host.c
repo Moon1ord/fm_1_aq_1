@@ -4,7 +4,7 @@
  * "expect", its command, a reboot and the screen reader's dump.
  *
  * AMB-1's checks: playing held silent midionN keysdown bellson bassdown keyson breakbars barpos stepofbar bars chordhash view piece pool dirty sixteenths ext pad_level bass_level chordroot chordN loopnotes
- * parN battery section style level mask enmask keyslit help ringN mode arrange mutekeys mutemel mutebass mutedrums mutehats gainN meterN dimN litN (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
+ * parN battery section style level mask enmask keyslit help ringN mode arrange sysnotes sysnote ducked saving writepeak mutekeys mutemel mutebass mutedrums mutehats gainN meterN dimN litN (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
  * values, help lines and messages wider than their places. Its commands:
  * storeamb (what AMB-1 leaves in the store: its magic and format, nothing of ours); storeold (the project as it is, whole, but
  * for the format before this one); battery N (the battery read as N,
@@ -54,6 +54,16 @@ int app_expect(const char *what, int *got)
         g = en_mode;
     else if (!strcmp(what, "arrange"))
         g = proj.arrange;
+    else if (!strcmp(what, "sysnotes"))           /* the system's voice: its notes since the engine started, the last */
+        g = (int)en_sys_notes;
+    else if (!strcmp(what, "sysnote"))
+        g = en_sys_note;
+    else if (!strcmp(what, "ducked"))             /* the volume's duck: at zero */
+        g = en_ducked;
+    else if (!strcmp(what, "saving"))             /* a save: 0 none, 1 fading, 2 coming back */
+        g = sv.st;
+    else if (!strcmp(what, "writepeak"))          /* the most in the two blocks before the last write; -1 none yet */
+        g = host_write_peak;
     else if (!strcmp(what, "mutekeys"))
         g = en_mute_keys;
     else if (!strcmp(what, "mutemel"))

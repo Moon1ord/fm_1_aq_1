@@ -30,6 +30,15 @@ void app_render(int32_t *lr, uint32_t n, uint32_t gain_q12)
     uint32_t t0 = plat_ticks24(), us;
     blocks++;
     en_render(lr, n, gain_q12);
+#ifdef PLAT_HOST
+    {
+        uint32_t i;
+        int32_t pk = 0;
+        for (i = 0; i < 2u * n; i++)
+            pk = lr[i] > pk ? lr[i] : -lr[i] > pk ? -lr[i] : pk;
+        host_blk_peak[blocks & 1u] = pk;
+    }
+#endif
     us = (plat_ticks24() - t0) / PLAT_TICKS_PER_US;
     if (us > app_render_max_us)
         app_render_max_us = us;
@@ -45,6 +54,7 @@ void app_panic(void)
 {
     en_play(0);
     en_panic();
+    ui_panic();
 }
 void app_ui_init(void) { ui_init(); }
 void app_frame(void) { ui_frame(); }

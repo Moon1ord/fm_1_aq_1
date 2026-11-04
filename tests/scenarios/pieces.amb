@@ -131,6 +131,7 @@ expect par8 65
 turn PRESET 6
 expect piece 6
 tap SAVE
+wait 800
 expect store_writes 1
 reboot
 wait 300

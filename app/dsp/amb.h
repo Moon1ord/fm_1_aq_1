@@ -72,6 +72,16 @@ void en_layers_on(void);                       /* all of them, as each would com
  * button) holds what is playing until then; as_saved 1 (a piece taken up) is Energy's at once. Back to Auto it goes on from where it is */
 enum { EN_AUTO, EN_HANDS };
 void en_arrange(int mode, int as_saved);
+/* The volume's duck, for a flash write: the whole output, after everything, down to nothing in 150 ms or back in 300 ms. Nothing under it knows: it plays on.
+ * en_ducked: at zero, and has been for a whole DMA ring of samples, so a write now cuts nothing (a panic ends a duck; silence is at zero already) */
+void en_duck(int on);
+extern volatile uint8_t en_ducked;
+/* The system's voice: one FM bell of its own, its notes from the chord as it stands when each is struck, rising; into the mix and the reverb, never to MIDI.
+ * A blip does not break into the boot's or the save's notes; nothing sings in a panic's silence */
+enum { EN_SYS_BLIP, EN_SYS_BOOT, EN_SYS_SAVE };
+void en_sys(int kind);
+extern volatile uint8_t en_sys_note;           /* the note it struck last (MIDI) */
+extern volatile uint32_t en_sys_notes;         /* and how many since en_init */
 /* MIDI clock in (as FoMni): ticks drive the 1/16 grid (6 a step) while they keep coming. Stop rests, Continue grows on. Start grows
  * from the top of a bar and a phrase, keeping the section and the chord (the very first time: the song's top) */
 enum { EN_CLK_TICK, EN_CLK_START, EN_CLK_CONTINUE, EN_CLK_STOP };

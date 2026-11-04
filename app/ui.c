@@ -63,6 +63,9 @@ static const char *const KNOB_LABEL[NVIEWS][4] = {
 #define K_FROST RGB(60, 132, 160)
 #define K_FROST_T RGB(170, 210, 216)
 
+#ifdef PLAT_HOST
+static int32_t host_blk_peak[2], host_write_peak = -1;   /* the simulator's: the last two blocks at their loudest (the DMA's ring); that at the last write */
+#endif
 static struct {
     uint8_t view;
     uint32_t btn, keys, btn_used;
@@ -74,7 +77,8 @@ static struct {
     uint8_t reset_done;                /* SAVE held: the piece went back to its recipe this hold */
     uint8_t edit_sel;                  /* EDIT went down with SEL held: a break, whichever comes up first */
     uint8_t dirty;                     /* the project changed since the last save */
-    uint32_t act_t, saved_t;
+    uint32_t act_t, saved_t;           /* the last touch, the last write */
+    uint32_t save_t;                   /* the last time SAVE saved (the screen's animation) */
     char msg[2][24];
     uint32_t msg_until;
     int8_t touched;                    /* the knob turned last (0..3), shown bright for a moment */
@@ -140,7 +144,28 @@ static void itoa_u(uint32_t v, char *b)
     *b = 0;
 }
 
-static void mark_dirty(void) { ui.dirty = 1; }
+/* SAVING: a flash erase stops everything for tens of ms, so every write goes through the volume's duck (en_duck). It fades, it writes, it comes back, and all
+ * that without holding up the main loop; only the write itself does. SAVE works at any time; AUTOSAVE only in a rest, once nothing has been touched for
+ * AUTOSAVE_QUIET, and a touch or MIDI's transport before the write cancels it. For the screen: sv.st says a save is under way, ui.save_t when SAVE last saved */
+#define AUTOSAVE_QUIET 4000u
+#define SAVE_LATE 400u                 /* the engine has not said zero by now: no render running, so nothing to cut */
+#define SAVE_BACK 300u
+#define SAVE_QUEUE 8u
+enum { SV_IDLE, SV_FADE, SV_RETURN };
+static struct {
+    uint8_t st, manual;                /* manual: SAVE's. It reports and nothing cancels it; an autosave does neither */
+    uint8_t ok;                        /* the write went well */
+    uint8_t failed;                    /* the last write failed: no autosave until something changes (no breathing every few seconds) */
+    uint8_t hushed;                    /* a panic, and no ui_init yet: nothing saves itself */
+    uint8_t n, q[SAVE_QUEUE];          /* buttons pressed during it, in order: played after it. A knob or a key is not held up */
+    uint32_t t;
+} sv;
+
+static void mark_dirty(void)
+{
+    ui.dirty = 1;
+    sv.failed = 0;
+}
 int ui_dirty(void) { return ui.dirty != 0; }
 
 static int pool_count(uint32_t p)
@@ -340,6 +365,7 @@ static void set_piece(int i)                    /* the piece playing kept as it 
     say_as("PIECE", piece_name(proj.piece), 0);
     sp_piece();                                  /* a screen reader: the piece with its key and tempo */
     mark_dirty();
+    en_sys(EN_SYS_BLIP);
 }
 
 /* ------------------------------------------------------------ buttons --- */
@@ -395,7 +421,35 @@ static int sel_button(int b)                     /* 1: it was a page's */
     return 0;
 }
 
-static void button(int b)
+static void save_begin(int manual)
+{
+    if (sv.st == SV_IDLE) {
+        sv.st = SV_FADE;
+        sv.manual = (uint8_t)manual;
+        sv.t = plat_ms();
+        en_duck(1);
+    } else if (sv.st == SV_FADE && manual) {
+        sv.manual = 1u;                /* (a press seen between frames: nothing has cancelled it yet) now it is the button's */
+    }
+}
+
+/* a button pressed during a save, or while those pressed before it are still going: 1 if it waits. An autosave's fade waits for nobody: a press cancels it (save_tick) */
+static int save_holds(int b)
+{
+    if (sv.st == SV_IDLE ? !sv.n : sv.st == SV_FADE && (!sv.manual || b == B_SAVE))
+        return 0;
+    if (b == B_SAVE && sv.st == SV_RETURN && !ui.dirty && sv.ok) {   /* written just now, and nothing since: what it asked for is done */
+        sv.manual = 1u;
+        say("SAVED", 0);
+        ui.save_t = plat_ms();
+        return 1;
+    }
+    if (sv.n < SAVE_QUEUE)
+        sv.q[sv.n++] = (uint8_t)b;
+    return 1;
+}
+
+static void button_now(int b)
 {
     int v;
     if (b == B_GLO && ui.view == V_SETUP) {      /* GLO on Setup: the reading starts afresh */
@@ -405,6 +459,7 @@ static void button(int b)
     for (v = 0; v < NVIEWS; v++)                 /* a page's button: its page */
         if (VIEW_BTN[v] == b) {
             set_view(v);
+            en_sys(EN_SYS_BLIP);
             return;
         }
     switch (b) {
@@ -435,15 +490,16 @@ static void button(int b)
         }
         break;
     case B_SAVE:
-        if (project_save() == 0) {
-            ui.dirty = 0;
-            say("SAVED", 0);
-        } else {
-            warn("NOT SAVED", "FLASH ERROR");
-        }
+        save_begin(1);
         break;
     default: break;
     }
+}
+
+static void button(int b)
+{
+    if (!save_holds(b))
+        button_now(b);
 }
 
 /* MIDI in (USB and the TRS jack): channel 1 notes add or remove their note from the scale; clock and
@@ -453,10 +509,14 @@ static void midi_in(void)
     uint32_t pkt;
     while (plat_midi_in(&pkt, 0)) {
         uint32_t st = (pkt >> 8) & 0xFFu, n = (pkt >> 16) & 0x7Fu, v = pkt >> 24;
-        if (st == 0xF8u || st == 0xFAu || st == 0xFBu || st == 0xFCu)
+        if (st == 0xF8u || st == 0xFAu || st == 0xFBu || st == 0xFCu) {
             en_clock(st == 0xF8u ? EN_CLK_TICK : st == 0xFAu ? EN_CLK_START : st == 0xFBu ? EN_CLK_CONTINUE : EN_CLK_STOP);
-        else if (st == 0x90u && v)
+            if (st != 0xF8u)
+                ui.act_t = plat_ms();          /* a touch, and seen before en_playing can say so: an autosave's fade stops here, before the write */
+        } else if (st == 0x90u && v) {
             toggle_note((int)(n % 12u));
+            ui.act_t = plat_ms();
+        }
     }
 }
 
@@ -544,15 +604,15 @@ static void input(void)
             if (v >= 0 && v < NVIEWS)
                 set_view(v);
         }
-        ui.turn_t = plat_ms();
+        ui.act_t = ui.turn_t = plat_ms();
     }
     if ((e = plat_enc(EN_ALGO)) != 0) {
         set_mode(proj.par[P_MODE] + (e > 0 ? 1 : -1));
-        ui.turn_t = plat_ms();
+        ui.act_t = ui.turn_t = plat_ms();
     }
     if ((e = plat_enc(EN_PRESET)) != 0) {
         set_piece(proj.piece + (e > 0 ? 1 : -1));
-        ui.turn_t = plat_ms();
+        ui.act_t = ui.turn_t = plat_ms();
     }
     if ((btn >> B_SAVE & 1u) && !ui.reset_done && plat_ms() - ui.down_t[B_SAVE] > RESET_HOLD) {
         ui.reset_done = 1;                     /* held: the piece back to its recipe (not saved) */
@@ -1137,19 +1197,72 @@ static void leds(void)
     }
 }
 
-/* AUTOSAVE: a few seconds after a change, while resting and quiet, nothing touched (a flash erase
- * silences the audio for a moment: never while the garden grows; SAVE saves then). The pad sings on through a rest now, so it does not
- * come to this until saving goes through a dip of the volume (the next task but one) */
-#define AUTOSAVE_QUIET 4000u
-static void autosave(void)
+static int autosave_due(uint32_t now)
 {
-    uint32_t now = plat_ms();
-    if (!ui.dirty || en_playing || ui.btn || ui.keys || now - ui.act_t < AUTOSAVE_QUIET || en_pad_level > 0.01f)
-        return;
-    if (project_save() == 0) {
+    return ui.dirty && !sv.failed && !sv.hushed && !en_playing && !ui.btn && !ui.keys && now - ui.act_t >= AUTOSAVE_QUIET;
+}
+
+static void save_write(uint32_t now)
+{
+    sv.ok = project_save() == 0;
+    if (sv.ok) {
         ui.dirty = 0;
         ui.saved_t = now;
+        if (sv.manual) {
+            say("SAVED", 0);
+            ui.save_t = now;
+        }
+    } else {
+        sv.failed = 1u;
+        warn("NOT SAVED", "FLASH ERROR");
     }
+    en_duck(0);
+    sv.t = plat_ms();                  /* (the write took its time) */
+    sv.st = SV_RETURN;
+}
+
+static void save_tick(void)
+{
+    const uint32_t now = plat_ms();
+    uint32_t i;
+    switch (sv.st) {
+    case SV_IDLE:
+        if (sv.n) {                    /* what was pressed, in order, one a frame: PLAY and REC go by what the engine says, and it has a block to say it. A SAVE among them starts another, and the rest wait again */
+            const int b = sv.q[0];
+            sv.n--;
+            for (i = 0; i < sv.n; i++)
+                sv.q[i] = sv.q[i + 1u];
+            button_now(b);
+        } else if (autosave_due(now)) {
+            save_begin(0);
+        }
+        break;
+    case SV_FADE:
+        if (!sv.manual && !autosave_due(now)) {
+            en_duck(0);
+            sv.st = SV_IDLE;
+        } else if (en_ducked || now - sv.t > SAVE_LATE) {
+#ifdef PLAT_HOST
+            host_write_peak = host_blk_peak[0] > host_blk_peak[1] ? host_blk_peak[0] : host_blk_peak[1];
+#endif
+            save_write(now);
+        }
+        break;
+    default:                           /* SV_RETURN: its notes when the sound is back */
+        if (now - sv.t >= SAVE_BACK) {
+            en_duck(0);                /* (again: a dropped command must not leave it mute) */
+            if (sv.manual && sv.ok)
+                en_sys(EN_SYS_SAVE);
+            sv.st = SV_IDLE;
+        }
+        break;
+    }
+}
+
+void ui_panic(void)                    /* the engine ends the duck itself: here, nothing goes on writing or waiting */
+{
+    memset(&sv, 0, sizeof sv);
+    sv.hushed = 1u;
 }
 
 /* ------------------------------------------------------ screen reader --- */
@@ -1645,13 +1758,19 @@ static void speak_dump(void)
 void ui_init(void)
 {
     memset(&ui, 0, sizeof ui);
+    memset(&sv, 0, sizeof sv);
     ui.touched = -1;
     lcd_fill(0, 0, 240, 240, K_BG);
 #if defined PLAT_HOST && !defined PLAT_WEB
     host_pieces = 0u;
 #endif
     en_seed(seed_now());
+    en_duck(0);                                  /* (whatever was under way when this was called) */
     en_restore();                                /* it grows: from the start at power-on, from where it was after a panic */
+#if defined PLAT_HOST && !defined PLAT_WEB
+    if (!getenv("AQ1_NO_BOOT_NOTES"))            /* the simulator's, to compare a render with one from before they were */
+#endif
+    en_sys(EN_SYS_BOOT);                         /* (after a panic nothing sings: that is an update come back, not a start) */
     sp_tp.playing = 1;
     sp_tp.play_t = plat_ms();
 }
@@ -1659,7 +1778,7 @@ void ui_init(void)
 void ui_frame(void)
 {
     input();
-    autosave();
+    save_tick();
     draw_header();
     draw_main();
     draw_knobs();

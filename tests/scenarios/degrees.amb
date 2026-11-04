@@ -138,6 +138,7 @@ expect pool 0xAD5
 expect ring11 2
 # it keeps with the piece, is saved, and SAVE held gives the recipe's all on
 tap SAVE
+wait 800
 expect dirty 0
 turn PRESET 1
 expect mask 0xFFF

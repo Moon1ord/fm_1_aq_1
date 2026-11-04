@@ -1,0 +1,432 @@
+# every save through the duck: SAVE any time, growing or resting; autosave in a rest, what cancels it; presses queued; a panic; the system's voice
+# (sysnotes counts what it has sung since the engine started; writepeak: the most in the two blocks before the last write, the DMA's ring: 0 is nothing to cut)
+wait 700
+# the boot's five rising notes have sung, and only those
+expect sysnotes 5
+
+# ---- SAVE, growing: it fades, then it writes, then it comes back, then its three notes
+tap ENV
+expect sysnotes 6
+wait 300
+spin K1 -10
+expect par4 50
+expect dirty 1
+tap SAVE
+expect saving 1
+expect store_writes 0
+expect dirty 1
+wait 100
+expect store_writes 0
+expect ducked 0
+wait 100
+expect store_writes 1
+expect writepeak 0
+expect dirty 0
+expect saving 2
+expect playing 1
+wait 150
+expect saving 2
+expect sysnotes 6
+wait 200
+expect saving 0
+expect sysnotes >6
+wait 500
+expect sysnotes 9
+expect ducked 0
+expect playing 1
+
+# ---- autosave, resting: four seconds after the last touch, no notes
+spin K1 5
+expect par4 55
+tap PLAY
+wait 100
+expect playing 0
+wait 3700
+expect dirty 1
+expect saving 0
+expect store_writes 1
+wait 300
+expect saving >0
+wait 200
+expect store_writes 2
+expect writepeak 0
+expect dirty 0
+wait 800
+expect saving 0
+expect sysnotes 9
+# nothing changed, nothing written, however long it rests
+wait 8000
+expect store_writes 2
+expect saving 0
+reboot
+wait 700
+expect par4 55
+expect sysnotes 5
+expect playing 1
+
+# ---- what cancels it: each touch, inside the fade, before the write
+tap PLAY
+wait 200
+expect playing 0
+# a button: it fades, a press, it comes back and nothing is written; and four seconds from the press
+tap ENV
+spin K1 1
+wait 4030
+expect saving 1
+press OCT-
+wait 20
+expect saving 0
+expect store_writes 2
+release OCT-
+wait 3000
+expect store_writes 2
+expect dirty 1
+# a key
+wait 1100
+expect saving 1
+key 3 down
+wait 20
+expect saving 0
+key 3 up
+wait 200
+expect store_writes 2
+# a knob
+wait 3900
+expect saving 1
+spin K2 1
+wait 5
+expect saving 0
+wait 500
+expect store_writes 2
+# the SELECT encoder, a page further: a turn is a touch, whichever knob
+wait 3560
+expect saving 1
+turn SELECT 1 20
+expect saving 0
+wait 500
+expect store_writes 2
+# the ALGORITHM encoder
+wait 3550
+expect saving 1
+turn ALGO 1 20
+expect saving 0
+wait 500
+expect store_writes 2
+# MIDI Continue, then MIDI Stop and a rest: the transport is a touch too
+wait 3550
+expect saving 1
+midi FB 00 00
+wait 20
+expect saving 0
+wait 100
+expect playing 1
+expect store_writes 2
+wait 6000
+expect store_writes 2
+expect dirty 1
+midi FC 00 00
+wait 100
+expect playing 0
+wait 3000
+expect store_writes 2
+# MIDI Start, on the very frame before the write would have been
+wait 950
+expect saving 1
+wait 100
+midi FA 00 00
+wait 20
+expect saving 0
+wait 100
+expect playing 1
+expect store_writes 2
+expect dirty 1
+wait 6000
+expect store_writes 2
+# a note by MIDI changes the scale: it moves the four seconds on
+midi FC 00 00
+wait 3900
+expect saving 0
+midi 90 3D 64
+expect dirty 1
+wait 3900
+expect saving 0
+expect store_writes 2
+# and left alone at last, it saves
+wait 500
+expect store_writes 3
+wait 500
+expect saving 0
+expect dirty 0
+
+# ---- never while growing, however long
+tap PLAY
+wait 100
+expect playing 1
+spin K2 1
+wait 9000
+expect dirty 1
+expect store_writes 3
+expect saving 0
+
+# ---- presses in a duck wait for it, in order, every one
+tap ENV
+expect view 1
+tap SAVE
+expect saving 1
+tap ARP
+expect view 1
+tap LFO
+tap PLAY
+tap PLAY
+expect view 1
+expect playing 1
+wait 700
+expect saving 0
+expect store_writes 4
+# the last page pressed, not the highest: ARP then SEQ would not tell, so LFO after ARP does (B_ARP > B_LFO)
+expect view 3
+# PLAY twice is PLAY twice
+expect playing 1
+tap SAVE
+expect saving 1
+tap LFO
+tap ARP
+expect view 3
+wait 700
+expect view 2
+expect store_writes 5
+# a press in the back half: waits as well
+tap SAVE
+wait 300
+expect saving 2
+tap PLAY
+expect playing 1
+wait 300
+expect saving 0
+expect playing 0
+tap PLAY
+wait 100
+expect store_writes 6
+# a knob works through a duck; what it changed before the write is saved, what it changed after it waits
+tap ARP
+spin K2 1
+tap SAVE
+spin K2 1
+expect par9 >0
+wait 300
+expect store_writes 7
+expect dirty 0
+expect saving 2
+spin K2 1
+expect dirty 1
+wait 500
+expect saving 0
+expect dirty 1
+expect store_writes 7
+
+# ---- SAVE on SAVE: within the fade, one write; after the write with nothing new, none more, the notes once; after the write with something new, another
+tap SAVE
+wait 500
+expect store_writes 8
+wait 1000
+expect dirty 0
+press SAVE
+wait 10
+release SAVE
+wait 30
+expect saving 1
+press SAVE
+wait 10
+release SAVE
+wait 300
+expect store_writes 9
+expect saving 2
+tap SAVE
+wait 800
+expect store_writes 9
+expect saving 0
+spin K2 1
+tap SAVE
+wait 300
+expect store_writes 10
+expect saving 2
+spin K2 1
+tap SAVE
+expect saving 2
+wait 150
+expect saving 1
+wait 300
+expect store_writes 11
+expect dirty 0
+wait 600
+expect saving 0
+
+# ---- an autosave under way, and SAVE: it is cancelled by the press, and the release is the button's: a save, with its notes
+tap PLAY
+wait 100
+expect playing 0
+spin K2 1
+wait 4030
+expect saving 1
+press SAVE
+wait 20
+expect saving 0
+release SAVE
+wait 20
+expect saving 1
+wait 300
+expect store_writes 12
+expect playing 0
+wait 700
+expect saving 0
+
+# ---- held: the recipe, and no save. Its card, and no save
+press SAVE
+wait 1700
+release SAVE
+wait 300
+expect store_writes 12
+expect saving 0
+expect dirty 1
+tap SAVE
+wait 800
+expect store_writes 13
+
+# ---- a flash that fails: no notes; it says so; dirty stays; the rest does not breathe over and over; a change tries again; SAVE tries again
+tap PLAY
+wait 100
+expect playing 1
+wait 1000
+flash_fail 1
+spin K2 1
+expect sysnotes 38
+tap SAVE
+wait 1500
+expect saving 0
+expect dirty 1
+expect store_tries 14
+expect sysnotes 38
+tap PLAY
+wait 100
+expect playing 0
+wait 15000
+expect store_tries 14
+expect saving 0
+spin K2 1
+wait 4400
+expect store_tries 15
+expect dirty 1
+wait 800
+expect saving 0
+wait 15000
+expect store_tries 15
+flash_fail 0
+tap SAVE
+wait 800
+expect store_tries 16
+expect store_writes 14
+expect dirty 0
+
+# ---- a panic in a duck: no write after it, nothing left down; the way back is not mute
+tap ENV
+spin K1 1
+tap SAVE
+expect saving 1
+tap ARP
+panic
+wait 10
+expect saving 0
+expect ducked 0
+expect silent 1
+wait 2000
+expect store_tries 16
+expect saving 0
+uiinit
+wait 200
+expect silent 0
+wait 1000
+expect ducked 0
+expect store_tries 16
+wait 8000
+peakreset
+wait 5000
+expect peak_db_min -40
+# and a panic while it comes back
+tap ENV
+spin K1 1
+tap SAVE
+wait 300
+expect saving 2
+panic
+wait 10
+expect saving 0
+expect ducked 0
+uiinit
+wait 9000
+peakreset
+wait 5000
+expect peak_db_min -40
+# after a panic, with something to save, nothing saves itself before the way back
+wait 100
+spin K1 1
+panic
+wait 8000
+expect saving 0
+expect silent 1
+expect store_tries 17
+uiinit
+wait 300
+expect silent 0
+
+# ---- the voice's other buttons: the pages and the pieces blip, and nothing else
+reboot
+wait 700
+expect sysnotes 5
+expect silent 0
+tap ENV
+expect sysnotes 6
+tap ARP
+tap LFO
+tap SEQ
+tap FX
+tap GLO
+tap HOME
+expect sysnotes 12
+# the piece: a note for each step of it
+turn PRESET 1
+expect sysnotes 13
+turn PRESET -1
+expect sysnotes 14
+# not a knob, not SELECT stepping pages, not a key, not the transport, not EDIT, REC, the octaves, not SELECT by itself
+spin K1 1
+turn SELECT 1
+turn ALGO 1
+tapkey 3
+tap PLAY
+wait 100
+tap PLAY
+tap EDIT
+tap REC
+tap REC
+tap OCT+
+tap OCT-
+tap SEL
+expect sysnotes 14
+# SELECT + a page's button: a layer, not a page; no blip
+press SEL
+tap ARP
+release SEL
+expect sysnotes 14
+press SEL
+tap ARP
+release SEL
+# a card held up and let go: no page, no blip
+press ENV
+wait 1000
+release ENV
+wait 40
+expect help 0
+expect sysnotes 14
+wait 100
+# none of it comes to MIDI: the ledger is the engine's alone
+expect midion1 >0

@@ -4,6 +4,7 @@ tap ENV
 spin K1 -10
 expect par4 <60
 tap SAVE
+wait 800
 expect store_writes 1
 storeamb
 reboot

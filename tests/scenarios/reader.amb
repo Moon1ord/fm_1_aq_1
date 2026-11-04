@@ -96,6 +96,7 @@ wait 1000
 said SAVE button. SAVES ALL EIGHT PIECES. KEEP HOLDING: THE PIECE BACK TO ITS RECIPE
 release SAVE
 tap SAVE
+wait 800
 said SAVED
 press REC
 wait 1000

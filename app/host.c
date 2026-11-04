@@ -7,7 +7,7 @@
  * parN battery section style level mask enmask keyslit help ringN mode arrange enagree brkshown brkquiet brkwrong absent sysnotes sysnote ducked saving writepeak mutekeys mutemel mutebass mutedrums mutehats gainN meterN dimN litN screen eye smile blinks wipes wiping drawrows drawbytes drawpx artbytes stale (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
  * values, help lines and messages wider than their places. Its commands:
  * storeamb (what AMB-1 leaves in the store: its magic and format, nothing of ours); storeold (the project as it is, whole, but
- * for the format before this one); storeshort (a save as the format before this one was laid out: its magic, its format, its length, four parameters less to a piece); storebad N P V (the project as it is, whole,
+ * for the format before this one); storeshort (a save as the format before this one was laid out: its magic, its format, its length, two parameters less to a piece); storebad N P V (the project as it is, whole,
  * in this format, but piece N's parameter P is V; N -1: the piece playing's); battery N (the battery read as N,
  * plat.h's plat_battery: -1..4; "battery off" the simulator's own, full); seed N (the musical seed, from the next choice on;
  * until told it is EN_HARM_SEED); melhear T (a statement in this timbre at the next chance: an audition); setpar P V (parameter P to V, as a knob would); style NAME; energy N; breaks N; keysgain G (the keys alone down, against the pad: a listening file's, the panel has no such thing); trace FILE
@@ -299,7 +299,7 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
         project_save();
         old = proj;
         old.format = PROJ_FORMAT - 1u;
-        plat_store_save(OBJ_PROJ, &old, sizeof old - (size_t)(1 + NPIECES) * 4u * sizeof(int16_t));
+        plat_store_save(OBJ_PROJ, &old, sizeof old - (size_t)(1 + NPIECES) * 2u * sizeof(int16_t));
         return 1;
     }
     if (!strcmp(cmd, "storebad")) {

@@ -122,7 +122,8 @@ static void t_table(void)
         for (l = 0; l < 4; l++)
             CHECK(par[LAYER[l].par] == 0, "%s: %s's sound is the first", en_piece_name(i), LAYER[l].name);
     }
-    CHECK(P_KEYSND == P_MODE + 1 && P_NPARAMS == P_MODE + 5, "the sounds come after the old parameters: a scenario's numbers stay");
+    CHECK(P_KEYSND == P_MODE + 1 && P_MELSND == P_MODE + 4, "the sounds come after the old parameters: a scenario's numbers stay");
+    CHECK(P_MELMODE == P_MELSND + 1 && P_ARPPAT == P_MELSND + 2 && P_NPARAMS == P_MODE + 7, "the melody's mode and pattern after the sounds: a scenario's numbers stay");
     CHECK(P_NPARAMS + 6 <= EN_ROOM_MAX, "a piece's commands fit the queue: %d in %d", P_NPARAMS + 6, (int)EN_ROOM_MAX);
     CHECK(EN_ROOM_MAX == 56u, "the queue as it was");
 }

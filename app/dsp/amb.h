@@ -40,6 +40,7 @@ enum {
     P_ROOT, P_TUNE, P_MIDI,                           /* Setup (its fourth knob, the lights, is the panel's: not the engine's) */
     P_MODE,                                           /* the ALGORITHM encoder */
     P_KEYSND, P_PADSND, P_BASSSND, P_MELSND,          /* the sounds: SEL + a knob (the first of each is the sound the owner approved; the melody's first is Auto, then each timbre + 1) */
+    P_MELMODE, P_ARPPAT,                              /* the melody: Phrases or Arp, and Arp's pattern: SEL + KNOB 2, SEL + KNOB 3 on its page */
     P_NPARAMS
 };
 typedef struct {
@@ -66,10 +67,11 @@ void en_regrow(void);                          /* a new piece: its key; the song
  * about a tenth of a second, on the note sounding; melody: from its next note. en_mel_hear: the hand has chosen a timbre: if no phrase is under way and the melody is on, one quiet note in it, not on MIDI, once the turning has stopped */
 void en_mel_hear(void);
 /* The layers, on and off. Off is a gain and nothing else: what composes goes on composing and MIDI goes on, like a level of 0, and the room rings out
- * what it had. Keys (with the pad) and melody go over about a second; bass, kick and snare (with the ghosts, the rim, the tom and the kick's duck)
- * and hats on the next bar line, at once while resting, and before it has played at all. A panic and a new piece leave them; en_init has the start.
+ * what it had. Keys (with the pad) and melody go over about a second. Bass, kick and snare (with the ghosts, the rim, the tom and the kick's duck) and hats: off at once, in the block it is asked in and in a few ms
+ * (bass 15, the others 5); on at the next sixteenth, in as few, in whatever the bar is playing by then (the bass in the note it has, or in its next); at once while resting, and before it has played at all. Going to the other mode's set (en_arrange), on the next bar line, as a change of arrangement.
+ * A panic and a new piece leave them; en_init has the start.
  * en_layer_press is the hand's switch: on what is off, off what is playing, and it answers 1 for on. In Auto a layer the arranger has absent (en_layers_absent) counts
- * as off, and pressed, the next bar is the first place it plays; in Hands the melody, pressed on, has a phrase at its next chance */
+ * as off, and pressed, the next bar is the first place it plays (a jump of sections is a jump of chords and rhythm: on the bar, as EDIT); in Hands the melody, pressed on, has a phrase at its next chance */
 enum { EN_L_KEYS, EN_L_MEL, EN_L_BASS, EN_L_DRUMS, EN_L_HATS, EN_NLAYERS };
 void en_layer(int layer, int on);
 int en_layer_press(int layer);
@@ -196,6 +198,7 @@ int en_test_bell_voices(void);                  /* its voices sounding, tails to
 extern uint32_t en_test_bell_echoes;            /* its notes that have gone to the echo */
 int en_test_bell_limit(void);                   /* how many it may have */
 float en_test_bell_stolen(void);                /* the loudest a sounding voice was when it was taken: its level, 0..1 */
+void en_test_bell_stolen_clear(void);           /* from here on */
 void en_test_bell_note(int timbre, int note, float vel);   /* one note in a timbre, at once, out of the echo: to measure it */
 void en_test_key_note(int note, float vel);     /* a key held, at once: to measure it */
 void en_test_bass_note(int note, uint32_t steps);   /* a note of the bass, at once, at this MIDI note */
@@ -285,6 +288,20 @@ int en_bass_ch(const en_hchord_t *ch, const en_hchord_t *nx, uint32_t pool, uint
 #define EN_MEL_RANGE 19                        /* semitones, its whole register: an octave and a half */
 #define EN_MEL_LO(key) (72 + (key))            /* the key's tonic an octave over middle C: the hand stays under it */
 #define EN_MEL_TOP 98                          /* the highest, however high the key */
+/* Arp, the melody's other mode: the notes of the chord sounding, one after another with no rests, in the melody's voices and on its channel, through a register of two octaves. All of it pure; amb.c plays it.
+ * en_arp_steps: Rate's division, in sixteenths: to 33 a quarter (4), to 66 an eighth (2), above a sixteenth (1). en_arp_next: from where it is, the next note in this pattern of these pitch classes (absolute, bit i);
+ * h only for Random. en_arp_timbre: what Auto has it sound in: of what Tone allows, those that speak at a sixteenth, by a hash that moves slowly. */
+enum { EN_MEL_PHRASES, EN_MEL_ARP };
+enum { EN_ARP_UP, EN_ARP_DOWN, EN_ARP_UPDOWN, EN_ARP_RANDOM, EN_ARP_NPATTERNS };
+typedef struct {
+    uint8_t last;                              /* the last note, 0 none yet */
+    int8_t dir;                                /* up-down: the way it is going */
+} en_arp_t;
+int en_arp_steps(int rate);
+void en_arp_range(int key, int *lo, int *hi);
+void en_arp_start(en_arp_t *a);
+int en_arp_next(en_arp_t *a, uint32_t tones, int key, int pattern, uint32_t h);
+int en_arp_timbre(int tone, uint32_t h);
 int en_mel_fold(int n);                        /* a note MIDI has: over 127, down by octaves, so it stays in tune */
 enum { EN_TB_FLUTE, EN_TB_VOCAL, EN_TB_VIBES, EN_TB_MARIMBA, EN_TB_BOX, EN_TB_GLASS, EN_NTIMBRES };   /* softest to brightest */
 extern const char *const EN_TIMBRE_NAME[EN_NTIMBRES];
@@ -313,6 +330,7 @@ typedef struct {
 typedef struct {
     uint32_t pool, seed;                       /* pool relative to the key */
     int key, section, evolve, rate, tone, echo_steps, nchords;
+    int hands;                                 /* the player's (Hands): over the recipes' Rates the rests shrink towards none, the section's calm counting for less and less. 0: Auto's, as approved */
     en_mel_chord_t chord[EN_MEL_CHORDS];
 } en_mel_in_t;
 typedef struct {

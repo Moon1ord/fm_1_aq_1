@@ -13,6 +13,7 @@
  *   OCT- / OCT+    the melody's octave
  *   HOME + SELECT  tempo   ALGORITHM mode (loads a pool)   PRESETS the piece (Root is on the Setup page)
  *   SEL + KNOB 1   on Keys, Melody and Bass: the layer's sound (Keys: SEL + KNOB 2, the pad's). The four knobs are as ever otherwise; SEL + a knob on the other pages too
+ *   SEL + KNOB 2, SEL + KNOB 3   on Melody: Phrases or Arp, and Arp's pattern. In Arp, Rate is its division
  *   HOME ENV ARP LFO SEQ FX GLO   the pages: Home, Keys, Melody, Bass, Drums, Space, Setup (the SELECT encoder steps through them)
  *   KNOB 1-4       the page's four values
  *   SAVE           saves (it also saves by itself a few seconds after a change, while resting);
@@ -224,7 +225,12 @@ static const char *knob_name(int k)
 static void knob_text(int k, char *b)
 {
     int v = knob_get(k);
-    if (k < P_NPARAMS) {
+    if (k == P_MRATE && proj.par[P_MELMODE]) {   /* in Arp, Rate is its division */
+        const int d = en_arp_steps(v);
+        const char *n = d == 4 ? "1/4" : d == 2 ? "1/8" : "1/16";
+        while ((*b++ = *n++))
+            ;
+    } else if (k < P_NPARAMS) {
         en_param_text(k, v, b);
     } else if (k == K_LEDS) {                    /* On: the keys, and the unlit buttons glow; Keys: no glow */
         const char *n = v == 2 ? "Keys" : v ? "On" : "Off";
@@ -294,9 +300,11 @@ static void turn(int role, int k, int32_t e)
  * and as with SEL + a layer's button, a turn says this hold is not that (ui.sel_layer) */
 static const struct {
     uint8_t view, knob, par;
-    const char *say;
-} SOUND_KNOB[] = {{V_KEYS, 0, P_KEYSND, "KEYS SOUND"}, {V_KEYS, 1, P_PADSND, "PAD SOUND"}, {V_MOTIFS, 0, P_MELSND, "MELODY SOUND"}, {V_BASS, 0, P_BASSSND, "BASS SOUND"}};
+    const char *say, *spoken;
+} SOUND_KNOB[] = {{V_KEYS, 0, P_KEYSND, "KEYS SOUND", ". Sound "}, {V_KEYS, 1, P_PADSND, "PAD SOUND", ", pad sound "}, {V_MOTIFS, 0, P_MELSND, "MELODY SOUND", ". Sound "},
+                  {V_MOTIFS, 1, P_MELMODE, "MELODY MODE", ", mode "}, {V_MOTIFS, 2, P_ARPPAT, "ARP PATTERN", ", pattern "}, {V_BASS, 0, P_BASSSND, "BASS SOUND", ". Sound "}};
 #define NSOUND_KNOBS ((int)(sizeof SOUND_KNOB / sizeof SOUND_KNOB[0]))
+static int sound_said(int i) { return SOUND_KNOB[i].par != P_ARPPAT || proj.par[P_MELMODE]; }   /* (the page has no use for a pattern in Phrases: its knob still sets it) */
 static int sound_turn(int knob, int32_t e)      /* 1: it was a sound's */
 {
     int i;
@@ -1079,11 +1087,12 @@ static void setup_read(char *c)
     itoa_u(scr.r_s, c + k);
 }
 /* what the header says of a page's sounds: Keys has two, the keys' and the pad's. 0: none */
-static int page_sound(int view, char *b)
+#define HEADER_SOUND_ROOM(view) (231 - BATT_W - 6 - 9 - 22 - 6 - 10 - (9 + text_w(&FONT_B, VIEW_NAME[view]) + 5))   /* with the tempo, a dot, the battery and a rest's mark on its right */
+static int page_sounds(int view, char *b, int leave)
 {
     int i, n = 0;
     for (i = 0; i < NSOUND_KNOBS; i++)
-        if (SOUND_KNOB[i].view == view) {
+        if (SOUND_KNOB[i].view == view && sound_said(i) && SOUND_KNOB[i].par != leave) {
             char t[16];
             int k = 0;
             en_param_text(SOUND_KNOB[i].par, proj.par[SOUND_KNOB[i].par], t);
@@ -1093,6 +1102,13 @@ static int page_sound(int view, char *b)
                 b[n++] = t[k++];
         }
     b[n] = 0;
+    return n;
+}
+static int page_sound(int view, char *b)         /* in Arp the mode and the pattern are what the page can not say otherwise: a sound's long name gives way to them (it says itself when turned) */
+{
+    int n = page_sounds(view, b, -1);
+    if (n && text_w(&FONT_XS, b) > HEADER_SOUND_ROOM(view))
+        n = page_sounds(view, b, P_MELSND);
     return n;
 }
 static const char *header_word(int sc)
@@ -1173,7 +1189,7 @@ static uint32_t header_sig(int sc)
     if (sc == SC_PAGE && ui.view == V_SETUP)
         h = hash(hash(h, scr.r_cpu | scr.r_max << 8), scr.r_x | scr.r_s << 16);
     else if (sc == SC_PAGE || sc == SC_HOLD)
-        h = hash(hash(h, chord_sig()), en_held | (uint32_t)proj.par[P_KEYSND] << 1 | (uint32_t)proj.par[P_PADSND] << 3 | (uint32_t)proj.par[P_BASSSND] << 5 | (uint32_t)proj.par[P_MELSND] << 7);
+        h = hash(hash(h, chord_sig()), en_held | (uint32_t)proj.par[P_KEYSND] << 1 | (uint32_t)proj.par[P_PADSND] << 3 | (uint32_t)proj.par[P_BASSSND] << 5 | (uint32_t)proj.par[P_MELSND] << 7 | (uint32_t)proj.par[P_MELMODE] << 10 | (uint32_t)proj.par[P_ARPPAT] << 11);
     return h;
 }
 
@@ -1326,7 +1342,7 @@ static int help_lines(int b, const char *l[HELP_LINES])
     switch (b) {
     case B_HOME: L("TEMPO, ENERGY, EVOLVE, STYLE"); L("HOLD + TURN SELECT: TEMPO"); L("SEL + KEY: CHORDS ON IT, OR NOT"); L("SEL + HOME: HANDS OR AUTO"); break;
     case B_ENV: L("THE KEYS AND THE PAD"); L("LEVEL, BLOOM, BRIGHT, NOTES"); L("SEL + ENV: ON OR OFF"); L("SEL + KNOB 1, KNOB 2: THE SOUNDS"); break;
-    case B_ARP: L("THE MELODY"); L("LEVEL, RATE, TONE, OCTAVE"); L("SEL + ARP: ON OR OFF"); L("SEL + KNOB 1: THE SOUND"); break;
+    case B_ARP: L("THE MELODY: LEVEL, RATE, TONE, OCT"); L("SEL + ARP: ON OR OFF"); L("SEL + KNOB 1: THE SOUND"); L("SEL + KNOB 2, 3: ARP, ITS PATTERN"); break;
     case B_LFO: L("THE BASS"); L("LEVEL, MOVE, GLIDE, OCTAVE"); L("SEL + LFO: ON OR OFF"); L("SEL + KNOB 1: THE SOUND"); break;
     case B_SEQ: L("THE DRUMS"); L("LEVEL, BREAKS, HATS, KIT"); L("SEL + SEQ: KICK AND SNARE"); L(" ON OR OFF"); break;
     case B_FX: L("THE SPACE"); L("ECHO, ECHO TIME, REVERB,"); L(" SIZE"); L("SEL + FX: HATS ON OR OFF"); break;
@@ -1384,7 +1400,7 @@ static void draw_knobs(void)
 }
 static uint32_t knob_sig(int i)
 {
-    return (uint32_t)(knob_get(VIEW_KNOB[ui.view][i]) + 1024) << 1 | (uint32_t)(scr.now < ui.touch_until && ui.touched == i);
+    return (uint32_t)(knob_get(VIEW_KNOB[ui.view][i]) + 1024) << 2 | (uint32_t)proj.par[P_MELMODE] << 1 | (uint32_t)(scr.now < ui.touch_until && ui.touched == i);
 }
 
 /* ---- the face: the closed cell, and patches of the others around the eyes and the mouth. Eyes closed while it listens (no drums), half open with drums, open on a
@@ -2188,8 +2204,8 @@ static void sp_page(int all)
         sp_knob(ui.view, i);
     }
     for (i = 0; i < NSOUND_KNOBS; i++)           /* and its sounds */
-        if (SOUND_KNOB[i].view == ui.view) {
-            sp_cat(i && SOUND_KNOB[i - 1].view == ui.view ? ", pad sound " : ". Sound ");
+        if (SOUND_KNOB[i].view == ui.view && sound_said(i)) {
+            sp_cat(SOUND_KNOB[i].spoken);
             sp_value(SOUND_KNOB[i].par);
         }
     if (!all)
@@ -2528,11 +2544,11 @@ static int ui_unfit(void)                             /* the host's "unfit": wha
     for (v = 0; v < NVIEWS; v++) {
         char c[24];
         const project_t k = proj;
-        for (x = 0; x < 49; x++) {
-            int16_t *q[4] = {&proj.par[P_KEYSND], &proj.par[P_PADSND], &proj.par[P_BASSSND], &proj.par[P_MELSND]};
-            *q[0] = (int16_t)(x % 4), *q[1] = (int16_t)(x / 4 % 4), *q[2] = (int16_t)(x % 4), *q[3] = (int16_t)(x % 7);
+        for (x = 0; x < 56; x++) {
+            int16_t *q[6] = {&proj.par[P_KEYSND], &proj.par[P_PADSND], &proj.par[P_BASSSND], &proj.par[P_MELSND], &proj.par[P_MELMODE], &proj.par[P_ARPPAT]};
+            *q[0] = (int16_t)(x % 4), *q[1] = (int16_t)(x / 4 % 4), *q[2] = (int16_t)(x % 4), *q[3] = (int16_t)(x % 7), *q[4] = (int16_t)(x / 7 % 2), *q[5] = (int16_t)(x / 14 % 4);
             if (page_sound(v, c))
-                n += unfit_one(&FONT_XS, c, 231 - BATT_W - 6 - 9 - 22 - 6 - 10 - (9 + text_w(&FONT_B, VIEW_NAME[v]) + 5), "the header's sound");
+                n += unfit_one(&FONT_XS, c, HEADER_SOUND_ROOM(v), "the header's sound");
         }
         proj = k;
     }

@@ -40,6 +40,8 @@ run mel sh -c "$CC -O2 -ffp-contract=off -std=c99 -D_POSIX_C_SOURCE=200809L -D_D
     -o $OUT/mel_test tests/host/mel_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/mel_test"
 run hands sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promotion -Werror -DEN_HOST -Iapp/dsp -Ibase/include \
     -o $OUT/hands_test tests/host/hands_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/hands_test"
+run arp sh -c "$CC -O2 -ffp-contract=off -std=c99 -D_DEFAULT_SOURCE -Wall -Wextra -Wdouble-promotion -Werror -DEN_HOST -Iapp/dsp -Ibase/include \
+    -o $OUT/arp_test tests/host/arp_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/arp_test"
 run piece sh -c "$CC -O2 -ffp-contract=off -std=c99 -D_DEFAULT_SOURCE -D_DARWIN_C_SOURCE -Wall -Wextra -Wdouble-promotion -Werror -DEN_HOST -Iapp/dsp -Ibase/include \
     -o $OUT/piece_test tests/host/piece_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/piece_test"
 run save sh -c "$CC -O2 -ffp-contract=off -std=c99 -D_DEFAULT_SOURCE -D_DARWIN_C_SOURCE -Wall -Wextra -Wdouble-promotion -Werror -DEN_HOST -Iapp/dsp -Ibase/include \

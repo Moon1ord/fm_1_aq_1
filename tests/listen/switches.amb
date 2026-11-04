@@ -1,0 +1,78 @@
+# The switches, as they are now: Load Screen by hand, a beat going, the drums and the hats off and on in the middle of bars, each off at once, each on at the next sixteenth; then the bass, then all of them at once. The times: the report of the change, and "switch" lines in the log. Not one of the tests.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/switches.amb app/build/listen
+wait 100
+tap SAVE
+wait 800
+reboot
+seed 3001
+master 2430
+wav switches.wav
+press SEL
+tap LFO
+tap SEQ
+tap FX
+release SEL
+wait 6050
+echo switch drums off
+press SEL
+tap SEQ
+release SEL
+wait 3000
+echo switch drums on
+press SEL
+tap SEQ
+release SEL
+wait 3370
+echo switch hats off
+press SEL
+tap FX
+release SEL
+wait 2770
+echo switch hats on
+press SEL
+tap FX
+release SEL
+wait 3130
+echo switch drums off
+press SEL
+tap SEQ
+release SEL
+wait 490
+echo switch drums on
+press SEL
+tap SEQ
+release SEL
+wait 610
+echo switch drums off
+press SEL
+tap SEQ
+release SEL
+wait 490
+echo switch drums on
+press SEL
+tap SEQ
+release SEL
+wait 3190
+echo switch hats off drums off
+press SEL
+tap FX
+tap SEQ
+release SEL
+wait 2230
+echo switch hats on drums on
+press SEL
+tap FX
+tap SEQ
+release SEL
+wait 3610
+echo switch bass off
+press SEL
+tap LFO
+release SEL
+wait 2410
+echo switch bass on
+press SEL
+tap LFO
+release SEL
+wait 3000
+wavstop

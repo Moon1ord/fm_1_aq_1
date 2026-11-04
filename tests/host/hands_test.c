@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: MPL-2.0 */
 /* The player's arrangement: layers on and off, and the modes, Auto and Hands. A layer off is a gain: nothing that composes or plays hears of it, so
- * what MIDI says is the same to the sample, and a dry mix comes back the same to the sample; only drums and bass wait for a bar, and nothing
+ * what MIDI says is the same to the sample, and a dry mix comes back the same to the sample; drums, hats and bass go off at once and come on at the next sixteenth, and nothing
  * clicks. Hands is the player's: the switches say what plays, Energy how densely, and nothing comes by itself. Auto, untouched, is the approved sound: its hashes. */
 #include <stdio.h>
 #include <stdlib.h>
@@ -143,6 +143,7 @@ static void hands_all(void)                      /* Hands with all of it on: wha
         en_layer(l, 1);
     en_mel_soon();
 }
+static int en_mute_of_ok(int l, int off) { return mute_of(l) == off; }
 static const char *const LNAME[EN_NLAYERS] = {"keys", "melody", "bass", "drums", "hats"};
 static const int LCH[EN_NLAYERS] = {0, 1, 2, 9, 9};
 
@@ -366,8 +367,8 @@ static void test_comes_back(void)
     free(b);
 }
 
-/* ---- on the bar. Two runs, one with a layer asked off in the middle of a bar: identical until the bar line (in sixteen-frame blocks, so to
- * that), and the keys and melody move at once */
+/* ---- at once, and on the next sixteenth. Two runs, one with a layer asked off in the middle of a bar: for what goes off, a difference from the block it is asked in, as soon as there is something
+ * to take away; for what comes on, identical until the next sixteenth (in sixteen-frame blocks, so to that) and heard from there as soon as it sounds; the keys and melody move at once */
 static int32_t *cmp_a;
 typedef struct {
     uint32_t at, first;
@@ -381,14 +382,13 @@ static void cmp_block(const int32_t *b, uint32_t n, void *arg)
             c->first = c->at + i / 2u;
     c->at += n;
 }
-static uint32_t frame_of_bar;
-static void test_on_the_bar(void)
+static void test_at_once(void)
 {
     int l, dir;
     int32_t *a = malloc(2u * SEC(12.0f) * sizeof(int32_t));
     for (dir = 0; dir < 2; dir++)
         for (l = 0; l < EN_NLAYERS; l++) {
-            uint32_t at = 0u, asked, bar_at = 0u, was;
+            uint32_t at = 0u, asked, step_at = 0u, was;
             cmp_t c = {0u, 0xFFFFFFFFu};
             rec_a = a;
             dry_start(424242u, EN_ST_LIQUID);
@@ -404,29 +404,34 @@ static void test_on_the_bar(void)
             CHECK(c.first == 0xFFFFFFFFu, "%s: a difference before it was asked", LNAME[l]);
             en_layer(l, dir);
             asked = c.at;
-            was = en_test_song() / 16u;
+            was = en_test_song();
             while (c.at < SEC(12.0f)) {
                 run(16u, 16u, cmp_block, &c);
-                if (!bar_at && en_test_song() / 16u > was && en_test_song() & 15u)
-                    bar_at = c.at;                   /* (the bar's first step has been played) */
+                if (!step_at && en_test_song() != was)
+                    step_at = c.at - 16u;            /* (the block the next sixteenth was played in) */
             }
-            frame_of_bar = bar_at;
             CHECK(c.first != 0xFFFFFFFFu, "%s (%d): nothing changed", LNAME[l], dir);
             if (l == EN_L_KEYS || l == EN_L_MEL) {
                 if (l == EN_L_KEYS)              /* (the melody may be between notes) */
                     CHECK(c.first < asked + SEC(0.1f), "%s (%d): waited %u frames", LNAME[l], dir, c.first - asked);
-            } else {
-                CHECK(c.first + 32u >= bar_at, "%s (%d): moved %d frames before the bar line", LNAME[l], dir, (int)bar_at - (int)c.first);
-                if (l == EN_L_BASS)              /* (under a bass note, or a little later) */
-                    CHECK(c.first < bar_at + SEC(3.0f), "%s (%d): %u frames past the bar line", LNAME[l], dir, c.first - bar_at);
+            } else if (!dir) {                   /* off: from that very block, or the moment there is anything to take away */
+                CHECK(c.first >= asked, "%s off: moved %d frames early", LNAME[l], (int)asked - (int)c.first);
+                if (l == EN_L_BASS)
+                    CHECK(c.first < asked + SEC(3.0f), "%s off: %u frames late", LNAME[l], c.first - asked);
                 else
-                    CHECK(c.first < bar_at + SEC(0.5f), "%s (%d): %u frames past the bar line", LNAME[l], dir, c.first - bar_at);
+                    CHECK(c.first < asked + SEC(0.5f), "%s off: %u frames late", LNAME[l], c.first - asked);
+            } else {                             /* on: not before the sixteenth */
+                CHECK(c.first >= step_at, "%s on: moved %d frames before the sixteenth", LNAME[l], (int)step_at - (int)c.first);
+                if (l == EN_L_BASS)              /* (under a bass note, or a little later) */
+                    CHECK(c.first < step_at + SEC(3.0f), "%s on: %u frames past the sixteenth", LNAME[l], c.first - step_at);
+                else
+                    CHECK(c.first < step_at + SEC(0.5f), "%s on: %u frames past the sixteenth", LNAME[l], c.first - step_at);
             }
         }
     free(a);
 }
 
-/* the gain itself: bar-line layers hold until the bar and pass in a few ms; the others take about a second, and fall no faster than that */
+/* the gain itself: bass, drums and hats start down in the block they are asked in and pass in a few ms; back, they hold to the next sixteenth; the others take about a second, and fall no faster than that */
 static void test_ramps(void)
 {
     int l;
@@ -434,13 +439,11 @@ static void test_ramps(void)
         const int slow = l == EN_L_KEYS || l == EN_L_MEL;
         uint32_t n, t = 0u, steps = 0u, moved_at = 0u;
         float last = 1.0f, most = 0.0f;
-        uint32_t bar;
         start(7u, EN_ST_LIQUID);
         en_play(1);
         run(SEC(3.0f), 256u, 0, 0);
         while (en_test_song() % 16u != 6u)
             run(16u, 16u, 0, 0);
-        bar = en_test_song() / 16u;
         en_layer(l, 0);
         for (n = 0u; n < SEC(3.0f); n += 16u, t += 16u) {
             float g;
@@ -454,7 +457,7 @@ static void test_ramps(void)
                 if (last - g > most)
                     most = last - g;
                 if (!slow)
-                    CHECK(en_test_song() / 16u > bar && en_test_song() & 15u, "%s: on its way down before the bar", LNAME[l]);
+                    CHECK(moved_at == 16u, "%s: not on its way down in the block it was asked: %u frames", LNAME[l], moved_at);
             }
             CHECK(g <= last, "%s: going off it came up", LNAME[l]);
             last = g;
@@ -470,8 +473,19 @@ static void test_ramps(void)
             CHECK(steps >= 4u, "%s: a jump, in %u blocks of 16", LNAME[l], steps);
             CHECK(ms < 40.0f, "%s: takes %f ms", LNAME[l], (double)ms);
         }
-        /* and back */
+        /* and back: bass, drums and hats not until the next sixteenth, and then in that block */
+        if (!slow)
+            while (en_test_song() % 16u != 6u)
+                run(16u, 16u, 0, 0);
         en_layer(l, 1);
+        if (!slow) {
+            const uint32_t was = en_test_song();
+            while (en_test_song() == was) {
+                CHECK(en_test_mute_gain(l) == 0.0f, "%s: back before the sixteenth", LNAME[l]);
+                run(16u, 16u, 0, 0);
+            }
+            CHECK(en_test_mute_gain(l) > 0.0f, "%s: the sixteenth has come, and no gain", LNAME[l]);
+        }
         for (n = 0u; n < SEC(3.0f); n += 16u)
             run(16u, 16u, 0, 0);
         CHECK(en_test_mute_gain(l) == 1.0f, "%s: not back after three seconds: %f", LNAME[l], (double)en_test_mute_gain(l));
@@ -539,8 +553,13 @@ static void test_no_click(void)
     free(a);
 }
 
-/* a layer entering on the bar, as a player brings it in, in a beat already running: its first moments move no faster than the same layer does when it has long been on */
+/* a layer entering at the next sixteenth, as a player brings it in, in a beat already running: its first moments move no faster than the same layer does when it has long been on. Asked on step 5, it comes on step 6, in the middle of what the bar is playing; test_any_step has the other steps */
 static uint32_t step_most;
+static uint32_t fm_max3(uint32_t a, uint32_t b, uint32_t c)
+{
+    const uint32_t m = a > b ? a : b;
+    return m > c ? m : c;
+}
 static int32_t step_prev;
 static void step_block(const int32_t *b, uint32_t n, void *arg)
 {
@@ -579,10 +598,13 @@ static void test_entry_click(void)
                 run(16u, 16u, step_block, 0);
                 CHECK(step_most == 0u, "layer %s off, and not silent: %u", LNAME[L[l]], step_most);
                 en_layer_press(L[l]);
-                /* over the bar line, and 30 ms past it */
+                /* over the next sixteenth, and 30 ms past it */
                 step_most = 0u;
-                while (en_test_song() & 15u)
-                    run(16u, 16u, step_block, 0);
+                {
+                    const uint32_t was = en_test_song();
+                    while (en_test_song() == was)
+                        run(16u, 16u, step_block, 0);
+                }
                 for (k = 0u; k < SEC(0.03f); k += 16u)
                     run(16u, 16u, step_block, 0);
                 entry = step_most;
@@ -598,6 +620,252 @@ static void test_entry_click(void)
                 steady = step_most;
                 CHECK(entry <= steady + steady / 20u + 200u, "%s style %d Energy %d: its entry steps %u, its own steady %u", LNAME[L[l]], STY[st], E[e], entry, steady);
             }
+}
+
+/* every style, Hands and Auto (held in its full section, so that the layer plays), every step of the bar: off starts down in the very block it is asked in and is gone in a few ms; on waits for
+ * the next sixteenth, starts in that block and is up in a few ms; and none of it moves faster than the layer does by itself. Over a bar in 16-frame blocks, a block a hand can fall in */
+static void any_step_at(uint32_t want)
+{
+    while ((en_test_song() + 1u) % 16u != want && en_test_song() % 16u != want)
+        run(256u, 256u, 0, 0);                   /* (the way there in a device's blocks; the last of it fine) */
+    while (en_test_song() % 16u != want)
+        run(16u, 16u, 0, 0);
+    run(16u, 16u, 0, 0);
+}
+/* the same set up, with or without its switching: Hands all on, Auto held in its full section; to a whole bar */
+static void any_step_setup(int st, int m, int la)
+{
+    start(77u + (uint32_t)st, st);
+    en_arrange(m ? EN_HANDS : EN_AUTO);
+    if (m) {
+        int o;
+        for (o = 0; o < EN_NLAYERS; o++)
+            en_layer(o, 1);
+    }
+    en_set(P_ENERGY, 90);
+    only(la);
+    en_layer(EN_L_KEYS, 0);
+    en_set(P_REVERB, 0);
+    en_set(P_ECHO, 0);
+    en_play(1);
+    run(SEC(0.5f), 256u, 0, 0);
+    if (!m) {
+        while (en_section != EN_SEC_FULL) {
+            en_next();
+            bars(1u);
+        }
+        en_hold(1);
+    }
+    bars(2u);
+    run(SEC(1.5f), 256u, 0, 0);          /* (the arrangement's bass has come up) */
+}
+#define ANY_BARS 96u
+static uint32_t any_own[ANY_BARS];       /* the layer's own, long on, bar by bar of the song: the notes it plays there are the same with or without a switch */
+static uint32_t any_steady(void)
+{
+    const uint32_t b = en_test_song() / 16u % ANY_BARS;
+    return fm_max3(any_own[(b + ANY_BARS - 1u) % ANY_BARS], any_own[b], any_own[(b + 1u) % ANY_BARS]);
+}
+static void test_any_step(void)
+{
+    static const int L[3] = {EN_L_BASS, EN_L_DRUMS, EN_L_HATS};
+    int st, m, l;
+    uint32_t worst_entry = 0u, worst_off = 0u, worst_rise = 0u;
+    for (st = 0; st < EN_NSTYLES; st++)
+        for (m = 0; m < 2; m++)
+            for (l = 0; l < 3; l++) {
+                const int la = L[l];
+                uint32_t step, steady, any_most, k;
+                /* its own, long on, the same bars in a run with no switching */
+                any_step_setup(st, m, la);
+                memset(any_own, 0, sizeof any_own);
+                run(256u, 256u, 0, 0);
+                step_prev = buf[510];
+                steady = 0u;
+                for (k = 0u; k < 8u + 40u; k++) {
+                    const uint32_t bar = en_test_song() / 16u;
+                    step_most = 0u;
+                    while (en_test_song() / 16u == bar)
+                        run(256u, 256u, step_block, 0);
+                    any_own[bar % ANY_BARS] = step_most;
+                    steady = step_most > steady ? step_most : steady;
+                }
+                CHECK(steady > 100u, "style %d mode %d %s: does not sound: %u", st, m, LNAME[la], steady);
+                any_most = steady;
+                any_step_setup(st, m, la);
+                bars(8u);
+                for (step = 0u; step < 16u; step++) {
+                    uint32_t rise, before;
+                    float g;
+                    /* off */
+                    any_step_at(step);
+                    CHECK(en_test_mute_gain(la) == 1.0f, "style %d mode %d %s step %u: not fully on", st, m, LNAME[la], step);
+                    en_layer(la, 0);
+                    step_most = 0u;
+                    step_prev = buf[30];
+                    run(16u, 16u, step_block, 0);
+                    CHECK(en_mute_of_ok(la, 1), "style %d mode %d %s step %u: the state does not follow", st, m, LNAME[la], step);
+                    CHECK(en_test_mute_gain(la) < 1.0f, "style %d mode %d %s step %u: off, not at once", st, m, LNAME[la], step);
+                    for (k = 0u; k < SEC(0.03f); k += 16u)
+                        run(16u, 16u, step_block, 0);
+                    CHECK(en_test_mute_gain(la) == 0.0f, "style %d mode %d %s step %u: not off in 30 ms: %f", st, m, LNAME[la], step, (double)en_test_mute_gain(la));
+                    if (step_most > worst_off)
+                        worst_off = step_most;
+                    steady = la == EN_L_HATS ? any_most : any_steady();
+                    CHECK(step_most <= steady + steady / 10u + 200u, "style %d mode %d %s step %u: off steps %u, its own steady %u", st, m, LNAME[la], step, step_most, steady);
+                    /* on: the same step of the next bar */
+                    any_step_at(step);
+                    en_layer(la, 1);
+                    before = en_test_song();
+                    step_most = 0u;
+                    step_prev = buf[30];
+                    run(16u, 16u, step_block, 0);
+                    CHECK(en_mute_of_ok(la, 0), "style %d mode %d %s step %u: the state does not follow", st, m, LNAME[la], step);
+                    while (en_test_song() == before) {
+                        CHECK(en_test_mute_gain(la) == 0.0f, "style %d mode %d %s step %u: on before the next sixteenth", st, m, LNAME[la], step);
+                        run(16u, 16u, step_block, 0);
+                    }
+                    g = en_test_mute_gain(la);
+                    CHECK(g > 0.0f, "style %d mode %d %s step %u: the next sixteenth, and no gain", st, m, LNAME[la], step);
+                    rise = 0u;
+                    while (en_test_mute_gain(la) < 1.0f && rise < SEC(0.1f)) {
+                        run(16u, 16u, step_block, 0);
+                        rise += 16u;
+                    }
+                    if (rise > worst_rise)
+                        worst_rise = rise;
+                    CHECK(rise < SEC(0.03f), "style %d mode %d %s step %u: %u frames to come up", st, m, LNAME[la], step, rise);
+                    CHECK(rise >= 16u || g == 1.0f, "style %d mode %d %s step %u: a jump", st, m, LNAME[la], step);
+                    for (k = 0u; k < SEC(0.03f); k += 16u)
+                        run(16u, 16u, step_block, 0);
+                    if (step_most > worst_entry)
+                        worst_entry = step_most;
+                    steady = la == EN_L_HATS ? any_most : any_steady();   /* (a hat is noise and its own random level: the most of a whole run, to tell a click from that) */
+                    CHECK(step_most <= steady + steady / 10u + 200u, "style %d mode %d %s step %u: its entry steps %u, its own steady %u", st, m, LNAME[la], step, step_most, steady);
+                }
+            }
+    printf("  any step: the largest sample's step over an entry %u, over an off %u; %u frames at most to come up\n", worst_entry, worst_off, worst_rise);
+}
+
+/* a device's blocks: 256 frames, whatever the chunks inside it. The gain's way is a line within a block, so at the sample there is no step whichever block it falls in */
+static void test_any_step_256(void)
+{
+    uint32_t off;
+    for (off = 0u; off < 16u; off++) {
+        start(5u + off, EN_ST_LIQUID);
+        en_arrange(EN_HANDS);
+        en_layer(EN_L_DRUMS, 1);
+        en_play(1);
+        run(SEC(2.0f) + off * 256u, 256u, 0, 0);
+        en_layer(EN_L_DRUMS, 0);
+        run(256u, 256u, 0, 0);
+        CHECK(en_test_mute_gain(EN_L_DRUMS) < 0.1f, "256 frames on, the drums' gain still %f", (double)en_test_mute_gain(EN_L_DRUMS));
+        run(256u, 256u, 0, 0);
+        CHECK(en_test_mute_gain(EN_L_DRUMS) == 0.0f, "two blocks on, the drums' gain still %f", (double)en_test_mute_gain(EN_L_DRUMS));
+        en_layer(EN_L_DRUMS, 1);
+        {
+            uint32_t n = 0u;
+            const uint32_t was = en_test_song();
+            while (en_test_song() == was && n < SEC(0.2f)) {
+                run(256u, 256u, 0, 0);
+                n += 256u;
+            }
+            CHECK(n < SEC(0.11f), "from a press to the next sixteenth: %u frames", n);
+            run(256u, 256u, 0, 0);
+            CHECK(en_test_mute_gain(EN_L_DRUMS) == 1.0f, "a block past the sixteenth, the drums' gain %f", (double)en_test_mute_gain(EN_L_DRUMS));
+        }
+    }
+}
+
+/* quick hands: several presses within a bar, a sixteenth or within one: each is what it says, the last is what stays, and there is never a jump of the gain; the MIDI is what it would have been */
+static void test_rapid(void)
+{
+    static const int L[3] = {EN_L_BASS, EN_L_DRUMS, EN_L_HATS};
+    int l;
+    uint32_t sd;
+    for (l = 0; l < 3; l++)
+        for (sd = 0u; sd < 6u; sd++) {
+            const int la = L[l];
+            uint32_t i, ma, na;
+            /* MIDI, untouched */
+            start(300u + sd, (int)sd % EN_NSTYLES);
+            en_arrange(EN_HANDS);
+            en_play(1);
+            run(SEC(12.0f), 256u, 0, 0);
+            ma = mhash;
+            na = midi_n;
+            start(300u + sd, (int)sd % EN_NSTYLES);
+            en_arrange(EN_HANDS);
+            en_play(1);
+            ledger = 1;
+            run(SEC(2.0f), 256u, 0, 0);
+            en_layer(la, 1);
+            run(256u, 256u, 0, 0);
+            /* every block, 5.8 ms: faster than any hand. Each says what it should */
+            for (i = 0u; i < 120u; i++) {
+                const int on = en_layer_press(la);
+                CHECK(on == (int)(i & 1u), "%s: press %u says %d", LNAME[la], i, on);
+                run(256u, 256u, 0, 0);
+                CHECK(en_test_mute_gain(la) >= 0.0f && en_test_mute_gain(la) <= 1.0f, "a gain of %f", (double)en_test_mute_gain(la));
+                if (!on)
+                    CHECK(en_test_mute_gain(la) < 1.0f || mute_of(la), "%s: off, and all there", LNAME[la]);
+            }
+            /* however many, the last is what stays: an even number left it on */
+            {
+                const int on = !mute_of(la);
+                const uint32_t was = en_test_song();
+                CHECK(on, "%s: an even count of presses left it off", LNAME[la]);
+                while (en_test_song() == was)
+                    run(256u, 256u, 0, 0);
+                run(SEC(0.05f), 256u, 0, 0);
+                CHECK(en_test_mute_gain(la) == 1.0f, "%s: on at the end, gain %f", LNAME[la], (double)en_test_mute_gain(la));
+                en_layer_press(la);
+                run(SEC(0.05f), 256u, 0, 0);
+                CHECK(en_test_mute_gain(la) == 0.0f, "%s: off at the end, gain %f", LNAME[la], (double)en_test_mute_gain(la));
+                en_layer_press(la);
+            }
+            while (frames < SEC(12.0f))
+                run(256u, 256u, 0, 0);
+            ledger = 0;
+            CHECK(mhash == ma && midi_n == na, "%s, quick presses: MIDI moved", LNAME[la]);
+        }
+    CHECK(!led_bad, "the ledger: %u bad blocks", led_bad);
+}
+
+/* the other mode's set of layers is a change of the whole arrangement: it goes on the bar, as it was (a piece in the other mode brings it, with no hand near it). A hand's switch after it is a hand's */
+static void test_mode_on_bar(void)
+{
+    uint32_t i;
+    for (i = 0u; i < 16u; i++) {
+        uint32_t b;
+        start(31u + i, EN_ST_LIQUID);            /* Auto: all on */
+        en_play(1);
+        run(SEC(1.0f), 256u, 0, 0);
+        bars(1u);
+        while (en_test_song() % 16u != i % 15u + 1u)   /* (any step but the bar's own) */
+            run(16u, 16u, 0, 0);
+        b = en_test_song() / 16u;
+        en_arrange(EN_HANDS);                    /* Hands' first set: bass, drums, hats off */
+        run(16u, 16u, 0, 0);
+        CHECK(en_mute_drums && en_mute_bass && en_mute_hats, "the state says it at once");
+        while (en_test_song() / 16u == b) {
+            CHECK(en_test_mute_gain(EN_L_DRUMS) == 1.0f && en_test_mute_gain(EN_L_BASS) == 1.0f && en_test_mute_gain(EN_L_HATS) == 1.0f, "the other set before its bar: %f", (double)en_test_mute_gain(EN_L_DRUMS));
+            run(16u, 16u, 0, 0);
+        }
+        while (!(en_test_song() & 15u)) {        /* (the next step is the bar's: not played yet) */
+            CHECK(en_test_mute_gain(EN_L_DRUMS) == 1.0f, "the other set, a step before its bar");
+            run(16u, 16u, 0, 0);
+        }
+        run(SEC(0.05f), 256u, 0, 0);
+        CHECK(en_test_mute_gain(EN_L_DRUMS) == 0.0f && en_test_mute_gain(EN_L_HATS) == 0.0f && en_test_mute_gain(EN_L_BASS) == 0.0f, "the other set, on its bar: %f %f %f, step %u", (double)en_test_mute_gain(EN_L_BASS), (double)en_test_mute_gain(EN_L_DRUMS), (double)en_test_mute_gain(EN_L_HATS), i);
+        /* a hand within the wait: its own switch, at once, whatever the mode's change was waiting for */
+        en_arrange(EN_AUTO);
+        run(256u, 256u, 0, 0);
+        en_layer(EN_L_DRUMS, 1);
+        en_layer(EN_L_DRUMS, 0);
+        run(256u, 256u, 0, 0);
+        CHECK(en_test_mute_gain(EN_L_DRUMS) == 0.0f, "a hand, after a mode's change: %f", (double)en_test_mute_gain(EN_L_DRUMS));
+    }
 }
 
 /* a kick nobody hears pulls nothing down */
@@ -686,22 +954,22 @@ static void test_resting(void)
     for (l = 0; l < EN_NLAYERS; l++)
         CHECK(!mute_of(l), "%s, all on: still off", LNAME[l]);
     CHECK(en_test_mute_gain(EN_L_DRUMS) == 1.0f, "all on, resting: the drums");
-    /* all on, growing: the drums and the bass on the bar, like any other */
+    /* all on, growing: the drums and the bass as ever: off at once, on at the next sixteenth */
     en_play(1);
     run(SEC(1.0f), 256u, 0, 0);
     en_layer(EN_L_DRUMS, 0);
-    bars(1u);
-    run(2048u, 256u, 0, 0);
-    CHECK(en_test_mute_gain(EN_L_DRUMS) == 0.0f, "growing: the drums off on the bar");
+    run(512u, 256u, 0, 0);
+    CHECK(en_test_mute_gain(EN_L_DRUMS) == 0.0f, "growing: the drums off at once");
     while (en_test_song() % 16u != 4u)
         run(16u, 16u, 0, 0);
     for (l = 0; l < EN_NLAYERS; l++)
         en_layer(l, 1);
-    run(SEC(0.05f), 256u, 0, 0);
-    CHECK(en_test_mute_gain(EN_L_DRUMS) == 0.0f, "all on, growing: the drums do not wait for the bar");
-    bars(1u);
-    run(2048u, 256u, 0, 0);
-    CHECK(en_test_mute_gain(EN_L_DRUMS) == 1.0f, "all on: the drums not back after the bar");
+    run(16u, 16u, 0, 0);
+    CHECK(en_test_mute_gain(EN_L_DRUMS) == 0.0f, "all on, growing: the drums do not wait for the sixteenth");
+    while (en_test_song() % 16u != 5u)
+        run(16u, 16u, 0, 0);
+    run(512u, 256u, 0, 0);
+    CHECK(en_test_mute_gain(EN_L_DRUMS) == 1.0f, "all on: the drums not back after the sixteenth");
 }
 
 /* ---- Hands: nothing moves by itself, for as long as you like */
@@ -1336,14 +1604,19 @@ static void test_ledger(void)
         for (c = 0; c < 1 << EN_NLAYERS; c++) {
             start(1001u + (uint32_t)c, c % EN_NSTYLES);
             en_arrange(m);
+            en_set(P_MELMODE, c >> 2 & 1);           /* (half of them with the melody in Arp) */
+            en_set(P_MRATE, c >> 2 & 1 ? 90 : 50);
             en_play(1);
             run(SEC(1.0f), 256u, 0, 0);
             for (l = 0; l < EN_NLAYERS; l++)
                 if (mute_of(l) != !(c >> l & 1))     /* (each through the hand's switch: to this combination) */
                     en_layer_press(l);
             run(SEC(6.0f), 256u, 0, 0);
-            for (l = 0; l < EN_NLAYERS; l++)
+            for (l = 0; l < EN_NLAYERS; l++) {       /* (and to its opposite, a press at a time, in the middle of a bar, at no one step) */
+                while (en_test_song() % 16u != (uint32_t)(3 * l + c % 16 + 1) % 16u)
+                    run(64u, 64u, 0, 0);
                 en_layer(l, !(c >> l & 1));
+            }
             run(SEC(6.0f), 256u, 0, 0);
             en_set(P_ENERGY, 90);
             en_next();
@@ -1405,10 +1678,14 @@ int main(void)
     test_like_level_0();
     test_same_notes();
     test_comes_back();
-    test_on_the_bar();
+    test_at_once();
     test_ramps();
     test_no_click();
     test_entry_click();
+    test_any_step();
+    test_any_step_256();
+    test_rapid();
+    test_mode_on_bar();
     test_duck();
     test_auto_keeps();
     test_resting();
@@ -1426,7 +1703,6 @@ int main(void)
     test_break();
     test_ledger();
     test_careless();
-    (void)frame_of_bar;
     printf(fails ? "hands_test: %d FAILED\n" : "hands_test: ok\n", fails);
     return fails != 0;
 }

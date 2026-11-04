@@ -40,7 +40,7 @@ expect view 3
 expect mutebass 1
 tap HOME
 expect view 0
-# ---- the switch: SELECT + LFO: the bass ON, on the bar. The page stays, the level is not touched, it says so, the glow comes
+# ---- the switch: SELECT + LFO: the bass ON, at the next sixteenth. The page stays, the level is not touched, it says so, the glow comes
 expect par12 50
 press SEL
 tap LFO
@@ -52,19 +52,18 @@ expect mutebass 0
 expect par12 50
 expect dirty 0
 expect dim3 1
-wait 2000
+wait 160
 expect gain2 100
 wait 3000
 expect meter2 >0
-# and off, on the bar too
+# and off, at once
 press SEL
 tap LFO
 release SEL
 said BASS OFF
-wait 20
+wait 40
 expect mutebass 1
 expect dim3 0
-wait 2000
 expect gain2 0
 # (the page you are on stays lit, off or not; leave it and it goes dark)
 tap LFO
@@ -97,17 +96,29 @@ expect gain1 100
 expect gain2 100
 expect gain3 100
 expect gain4 100
-# the drums on the bar (how exactly: hands_test); the keys go over a second
+# the drums: off at once, on at the next sixteenth, a sixteenth being 88 ms (how exactly, at every step: hands_test); the keys go over a second
 press SEL
 tap SEQ
 release SEL
-wait 2000
+wait 30
 expect gain3 0
 press SEL
 tap SEQ
 release SEL
-wait 2000
+wait 130
 expect gain3 100
+# the hats the same
+press SEL
+tap FX
+release SEL
+wait 30
+expect gain4 0
+press SEL
+tap FX
+release SEL
+wait 130
+expect gain4 100
+wait 1000
 press SEL
 tap ENV
 release SEL
@@ -278,7 +289,7 @@ expect breakbars 0
 expect section 4
 expect level 3
 breaks 50
-wait 100
+wait 600
 # the meters: full of what is playing; a layer off reads empty, playing or not
 expect meter3 >0
 press SEL

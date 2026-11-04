@@ -1,0 +1,253 @@
+# the melody's other mode, as a hand has it: SEL + KNOB 2 Phrases or Arp, SEL + KNOB 3 its pattern, on the Melody page; the four knobs as ever, Rate the division in Arp; SEL + ARP on and off in either; kept with the piece, a recipe in Phrases; through a save, a piece, a quick turn, a panic. What it plays: arp_test
+wait 300
+expect unfit 0
+expect par32 0
+expect par33 0
+expect enagree 0
+listen
+# ---- the header says the mode; no pattern while it is Phrases
+tap ARP
+wait 300
+said Melody page: Level 60, Rate 50, Tone 50, Octave 0. Sound Auto, mode Phrases
+shot melody_phrases.png
+# ---- the melody off, by the hand as ever: in either mode. Its MIDI goes on, in Arp too
+press SEL
+tap ARP
+release SEL
+said MELODY ON
+wait 20
+expect mutemel 0
+# ---- SEL + KNOB 2: Arp, and the values of the knobs do not move, no Degrees
+press SEL
+spin K2 1
+expect par32 1
+expect par9 50
+said MELODY MODE Arp
+expect view 2
+spin K3 1
+expect par33 1
+said ARP PATTERN Down
+spin K3 1
+said ARP PATTERN Up-Down
+spin K3 1
+said ARP PATTERN Random
+spin K3 1
+said ARP PATTERN Up
+spin K3 -1
+expect par33 3
+said ARP PATTERN Random
+spin K3 -1
+spin K3 -1
+expect par33 1
+release SEL
+wait 500
+expect view 2
+expect enagree 0
+expect dirty 1
+shot melody_arp.png
+# it plays, with no rests: an eighth at Rate 50; one key at a time
+expect mutemel 0
+wait 1000
+expect bellson <2
+expect meter1 >0
+# ---- Rate says the division: on the knob and in the reader
+tap ENV
+wait 100
+tap ARP
+wait 300
+said Melody page: Level 60, Rate 1/8, Tone 50, Octave 0. Sound Auto, mode Arp, pattern Down
+spin K2 30
+expect par9 80
+wait 300
+said Rate 1/16
+shot melody_arp_rate.png
+setpar 9 34
+spin K2 -1
+expect par9 33
+wait 300
+said Rate 1/4
+spin K2 1
+expect par9 34
+wait 300
+said Rate 1/8
+setpar 9 50
+# ---- the help card has it
+press ARP
+wait 1000
+said SEL + KNOB 2, 3: ARP, ITS PATTERN
+release ARP
+wait 100
+expect view 2
+# ---- SEL + ARP: off in Arp, on, still Arp; off is unheard and its notes still go
+press SEL
+tap ARP
+release SEL
+said MELODY OFF
+wait 1200
+expect gain1 0
+expect mutemel 1
+expect par32 1
+wait 1000
+expect meter1 0
+press SEL
+tap ARP
+release SEL
+said MELODY ON
+wait 1500
+expect gain1 100
+# ---- the knobs on the other pages do not do this
+tap LFO
+wait 200
+press SEL
+spin K2 1
+spin K3 1
+release SEL
+expect par13 51
+expect par14 11
+expect par32 1
+expect par33 1
+tap ARP
+wait 200
+# ---- back to Phrases, and to Arp, in the middle of whatever is playing: no note stays down
+press SEL
+spin K2 1
+expect par32 0
+said MELODY MODE Phrases
+spin K2 1
+expect par32 1
+spin K2 -1
+expect par32 0
+spin K2 -1
+expect par32 1
+release SEL
+wait 1000
+expect bellson <2
+expect enagree 0
+# ---- a save, in Arp: the duck, and it goes on from there
+tap SAVE
+wait 600
+expect saving 0
+expect ducked 0
+expect playing 1
+expect par32 1
+expect enagree 0
+wait 500
+expect bellson <2
+# ---- it is kept with the piece, and a recipe has Phrases. A quick turn: the last piece, all of it, within the queue's guarantee (a piece is 40 commands)
+turn PRESET 1 1
+wait 100
+expect piece 1
+expect par32 0
+expect par33 0
+expect enagree 0
+wait 100
+turn PRESET 3 1
+wait 30
+expect piece 4
+expect par32 0
+expect enagree 0
+turn PRESET -4 1
+wait 30
+expect piece 0
+expect par32 1
+expect par33 1
+expect enagree 0
+flood 200
+turn PRESET 1 1
+turn PRESET -1 1
+wait 60
+expect enagree 0
+expect par32 1
+expect par33 1
+flood 200
+wait 60
+expect enagree 0
+expect par32 1
+# ---- the panic and the way back: nothing, and then it plays on
+panic
+wait 200
+expect silent 1
+expect bellson 0
+expect midion2 0
+uiinit
+wait 3000
+expect silent 0
+expect playing 1
+expect par32 1
+wait 1000
+expect bellson <2
+# ---- what is chosen survives the power going off: Arp in the piece playing
+tap SAVE
+wait 800
+reboot
+wait 300
+expect piece 0
+expect par32 1
+expect par33 1
+expect enagree 0
+# ---- SAVE held: the piece back to its recipe: Phrases, and Up
+press SAVE
+wait 1600
+release SAVE
+wait 100
+expect par32 0
+expect par33 0
+expect enagree 0
+wait 800
+# ---- a save of another format: the recipes. 7 had no mode or pattern: as it is, whole but for the format; and as format 7 was laid out
+tap ARP
+wait 100
+press SEL
+spin K2 1
+release SEL
+wait 100
+expect par32 1
+tap SAVE
+wait 800
+reboot
+wait 300
+expect par32 1
+storeold
+reboot
+wait 300
+expect par32 0
+expect par33 0
+expect enagree 0
+tap ARP
+wait 100
+press SEL
+spin K2 1
+release SEL
+wait 100
+expect par32 1
+tap SAVE
+wait 800
+storeshort
+reboot
+wait 300
+expect par32 0
+# ---- out of range, in a save of this format: the recipes
+tap ARP
+wait 100
+press SEL
+spin K2 1
+release SEL
+wait 100
+tap SAVE
+wait 800
+storebad -1 32 2
+reboot
+wait 300
+expect par32 0
+tap ARP
+wait 100
+press SEL
+spin K2 1
+release SEL
+tap SAVE
+wait 800
+storebad 3 33 4
+reboot
+wait 300
+expect par32 0
+expect par33 0

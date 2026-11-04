@@ -53,6 +53,7 @@ If it no longer starts at all, see "Recovering an FM-1 that won't start" in the 
 | SELECT + a key | Whether chords may stand on that note |
 | SELECT + ENV · ARP · LFO · SEQ · FX | Keys and pad · melody · bass · kick and snare · hats, on or off |
 | SELECT + HOME | Hands (you lead) or Auto (the arranger leads) |
+| SELECT + KNOB 1 | On Keys, Melody and Bass: the layer's sound (on Keys, KNOB 2: the pad's) |
 | PLAY · REC | Play / rest · hold the chord |
 | EDIT · SELECT + EDIT | The next section · a break, each on the next bar |
 | HOME · ENV · ARP · LFO · SEQ · FX · GLO | The pages: Home, Keys, Melody, Bass, Drums, Space, Setup; KNOB 1–4 set their values |

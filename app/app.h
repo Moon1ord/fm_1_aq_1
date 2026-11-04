@@ -20,7 +20,7 @@
 enum { OBJ_PROJ, OBJ_PANEL, OBJ_NOBJ };
 #define APP_STORE_MAP {0xFC000u, 0xDC000u}
 #define PROJ_MAGIC 0x31555141u           /* "AQU1" */
-#define PROJ_FORMAT 6u                   /* 6: Hands is the recipes', and means the player's (an old save's Auto or Hands meant another thing: the recipes). 5: Auto or Hands, by piece. 4: the seven pages' knobs, the degrees (AMB-1's and older saves are not read: the recipes) */
+#define PROJ_FORMAT 7u                   /* 7: the sounds, by piece (a longer slot). 6: Hands is the recipes', and means the player's (an old save's Auto or Hands meant another thing: the recipes). 5: Auto or Hands, by piece. 4: the seven pages' knobs, the degrees (AMB-1's and older saves are not read: the recipes) */
 #define NPIECES EN_NPIECES
 
 typedef struct {

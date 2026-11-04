@@ -1,0 +1,63 @@
+# The melody: Auto, then each of the six timbres: the same phrases as Auto's, with Rate up so that there are enough to judge; the keys and the pad, the bass, the drums and the hats low. Each sound about 30 s in turn, from the first; the time each starts: the report of this change, and "sound" lines in the log. Not one of the tests.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/voices_melody.amb app/build/listen
+wait 300
+master 2430
+seed 11
+setpar 2 50
+press SEL
+tap ARP
+tap LFO
+tap SEQ
+tap FX
+release SEL
+setpar 9 90
+setpar 8 70
+setpar 4 34
+setpar 12 28
+setpar 16 22
+setpar 18 25
+wait 3000
+trace app/build/listen/voices_melody.trace
+wav voices_melody.wav
+tap ARP
+expect par31 0
+echo sound 0
+wait 30000
+press SEL
+spin K1 1
+release SEL
+expect par31 1
+echo sound 1
+wait 30000
+press SEL
+spin K1 1
+release SEL
+expect par31 2
+echo sound 2
+wait 30000
+press SEL
+spin K1 1
+release SEL
+expect par31 3
+echo sound 3
+wait 30000
+press SEL
+spin K1 1
+release SEL
+expect par31 4
+echo sound 4
+wait 30000
+press SEL
+spin K1 1
+release SEL
+expect par31 5
+echo sound 5
+wait 30000
+press SEL
+spin K1 1
+release SEL
+expect par31 6
+echo sound 6
+wait 30000
+wavstop
+trace off

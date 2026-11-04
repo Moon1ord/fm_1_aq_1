@@ -91,10 +91,12 @@ The drawing at the top shows most of them; here they all are.
 | SELECT + ENV · ARP · LFO · SEQ · FX | A layer on or off (see "Building a piece"). The page doesn't change. |
 | SELECT + HOME | The piece's arrangement: Hands or Auto. |
 | SELECT | Turn: the previous or next page. Hold HOME and turn it for the tempo, from any page. |
-| SELECT, held alone | After a moment, the Degrees screen, for as long as you hold it. |
+| SELECT, held alone | After a moment, the Degrees screen, for as long as you hold it. Turning a sound's knob goes back to the page for the rest of that hold. |
 | ALGORITHM | Mode: Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, pentatonic major and minor. Loads the mode's scale; editing it with the keys makes it Custom. |
 | PRESETS | The piece, one of eight. It goes round. |
 | KNOB 1–4 | The page's four values, shown at the bottom of the screen. A few clicks are always single steps; on the wider ranges a quick turn speeds up, so half a turn sweeps the range. |
+| SELECT + KNOB 1 | On the Keys, Melody and Bass pages: the layer's sound (see "Sounds"). The knob's value doesn't move. |
+| SELECT + KNOB 2 | On the Keys page: the pad's sound. |
 | OCT− / OCT+ | The melody's octave, two down to two up, from any page. |
 | MASTER | Volume. |
 | SAVE | Saves all eight pieces. Held for 1.5 s: puts the piece back to its recipe. |
@@ -205,11 +207,11 @@ In Auto:
 ## 6. The pieces
 
 PRESETS chooses one of eight pieces. Each is a recipe: key, mode, tempo, style and every knob. Each remembers how you
-left it, including its scale, its degrees and Hands or Auto. A card shows the piece for a moment. Each new piece, and
+left it, including its scale, its degrees, its sounds and Hands or Auto. A card shows the piece for a moment. Each new piece, and
 each power-on, starts composing from a new seed, so the settings are kept but the music is always new.
 
 Hold SAVE for 1.5 s to put the piece you're on back to its recipe. Tune, MIDI out and Lights are the same for all pieces.
-All eight start in Hands.
+All eight start in Hands, with the first sound of each layer.
 
 | Piece | Key and mode | Tempo | Style | Character |
 |---|---|---|---|---|
@@ -252,7 +254,7 @@ Seven pages, each on its own button, with four values on KNOB 1–4. SELECT step
 
 ![The Keys page](img/screen-keys.png "The Keys page")
 
-- **Level:** the electric piano's level. The pad follows it.
+- **Level:** the keys' level. The pad follows it.
 - **Bloom:** how slowly a chord opens and closes, from about 15 ms to over a second in its attack.
 - **Bright:** from dark to bright.
 - **Notes:** how many lone notes a chord may have between changes, 0 to 3. Short chords have fewer.
@@ -263,7 +265,8 @@ Seven pages, each on its own button, with four values on KNOB 1–4. SELECT step
 
 - **Level.**
 - **Rate:** how often a phrase comes.
-- **Tone:** the voices it chooses from, the softest to the brightest (flute, vocal, vibes, marimba, music box, glass).
+- **Tone:** the voices it chooses from, the softest to the brightest (flute, vocal, vibes, marimba, music box, glass). With a
+  sound chosen (see "Sounds"), only how bright that voice is.
 - **Octave:** two down to two up (OCT− and OCT+ too).
 
 ### LFO: Bass
@@ -314,6 +317,38 @@ At the top of this page is a reading of how the FM-1 is coping, `CPU n Mn Xn Sn`
 
 Press GLO again, on this page, to start M and S afresh.
 
+### Sounds
+
+The keys, the pad, the bass and the melody each have a choice of sound, kept with the piece. The four knobs stay what they are: hold SELECT and turn KNOB 1 on the
+layer's page, one sound a click, round and round (on the Keys page, KNOB 2 for the pad). The top line says it for a moment (`BASS SOUND` `Hollow`) and then keeps it next to the page's name.
+The other knobs, and the knobs on the other pages, do what they always do with SELECT held.
+
+| Layer | Sound | What it is |
+|---|---|---|
+| Keys | **Electric** | The electric piano: a soft tine, and a body that opens after the attack |
+| | **Clear** | Clean and glassy: no tine, the octaves above the note, and it stays open |
+| | **Organ** | Soft and hollow, like a stopped pipe: only the odd harmonics, steady |
+| | **Felt** | Warm and dark: nearly the pure note, the filter closed further |
+| Pad | **Warm** | Two saws a few cents apart under a dark filter |
+| | **Airy** | The filter wide open, more of it in the room, a little wider apart |
+| | **Choral** | Further apart and equal, so it moves like voices together |
+| | **Deep** | Close together, the filter low, only the body of the chord |
+| Bass | **Warm** | A round sub that speaks a little as each note starts |
+| | **Sub** | The pure sine, deep, with nothing over it |
+| | **Hollow** | The odd harmonics: it carries more on small speakers |
+| | **Round** | More of the octave above, a softer start and end |
+| Melody | **Auto** | AQ-1 chooses from what Tone allows, and changes it now and then |
+| | **Flute**, **Vocal**, **Vibes**, **Marimba**, **Music box**, **Glass** | Always that voice. The phrases are the same ones either way |
+
+**When you hear it:**
+
+- **Keys:** the bus and the chord sounding change within about a second, and the whole sound comes with the next chord.
+- **Pad:** the sounding chord moves to it over about 150 ms.
+- **Bass:** on the note sounding, in about a tenth of a second. Resting, the bass isn't playing: you hear it when it plays again.
+- **Melody:** from its next note. If no phrase is under way, one quiet note in the new voice answers the turn, once you stop turning.
+
+The sound doesn't change what's composed, and MIDI out is the same whichever you choose. All of them work in Hands and in Auto, and none costs noticeably more to play.
+
 ---
 
 ## 8. The screens
@@ -321,8 +356,8 @@ Press GLO again, on this page, to start M and S afresh.
 The screen shows one of these, the first that applies, in this order: a help card; Degrees; the title at power-on; the
 save; a piece's card; a break; a page; then the rest, the hold or Home.
 
-**Top line:** on Home, the piece with its root and mode; on a page, the page's name and the chord (Setup: its reading
-instead). On the right, the tempo (EXT when it follows MIDI clock, with a mark while resting), a dot when there are
+**Top line:** on Home, the piece with its root and mode; on a page, the page's name, its sound (Keys: the keys' sound and the pad's, `Felt/Warm`) and the chord (Setup: its reading
+instead; if there is no room, the chord gives way). On the right, the tempo (EXT when it follows MIDI clock, with a mark while resting), a dot when there are
 unsaved changes, and the battery. Messages (`ADDED F#`, `BREAK ON THE BAR`) show here for a moment.
 
 **The battery:** three bars when it's full, fewer as it runs down, with a warning colour at one bar or none. On USB power
@@ -414,7 +449,7 @@ The FM-1 says nothing until the page connects, so a DAW on the same cable never 
 
 ## 11. Saving
 
-AQ-1 keeps all eight pieces in the FM-1's memory, each as you left it: the knobs, the scale, the degrees, Hands or Auto,
+AQ-1 keeps all eight pieces in the FM-1's memory, each as you left it: the knobs, the scale, the degrees, the sounds, Hands or Auto,
 and the piece you're on, plus Tune, MIDI out and Lights. The music isn't saved, and neither are the layers you switched:
 power-on starts anew, with the keys and the pad.
 
@@ -511,6 +546,10 @@ The defaults are Load Screen's; each piece has its own.
 | Setup | MIDI out | Off, On | On |
 | Setup | Lights | Off, On, Keys | On |
 | ALGORITHM | Mode | 8 modes, or Custom | Lydian |
+| Keys, SELECT + KNOB 1 | Keys' sound | Electric, Clear, Organ, Felt | Electric |
+| Keys, SELECT + KNOB 2 | Pad's sound | Warm, Airy, Choral, Deep | Warm |
+| Melody, SELECT + KNOB 1 | Melody's sound | Auto, Flute, Vocal, Vibes, Marimba, Music box, Glass | Auto |
+| Bass, SELECT + KNOB 1 | Bass's sound | Warm, Sub, Hollow, Round | Warm |
 
 ---
 

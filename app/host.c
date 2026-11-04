@@ -7,9 +7,10 @@
  * parN battery section style level mask enmask keyslit help ringN mode arrange enagree brkshown brkquiet brkwrong absent sysnotes sysnote ducked saving writepeak mutekeys mutemel mutebass mutedrums mutehats gainN meterN dimN litN screen eye smile blinks wipes wiping drawrows drawbytes drawpx artbytes stale (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
  * values, help lines and messages wider than their places. Its commands:
  * storeamb (what AMB-1 leaves in the store: its magic and format, nothing of ours); storeold (the project as it is, whole, but
- * for the format before this one); battery N (the battery read as N,
+ * for the format before this one); storeshort (a save as the format before this one was laid out: its magic, its format, its length, four parameters less to a piece); storebad N P V (the project as it is, whole,
+ * in this format, but piece N's parameter P is V; N -1: the piece playing's); battery N (the battery read as N,
  * plat.h's plat_battery: -1..4; "battery off" the simulator's own, full); seed N (the musical seed, from the next choice on;
- * until told it is EN_HARM_SEED); melhear T (a statement in this timbre at the next chance: an audition); setpar P V (parameter P to V, as a knob would); style NAME; energy N; breaks N; trace FILE
+ * until told it is EN_HARM_SEED); melhear T (a statement in this timbre at the next chance: an audition); setpar P V (parameter P to V, as a knob would); style NAME; energy N; breaks N; keysgain G (the keys alone down, against the pad: a listening file's, the panel has no such thing); trace FILE
  * (a line for each bar: step section level character break's bars; a line for each chord: "chord" step name bars character key tones bass, the last two above the key)
  * and trace off; drawreset (the screen's counters); panic and uiinit (what the platform does around an update); overload (blocks too heavy, twice); flood N (more values than the engine's queue holds, all at once). */
 #include <stdio.h>
@@ -209,7 +210,7 @@ int app_expect(const char *what, int *got)
 
 int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, const char *d)
 {
-    (void)c, (void)d;
+    (void)d;
     if (!strcmp(cmd, "battery")) {               /* battery N: plat_battery as N (-1..4), "battery off" its own */
         batt_host = (int8_t)(strcmp(a, "off") ? atoi(a) : -2);
         return 1;
@@ -272,6 +273,10 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
         en_trace_mel = trace_f ? trace_mel : 0;
         return 1;
     }
+    if (!strcmp(cmd, "keysgain")) {
+        en_test_keys_gain = (float)atof(a);
+        return 1;
+    }
     if (!strcmp(cmd, "melhear")) {                /* melhear T: a statement in timbre T at the next chance; -1 back to its own */
         en_test_mel_hear(atoi(a));
         return 1;
@@ -287,6 +292,26 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
         old = proj;
         old.format = PROJ_FORMAT - 1u;
         plat_store_save(OBJ_PROJ, &old, sizeof old);
+        return 1;
+    }
+    if (!strcmp(cmd, "storeshort")) {
+        static project_t old;
+        project_save();
+        old = proj;
+        old.format = PROJ_FORMAT - 1u;
+        plat_store_save(OBJ_PROJ, &old, sizeof old - (size_t)(1 + NPIECES) * 4u * sizeof(int16_t));
+        return 1;
+    }
+    if (!strcmp(cmd, "storebad")) {
+        static project_t bad;
+        const int n = atoi(a);
+        project_save();
+        bad = proj;
+        if (n < 0)
+            bad.par[atoi(b)] = (int16_t)atoi(c);
+        else
+            bad.slot[n].par[atoi(b)] = (int16_t)atoi(c);
+        plat_store_save(OBJ_PROJ, &bad, sizeof bad);
         return 1;
     }
     return 0;

@@ -12,6 +12,7 @@
  *   EDIT           the next section, on the next bar    SEL + EDIT   a break, on the next bar, if there are drums then
  *   OCT- / OCT+    the melody's octave
  *   HOME + SELECT  tempo   ALGORITHM mode (loads a pool)   PRESETS the piece (Root is on the Setup page)
+ *   SEL + KNOB 1   on Keys, Melody and Bass: the layer's sound (Keys: SEL + KNOB 2, the pad's). The four knobs are as ever otherwise; SEL + a knob on the other pages too
  *   HOME ENV ARP LFO SEQ FX GLO   the pages: Home, Keys, Melody, Bass, Drums, Space, Setup (the SELECT encoder steps through them)
  *   KNOB 1-4       the page's four values
  *   SAVE           saves (it also saves by itself a few seconds after a change, while resting);
@@ -286,6 +287,33 @@ static void turn(int role, int k, int32_t e)
         return;
     knob_range(k, &lo, &hi);
     knob_set(k, knob_get(k) + accel(role, e, hi - lo));
+}
+
+/* ------------------------------------------------------------ the sounds --- */
+/* SEL + a knob on a layer's page. Each detent is the next, round and round, as ALGORITHM's and PRESETS' are. SEL's other jobs: SEL + a button is on the press, so no turn is in it; SEL alone is the Degrees view,
+ * and as with SEL + a layer's button, a turn says this hold is not that (ui.sel_layer) */
+static const struct {
+    uint8_t view, knob, par;
+    const char *say;
+} SOUND_KNOB[] = {{V_KEYS, 0, P_KEYSND, "KEYS SOUND"}, {V_KEYS, 1, P_PADSND, "PAD SOUND"}, {V_MOTIFS, 0, P_MELSND, "MELODY SOUND"}, {V_BASS, 0, P_BASSSND, "BASS SOUND"}};
+#define NSOUND_KNOBS ((int)(sizeof SOUND_KNOB / sizeof SOUND_KNOB[0]))
+static int sound_turn(int knob, int32_t e)      /* 1: it was a sound's */
+{
+    int i;
+    for (i = 0; i < NSOUND_KNOBS; i++)
+        if (SOUND_KNOB[i].view == ui.view && SOUND_KNOB[i].knob == knob) {
+            const int p = SOUND_KNOB[i].par, n = en_param_info(p)->hi + 1;
+            char t[16];
+            knob_set(p, (proj.par[p] + (e > 0 ? 1 : -1) + n) % n);
+            en_param_text(p, proj.par[p], t);
+            if (p == P_MELSND)
+                en_mel_hear();
+            say(SOUND_KNOB[i].say, t);
+            ui.sel_layer = 1u;
+            ui.btn_used |= 1u << B_SEL;
+            return 1;
+        }
+    return 0;
 }
 
 /* ------------------------------------------------------------- the pool --- */
@@ -669,9 +697,11 @@ static void input(void)
     }
     for (i = 0; i < 4; i++)
         if ((e = plat_enc(EN_K1 + (int)i)) != 0) {
-            turn(EN_K1 + (int)i, VIEW_KNOB[ui.view][i], e);
-            ui.touched = (int8_t)i;
-            ui.touch_until = plat_ms() + 1200u;
+            if (!(btn >> B_SEL & 1u) || !sound_turn((int)i, e)) {
+                turn(EN_K1 + (int)i, VIEW_KNOB[ui.view][i], e);
+                ui.touched = (int8_t)i;
+                ui.touch_until = plat_ms() + 1200u;
+            }
             ui.act_t = ui.turn_t = plat_ms();
         }
     help_tick(btn, keys);
@@ -1048,6 +1078,23 @@ static void setup_read(char *c)
     c[k++] = 'S';
     itoa_u(scr.r_s, c + k);
 }
+/* what the header says of a page's sounds: Keys has two, the keys' and the pad's. 0: none */
+static int page_sound(int view, char *b)
+{
+    int i, n = 0;
+    for (i = 0; i < NSOUND_KNOBS; i++)
+        if (SOUND_KNOB[i].view == view) {
+            char t[16];
+            int k = 0;
+            en_param_text(SOUND_KNOB[i].par, proj.par[SOUND_KNOB[i].par], t);
+            if (n)
+                b[n++] = '/';
+            while (t[k])
+                b[n++] = t[k++];
+        }
+    b[n] = 0;
+    return n;
+}
 static const char *header_word(int sc)
 {
     return sc == SC_DEG ? "Degrees" : sc == SC_HOLD ? "HOLD" : sc == SC_PAGE ? VIEW_NAME[ui.view] : piece_name(proj.piece);
@@ -1105,7 +1152,9 @@ static void draw_header(int sc)
                 text(xl + 3, 8, &FONT_XS, mode_name(), K_SOFT);
         }
     } else {
-        char nm[16];
+        char nm[16], snd[24];
+        if (sc == SC_PAGE && page_sound(ui.view, snd) && xl + text_w(&FONT_XS, snd) <= x)
+            xl = text(xl, 8, &FONT_XS, snd, K_INK) + 6;          /* (the page's sound, then the chord in its usual colour) */
         chord_now(nm);
         if (xl + text_w(&FONT_XS, nm) <= x)
             text(xl, 8, &FONT_XS, nm, en_held ? K_ICE : K_SOFT);   /* (a page, held: the chord in ice) */
@@ -1124,7 +1173,7 @@ static uint32_t header_sig(int sc)
     if (sc == SC_PAGE && ui.view == V_SETUP)
         h = hash(hash(h, scr.r_cpu | scr.r_max << 8), scr.r_x | scr.r_s << 16);
     else if (sc == SC_PAGE || sc == SC_HOLD)
-        h = hash(hash(h, chord_sig()), en_held);
+        h = hash(hash(h, chord_sig()), en_held | (uint32_t)proj.par[P_KEYSND] << 1 | (uint32_t)proj.par[P_PADSND] << 3 | (uint32_t)proj.par[P_BASSSND] << 5 | (uint32_t)proj.par[P_MELSND] << 7);
     return h;
 }
 
@@ -1276,9 +1325,9 @@ static int help_lines(int b, const char *l[HELP_LINES])
 #define L(t) (l[n++] = (t))
     switch (b) {
     case B_HOME: L("TEMPO, ENERGY, EVOLVE, STYLE"); L("HOLD + TURN SELECT: TEMPO"); L("SEL + KEY: CHORDS ON IT, OR NOT"); L("SEL + HOME: HANDS OR AUTO"); break;
-    case B_ENV: L("THE KEYS AND THE PAD"); L("LEVEL, BLOOM, BRIGHT, NOTES"); L("SEL + ENV: ON OR OFF"); break;
-    case B_ARP: L("THE MELODY"); L("LEVEL, RATE, TONE, OCTAVE"); L("SEL + ARP: ON OR OFF"); break;
-    case B_LFO: L("THE BASS"); L("LEVEL, MOVE, GLIDE, OCTAVE"); L("SEL + LFO: ON OR OFF"); break;
+    case B_ENV: L("THE KEYS AND THE PAD"); L("LEVEL, BLOOM, BRIGHT, NOTES"); L("SEL + ENV: ON OR OFF"); L("SEL + KNOB 1, KNOB 2: THE SOUNDS"); break;
+    case B_ARP: L("THE MELODY"); L("LEVEL, RATE, TONE, OCTAVE"); L("SEL + ARP: ON OR OFF"); L("SEL + KNOB 1: THE SOUND"); break;
+    case B_LFO: L("THE BASS"); L("LEVEL, MOVE, GLIDE, OCTAVE"); L("SEL + LFO: ON OR OFF"); L("SEL + KNOB 1: THE SOUND"); break;
     case B_SEQ: L("THE DRUMS"); L("LEVEL, BREAKS, HATS, KIT"); L("SEL + SEQ: KICK AND SNARE"); L(" ON OR OFF"); break;
     case B_FX: L("THE SPACE"); L("ECHO, ECHO TIME, REVERB,"); L(" SIZE"); L("SEL + FX: HATS ON OR OFF"); break;
     case B_GLO: L("SETUP: ROOT, TUNE, MIDI OUT, LIGHTS"); L("CPU LOAD, M WORST BLOCK,"); L(" X MISSED, S SHED"); L("AGAIN: THE READING AFRESH"); break;
@@ -2138,6 +2187,11 @@ static void sp_page(int all)
         sp_cat(i ? ", " : ": ");
         sp_knob(ui.view, i);
     }
+    for (i = 0; i < NSOUND_KNOBS; i++)           /* and its sounds */
+        if (SOUND_KNOB[i].view == ui.view) {
+            sp_cat(i && SOUND_KNOB[i - 1].view == ui.view ? ", pad sound " : ". Sound ");
+            sp_value(SOUND_KNOB[i].par);
+        }
     if (!all)
         return;
     sp_cat(". Piece ");
@@ -2464,6 +2518,24 @@ static int ui_unfit(void)                             /* the host's "unfit": wha
         en_param_text(P_MOCT, x, t);
         n += unfit_msg("MELODY OCTAVE", t);
     }
+    for (i = 0; i < NSOUND_KNOBS; i++) {              /* a sound: its message; its place in the header, with the page's name, the longest chord that is, and what is on the right */
+        const int p = SOUND_KNOB[i].par;
+        for (x = 0; x <= en_param_info(p)->hi; x++) {
+            en_param_text(p, x, t);
+            n += unfit_msg(SOUND_KNOB[i].say, t);
+        }
+    }
+    for (v = 0; v < NVIEWS; v++) {
+        char c[24];
+        const project_t k = proj;
+        for (x = 0; x < 49; x++) {
+            int16_t *q[4] = {&proj.par[P_KEYSND], &proj.par[P_PADSND], &proj.par[P_BASSSND], &proj.par[P_MELSND]};
+            *q[0] = (int16_t)(x % 4), *q[1] = (int16_t)(x / 4 % 4), *q[2] = (int16_t)(x % 4), *q[3] = (int16_t)(x % 7);
+            if (page_sound(v, c))
+                n += unfit_one(&FONT_XS, c, 231 - BATT_W - 6 - 9 - 22 - 6 - 10 - (9 + text_w(&FONT_B, VIEW_NAME[v]) + 5), "the header's sound");
+        }
+        proj = k;
+    }
     n += unfit_msg("THE ROOT STAYS", "(SETUP)");
     n += unfit_msg("3 NOTES", "AT LEAST");
     n += unfit_msg("2 DEGREES", "AT LEAST");
@@ -2512,6 +2584,19 @@ static void speak_dump(void)
             proj = keep;
         }
     }
+    for (i = 0; i < NSOUND_KNOBS; i++)                /* the sounds, as the page says them; as a turn says them */
+        for (x = 0; x <= en_param_info(SOUND_KNOB[i].par)->hi; x++) {
+            char o[16];
+            proj.par[SOUND_KNOB[i].par] = (int16_t)x;
+            ui.view = SOUND_KNOB[i].view;
+            sp_page(0);
+            sp_print("SCREEN", sp_buf);
+            en_param_text(SOUND_KNOB[i].par, x, o);
+            msg_text(SOUND_KNOB[i].say, o, t);
+            sp_print("MSG", t);
+            proj = keep;
+        }
+    ui.view = keep_view;
     for (x = 0; x < 8; x++) {                         /* WHERE: growing, resting, unsaved, a clock, held, custom */
         ui.view = (uint8_t)(x * 3 % NVIEWS);
         sp_tp.playing = (uint8_t)(x & 1);

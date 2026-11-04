@@ -1,0 +1,323 @@
+# the sounds, as a hand has them: SEL + KNOB 1 on Keys, Melody and Bass, SEL + KNOB 2 on Keys for the pad; the knobs as ever otherwise, here and on the other pages; Degrees and the SEL + button combinations stay what they are; in Hands and in Auto; each piece keeps its own; a save keeps them, range-checked; an older save is not read; MIDI and the rest: tests/host/sound_test.c
+wait 300
+expect unfit 0
+expect par28 0
+expect par29 0
+expect par30 0
+expect par31 0
+expect enagree 0
+listen
+# ---- the header says the sound
+tap ENV
+wait 300
+said Keys page: Level 60, Bloom 50, Bright 50, Notes 3. Sound Electric, pad sound Warm
+shot keys_page.png
+# ---- SEL + KNOB 1: the keys' sound, a detent at a time, round. The knob's value does not move, no Degrees come
+press SEL
+spin K1 1
+expect par28 1
+expect par4 60
+said KEYS SOUND Clear
+wait 400
+expect screen 2
+spin K1 1
+expect par28 2
+said KEYS SOUND Organ
+spin K1 1
+expect par28 3
+said KEYS SOUND Felt
+spin K1 1
+expect par28 0
+said KEYS SOUND Electric
+spin K1 -1
+expect par28 3
+wait 600
+expect enagree 0
+shot keys_felt.png
+wait 1000
+shot keys_header.png
+release SEL
+wait 100
+expect view 1
+expect mutekeys 0
+expect screen 2
+# ---- SEL + KNOB 2: the pad's. The keys' stays
+press SEL
+spin K2 1
+expect par29 1
+expect par28 3
+expect par5 50
+said PAD SOUND Airy
+release SEL
+wait 100
+# ---- KNOB 3 and 4 with SEL on Keys, and all of them without it: what they ever were
+press SEL
+spin K3 1
+expect par6 51
+expect par28 3
+spin K3 -1
+release SEL
+spin K1 1
+expect par4 61
+expect par28 3
+spin K1 -1
+spin K2 1
+expect par5 51
+expect par29 1
+spin K2 -1
+# ---- SEL on other pages: as ever: a knob is its value. Home
+tap HOME
+wait 100
+press SEL
+spin K2 1
+expect par1 71
+spin K2 -1
+release SEL
+tap SEQ
+wait 100
+press SEL
+spin K1 1
+expect par16 46
+spin K1 -1
+release SEL
+# ---- SEL alone still shows the Degrees, and SEL + a turn goes back to the page and it stays there this hold; the next hold has them again
+tap LFO
+wait 300
+said Bass page: Level 50, Move 50, Glide 10, Octave 0. Sound Warm
+press SEL
+wait 400
+expect screen 8
+spin K1 1
+expect par30 1
+said BASS SOUND Sub
+wait 300
+expect screen 2
+wait 300
+expect screen 2
+release SEL
+wait 100
+press SEL
+wait 400
+expect screen 8
+release SEL
+wait 100
+expect screen 2
+expect view 3
+# SEL + a button, SEL + a key after a turn in the same hold: they still are what they are
+expect mutebass 1
+press SEL
+spin K1 1
+expect par30 2
+said BASS SOUND Hollow
+tap LFO
+wait 50
+expect mutebass 0
+tap LFO
+wait 50
+expect mutebass 1
+release SEL
+expect view 3
+# ---- the melody: Auto, then the timbres
+tap ARP
+wait 300
+said Melody page: Level 60, Rate 50, Tone 50, Octave 0. Sound Auto
+press SEL
+spin K1 1
+expect par31 1
+said MELODY SOUND Flute
+spin K1 1
+spin K1 1
+spin K1 1
+spin K1 1
+expect par31 5
+said MELODY SOUND Music box
+wait 600
+shot melody_box.png
+spin K1 1
+spin K1 1
+expect par31 0
+said MELODY SOUND Auto
+spin K1 -1
+spin K1 -1
+expect par31 5
+release SEL
+# ---- the MIDI says nothing of it: the same channels and notes go on (the whole of it: sound_test). A help card still comes, and says so
+press ARP
+wait 1000
+expect help 9
+said SEL + KNOB 1: THE SOUND
+release ARP
+wait 100
+expect view 2
+# ---- it does the same in Auto
+press SEL
+tap HOME
+release SEL
+wait 100
+expect mode 0
+press SEL
+spin K1 1
+expect par31 6
+release SEL
+wait 100
+expect enagree 0
+expect dirty 1
+press SEL
+tap HOME
+release SEL
+wait 100
+expect mode 1
+# ---- each piece keeps its own. A quick turn: the last piece, all of it, within the queue's guarantee
+turn PRESET 1 1
+wait 100
+expect piece 1
+expect par28 0
+expect par31 0
+expect enagree 0
+tap LFO
+press SEL
+spin K1 1
+expect par30 1
+release SEL
+turn PRESET 3 1
+wait 30
+expect piece 4
+expect par30 0
+expect enagree 0
+turn PRESET -4 1
+wait 30
+expect piece 0
+expect par28 3
+expect par29 1
+expect par30 2
+expect par31 6
+expect enagree 0
+flood 200
+turn PRESET 1 1
+turn PRESET -1 1
+wait 60
+expect enagree 0
+expect par28 3
+# ---- SAVE held: the piece back to its recipe, the first sounds
+press SAVE
+wait 1600
+release SAVE
+wait 100
+expect par28 0
+expect par29 0
+expect par30 0
+expect par31 0
+expect enagree 0
+# ---- what is chosen survives the power going off, for the piece playing and another
+tap ENV
+press SEL
+spin K1 1
+spin K1 1
+spin K2 1
+spin K2 1
+spin K2 1
+release SEL
+tap LFO
+press SEL
+spin K1 1
+spin K1 1
+spin K1 1
+release SEL
+tap ARP
+press SEL
+spin K1 1
+spin K1 1
+spin K1 1
+spin K1 1
+release SEL
+turn PRESET 2 1
+wait 100
+tap LFO
+press SEL
+spin K1 1
+release SEL
+wait 100
+expect par30 1
+turn PRESET -2 1
+wait 100
+tap SAVE
+wait 800
+reboot
+wait 300
+expect piece 0
+expect par28 2
+expect par29 3
+expect par30 3
+expect par31 4
+expect enagree 0
+turn PRESET 2 1
+wait 100
+expect par30 1
+turn PRESET -2 1
+wait 100
+expect par28 2
+# ---- a sound out of range in a save: it is damaged, the recipes. Each of them, on the piece playing and on a piece not playing
+storebad -1 28 4
+reboot
+wait 300
+expect par28 0
+expect enagree 0
+storebad 3 29 -1
+reboot
+wait 300
+expect par29 0
+storebad 5 30 4
+reboot
+wait 300
+expect par30 0
+storebad 7 31 7
+reboot
+wait 300
+expect par31 0
+expect enagree 0
+# and in range is read, up to the last
+tap ENV
+press SEL
+spin K1 1
+release SEL
+wait 100
+storebad 7 31 6
+reboot
+wait 300
+expect par28 1
+turn PRESET -1 1
+wait 100
+expect piece 7
+expect par31 6
+expect enagree 0
+turn PRESET 1 1
+wait 100
+# ---- an older save: refused, whether its format or its length says so, and it falls back to the recipes
+tap ENV
+press SEL
+spin K1 1
+spin K1 1
+release SEL
+wait 100
+expect par28 3
+storeold
+reboot
+wait 300
+expect par28 0
+expect par4 60
+expect enagree 0
+press SEL
+spin K1 1
+release SEL
+expect par28 0
+press SEL
+tap HOME
+release SEL
+wait 100
+expect arrange 0
+storeshort
+reboot
+wait 300
+expect arrange 1
+expect par28 0
+expect enagree 0

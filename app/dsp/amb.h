@@ -39,6 +39,7 @@ enum {
     P_ECHO, P_ETIME, P_REVERB, P_SIZE,                /* Space */
     P_ROOT, P_TUNE, P_MIDI,                           /* Setup (its fourth knob, the lights, is the panel's: not the engine's) */
     P_MODE,                                           /* the ALGORITHM encoder */
+    P_KEYSND, P_PADSND, P_BASSSND, P_MELSND,          /* the sounds: SEL + a knob (the first of each is the sound the owner approved; the melody's first is Auto, then each timbre + 1) */
     P_NPARAMS
 };
 typedef struct {
@@ -61,6 +62,9 @@ void en_seed(uint32_t s);                      /* a new seed (24 bits are used):
 void en_panic(void);                           /* everything quiet, now, and it stays so until en_restore */
 void en_restore(void);                         /* it grows, from where it was; the first time, from the top */
 void en_regrow(void);                          /* a new piece: its key; the song goes on */
+/* The sounds. Nothing that composes knows of them and MIDI is the same whichever is chosen, and whenever. Keys and pad: on what is sounding too, at once and softly, and in full from the next chord; bass: over
+ * about a tenth of a second, on the note sounding; melody: from its next note. en_mel_hear: the hand has chosen a timbre: if no phrase is under way and the melody is on, one quiet note in it, not on MIDI, once the turning has stopped */
+void en_mel_hear(void);
 /* The layers, on and off. Off is a gain and nothing else: what composes goes on composing and MIDI goes on, like a level of 0, and the room rings out
  * what it had. Keys (with the pad) and melody go over about a second; bass, kick and snare (with the ghosts, the rim, the tom and the kick's duck)
  * and hats on the next bar line, at once while resting, and before it has played at all. A panic and a new piece leave them; en_init has the start.
@@ -193,6 +197,15 @@ extern uint32_t en_test_bell_echoes;            /* its notes that have gone to t
 int en_test_bell_limit(void);                   /* how many it may have */
 float en_test_bell_stolen(void);                /* the loudest a sounding voice was when it was taken: its level, 0..1 */
 void en_test_bell_note(int timbre, int note, float vel);   /* one note in a timbre, at once, out of the echo: to measure it */
+void en_test_key_note(int note, float vel);     /* a key held, at once: to measure it */
+void en_test_bass_note(int note, uint32_t steps);   /* a note of the bass, at once, at this MIDI note */
+extern float en_test_keys_gain;                 /* the keys alone, against the pad: 1 as ever, 0 out of the mix: to hear the pad */
+extern int en_test_bell_struck;                 /* the timbre of the melody's last note, -1 none */
+extern uint32_t en_test_mel_heard;              /* the notes en_mel_hear has played */
+float en_test_sound_now(int which);             /* where it has got to: 0 the pad's level, 1 the keys' bus */
+int en_test_bell_keys(void);                    /* the melody's keys down, whatever MIDI has been told */
+int en_test_bell_off_chord(void);               /* those of them that the chord sounding does not have */
+uint32_t en_test_bell_case(int which);          /* a chosen timbre, against the one it stands for: 0 its sound was over before the note's MIDI, 1 the MIDI before its sound */
 void en_test_mel_hear(int timbre);              /* a statement at the next chance in this timbre, -1 back to its own: to audition them */
 extern uint32_t en_mel_ops;                     /* the generator's steps of work, all of them: what bounds its cost */
 int en_test_pad_sent(void);

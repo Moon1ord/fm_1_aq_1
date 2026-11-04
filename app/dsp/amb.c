@@ -3088,6 +3088,13 @@ static void mel_plan(uint32_t s)
 #endif
 }
 
+int en_mel_fold(int n)
+{
+    while (n > 127)
+        n -= 12;
+    return n;
+}
+
 /* a note of the phrase, as the pool and the key are now: moved with the key, then to the nearest note the pool has */
 static int mel_live(int n)
 {
@@ -3143,7 +3150,7 @@ static void mel_step(uint32_t s)
         phr_i++;                                 /* (what a jump passed over) */
     while (mel_on && phr_i < phr.n && (uint32_t)phr.note[phr_i].step + phr_at == s) {
         const en_mnote_t *o = &phr.note[phr_i];
-        const int note = mel_live(o->note) + 12 * par[P_MOCT];
+        const int note = en_mel_fold(mel_live(o->note) + 12 * par[P_MOCT]);   /* (the key moved under a phrase, up two octaves: past what MIDI has) */
         const float pan = phr.role & 1u ? 0.10f : -0.10f;
         bell_strike(phr.timbre, note, (float)o->vel * 0.01f, o->echo, (int32_t)(((float)o->len - 0.15f) * step_len), pan, (int32_t)(hhash(song_seed, s, 46u) % 120u));
         en_loop_pos[phr.role & 1u] = phr_i;

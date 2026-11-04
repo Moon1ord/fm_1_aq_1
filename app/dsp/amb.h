@@ -272,6 +272,7 @@ int en_bass_ch(const en_hchord_t *ch, const en_hchord_t *nx, uint32_t pool, uint
 #define EN_MEL_RANGE 19                        /* semitones, its whole register: an octave and a half */
 #define EN_MEL_LO(key) (72 + (key))            /* the key's tonic an octave over middle C: the hand stays under it */
 #define EN_MEL_TOP 98                          /* the highest, however high the key */
+int en_mel_fold(int n);                        /* a note MIDI has: over 127, down by octaves, so it stays in tune */
 enum { EN_TB_FLUTE, EN_TB_VOCAL, EN_TB_VIBES, EN_TB_MARIMBA, EN_TB_BOX, EN_TB_GLASS, EN_NTIMBRES };   /* softest to brightest */
 extern const char *const EN_TIMBRE_NAME[EN_NTIMBRES];
 enum { EN_MEL_STATEMENT, EN_MEL_ANSWER, EN_MEL_RETURN, EN_MEL_CLOSE };

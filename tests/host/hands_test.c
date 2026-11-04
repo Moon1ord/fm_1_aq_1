@@ -146,7 +146,8 @@ static void test_hands_part(void)
             CHECK(RANK[p.level] >= last_rank && p.character >= last_char && p.bass >= last_bass, "style %d energy %d goes down somewhere", st, e);
             CHECK(p.bass > 0u, "style %d energy %d: no bass for the player to have", st, e);
             CHECK(p.ramp == 1u, "style %d energy %d: drums take %d bars", st, e, p.ramp);
-            CHECK(p.character <= 3u && p.section < EN_NSECTIONS, "style %d energy %d", st, e);
+            CHECK(p.character == (e == 0 ? 0 : e < 35 ? 1 : e < 80 ? 2 : 3), "style %d energy %d: character %d", st, e, p.character);
+            CHECK(p.section == (e == 0 ? EN_SEC_INTRO : e < 10 ? EN_SEC_HATS : e < 35 ? EN_SEC_DOWN : e < 60 ? EN_SEC_LIGHT : EN_SEC_FULL), "style %d energy %d: section %d", st, e, p.section);
             if (e < 60)
                 CHECK(p.character < 3u, "style %d energy %d: the peak under the full rhythm", st, e);
             last_rank = RANK[p.level];
@@ -756,15 +757,15 @@ static void test_switching(void)
     start(7u, EN_ST_LIQUID);
     en_set(P_ENERGY, 90);
     en_play(1);
-    /* into the full section, by way of EDIT */
-    while (en_section != EN_SEC_FULL) {
+    /* into the light section, by way of EDIT: not what Energy 90 would ask, so that a hold can be told from Energy */
+    while (en_section != EN_SEC_LIGHT) {
         en_next();
         bars(1u);
     }
     bars(4u);
     sec = en_section;
     lev = en_drum_level;
-    CHECK(lev == 3, "the full section at Energy 90: level %d", lev);
+    CHECK(lev == 2, "the light section at Energy 90: level %d", lev);
     en_arrange(EN_HANDS, 0);
     for (i = 0u; i < 400u; i++) {
         bars(1u);

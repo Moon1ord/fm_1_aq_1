@@ -244,10 +244,24 @@ wait 8000
 expect breakbars 0
 expect section 4
 expect level 3
-# saved with the piece, by format; what is off is not
+# the meters: full of what is playing; a layer off reads empty, playing or not
+expect meter2 >0
+expect meter3 >0
 press SEL
+tap SEQ
 tap LFO
 release SEL
+expect meter2 0
+expect meter3 0
+wait 3000
+expect meter2 0
+expect meter3 0
+press SEL
+tap SEQ
+release SEL
+wait 3000
+expect meter3 >0
+# saved with the piece, by format; what is off is not
 expect mutebass 1
 tap SAVE
 said SAVED

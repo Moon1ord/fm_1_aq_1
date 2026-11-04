@@ -3617,7 +3617,7 @@ uint32_t en_test_section_bar(void) { return (song - arr_start) / 16u; }
 uint32_t en_test_section_bars(void) { return arr_cur.bars; }
 int en_test_silent(void) { return silent; }
 float en_test_mute_gain(int l) { return mute_pos[l] * mute_pos[l]; }
-float en_test_duck(void) { return duck1; }
+float en_test_duck(void) { return fm_maxf(duck0, duck1); }
 int en_test_bass_down(void) { return bass.hold > 0; }
 int en_test_pad_sent(void)
 {

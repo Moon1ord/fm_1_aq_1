@@ -161,7 +161,7 @@ uint32_t en_test_section_bar(void);             /* this section's bar; how many 
 uint32_t en_test_section_bars(void);
 int en_test_silent(void);                       /* since en_panic */
 float en_test_mute_gain(int layer);             /* a layer's gain as it is now: 0 off .. 1 on */
-float en_test_duck(void);                       /* the duck the melodic bus last had */
+float en_test_duck(void);                       /* the duck the melodic bus last had, the more of its two ends */
 int en_test_bass_down(void);                    /* notes the engine thinks are down, by layer: what MIDI should say */
 int en_test_bells_on(void);                     /* the melody's notes MIDI has been told are down: one at most */
 int en_test_bell_voices(void);                  /* its voices sounding, tails too */

@@ -1,0 +1,120 @@
+# Arp's new patterns and Skip on Load Screen, played by hand: the keys, the pad, the bass, hats and drums on, the melody in Arp. At 1/8 and then at 1/16, 15 s each: Converge, Pedal top, Pedal root; Up at Skip 25, 50, 75; Pedal root at Skip 25, 50, 75. The times are in the file, each with its echo.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/arp_modes.amb app/build/listen
+wait 100
+tap SAVE
+wait 800
+reboot
+seed 3001
+master 2430
+trace app/build/listen/arp_modes.trace
+wav arp_modes.wav
+press SEL
+tap LFO
+tap SEQ
+tap FX
+tap ARP
+release SEL
+tap ARP
+wait 100
+press SEL
+spin K2 1
+release SEL
+expect par32 1
+expect par33 0
+expect par34 0
+setpar 9 50
+setpar 34 0
+# 0:00 1/8 converge
+setpar 33 4
+echo 0:00 arp 1/8 converge
+wait 15000
+# 0:15 1/8 pedal top
+setpar 33 5
+echo 0:15 arp 1/8 pedal top
+wait 15000
+# 0:30 1/8 pedal root
+setpar 33 6
+echo 0:30 arp 1/8 pedal root
+wait 15000
+setpar 33 0
+# 0:45 1/8 up skip 25
+setpar 34 25
+expect par34 25
+echo 0:45 arp 1/8 up skip 25
+wait 15000
+# 1:00 1/8 up skip 50
+setpar 34 50
+expect par34 50
+echo 1:00 arp 1/8 up skip 50
+wait 15000
+# 1:15 1/8 up skip 75
+setpar 34 75
+expect par34 75
+echo 1:15 arp 1/8 up skip 75
+wait 15000
+setpar 33 6
+# 1:30 1/8 pedal root skip 25
+setpar 34 25
+expect par34 25
+echo 1:30 arp 1/8 pedal root skip 25
+wait 15000
+# 1:45 1/8 pedal root skip 50
+setpar 34 50
+expect par34 50
+echo 1:45 arp 1/8 pedal root skip 50
+wait 15000
+# 2:00 1/8 pedal root skip 75
+setpar 34 75
+expect par34 75
+echo 2:00 arp 1/8 pedal root skip 75
+wait 15000
+setpar 9 85
+setpar 34 0
+# 2:15 1/16 converge
+setpar 33 4
+echo 2:15 arp 1/16 converge
+wait 15000
+# 2:30 1/16 pedal top
+setpar 33 5
+echo 2:30 arp 1/16 pedal top
+wait 15000
+# 2:45 1/16 pedal root
+setpar 33 6
+echo 2:45 arp 1/16 pedal root
+wait 15000
+setpar 33 0
+# 3:00 1/16 up skip 25
+setpar 34 25
+expect par34 25
+echo 3:00 arp 1/16 up skip 25
+wait 15000
+# 3:15 1/16 up skip 50
+setpar 34 50
+expect par34 50
+echo 3:15 arp 1/16 up skip 50
+wait 15000
+# 3:30 1/16 up skip 75
+setpar 34 75
+expect par34 75
+echo 3:30 arp 1/16 up skip 75
+wait 15000
+setpar 33 6
+# 3:45 1/16 pedal root skip 25
+setpar 34 25
+expect par34 25
+echo 3:45 arp 1/16 pedal root skip 25
+wait 15000
+# 4:00 1/16 pedal root skip 50
+setpar 34 50
+expect par34 50
+echo 4:00 arp 1/16 pedal root skip 50
+wait 15000
+# 4:15 1/16 pedal root skip 75
+setpar 34 75
+expect par34 75
+echo 4:15 arp 1/16 pedal root skip 75
+wait 15000
+wavstop
+trace off
+expect piece 0
+expect unfit 0

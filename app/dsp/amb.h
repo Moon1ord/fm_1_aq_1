@@ -40,7 +40,7 @@ enum {
     P_ROOT, P_TUNE, P_MIDI,                           /* Setup (its fourth knob, the lights, is the panel's: not the engine's) */
     P_MODE,                                           /* the ALGORITHM encoder */
     P_KEYSND, P_PADSND, P_BASSSND, P_MELSND,          /* the sounds: SEL + a knob (the first of each is the sound the owner approved; the melody's first is Auto, then each timbre + 1) */
-    P_MELMODE, P_ARPPAT,                              /* the melody: Phrases or Arp, and Arp's pattern: SEL + KNOB 2, SEL + KNOB 3 on its page */
+    P_MELMODE, P_ARPPAT, P_ARPSKIP,                   /* the melody: Phrases or Arp, Arp's pattern, Arp's skip: SEL + KNOB 2, 3, 4 on its page */
     P_NPARAMS
 };
 typedef struct {
@@ -288,19 +288,24 @@ int en_bass_ch(const en_hchord_t *ch, const en_hchord_t *nx, uint32_t pool, uint
 #define EN_MEL_RANGE 19                        /* semitones, its whole register: an octave and a half */
 #define EN_MEL_LO(key) (72 + (key))            /* the key's tonic an octave over middle C: the hand stays under it */
 #define EN_MEL_TOP 98                          /* the highest, however high the key */
-/* Arp, the melody's other mode: the notes of the chord sounding, one after another with no rests, in the melody's voices and on its channel, through a register of two octaves. All of it pure; amb.c plays it.
+/* Arp, the melody's other mode: the notes of the chord sounding, one after another, in the melody's voices and on its channel, through a register of two octaves. All of it pure; amb.c plays it.
  * en_arp_steps: Rate's division, in sixteenths: to 33 a quarter (4), to 66 an eighth (2), above a sixteenth (1). en_arp_next: from where it is, the next note in this pattern of these pitch classes (absolute, bit i);
- * h only for Random. en_arp_timbre: what Auto has it sound in: of what Tone allows, those that speak at a sixteenth, by a hash that moves slowly. */
+ * h only for Random. Converge: lowest, highest, next lowest, next highest. The pedals: the top note, or the lowest, every other note, the rest of them in turn from the bottom up.
+ * en_arp_rest: Skip. Whether this step, on the grid of div sixteenths, strikes nothing at this setting, 0..100: that share of the bar's steps, always the same ones in the bar for this seed, a higher setting's being a lower one's and more;
+ * the downbeat only at 100. The figure goes on through a rest (en_arp_next is called for it), so what sounds is what would have sounded.
+ * en_arp_timbre: what Auto has it sound in: of what Tone allows, those that speak at a sixteenth, by a hash that moves slowly. */
 enum { EN_MEL_PHRASES, EN_MEL_ARP };
-enum { EN_ARP_UP, EN_ARP_DOWN, EN_ARP_UPDOWN, EN_ARP_RANDOM, EN_ARP_NPATTERNS };
+enum { EN_ARP_UP, EN_ARP_DOWN, EN_ARP_UPDOWN, EN_ARP_RANDOM, EN_ARP_CONVERGE, EN_ARP_PEDTOP, EN_ARP_PEDROOT, EN_ARP_NPATTERNS };   /* kept with a piece: new ones at the end */
 typedef struct {
     uint8_t last;                              /* the last note, 0 none yet */
     int8_t dir;                                /* up-down: the way it is going */
+    uint8_t at, pat;                           /* converge and the pedals: the place in the figure; the pattern it is for */
 } en_arp_t;
 int en_arp_steps(int rate);
 void en_arp_range(int key, int *lo, int *hi);
 void en_arp_start(en_arp_t *a);
 int en_arp_next(en_arp_t *a, uint32_t tones, int key, int pattern, uint32_t h);
+int en_arp_rest(uint32_t seed, uint32_t step, int div, int skip);
 int en_arp_timbre(int tone, uint32_t h);
 int en_mel_fold(int n);                        /* a note MIDI has: over 127, down by octaves, so it stays in tune */
 enum { EN_TB_FLUTE, EN_TB_VOCAL, EN_TB_VIBES, EN_TB_MARIMBA, EN_TB_BOX, EN_TB_GLASS, EN_NTIMBRES };   /* softest to brightest */

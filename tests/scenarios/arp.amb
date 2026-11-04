@@ -1,8 +1,9 @@
-# the melody's other mode, as a hand has it: SEL + KNOB 2 Phrases or Arp, SEL + KNOB 3 its pattern, on the Melody page; the four knobs as ever, Rate the division in Arp; SEL + ARP on and off in either; kept with the piece, a recipe in Phrases; through a save, a piece, a quick turn, a panic. What it plays: arp_test
+# the melody's other mode, as a hand has it: SEL + KNOB 2 Phrases or Arp, SEL + KNOB 3 its pattern, SEL + KNOB 4 its skip, on the Melody page; the four knobs as ever, Rate the division in Arp; SEL + ARP on and off in either; kept with the piece, a recipe in Phrases; through a save, a piece, a quick turn, a panic. What it plays: arp_test
 wait 300
 expect unfit 0
 expect par32 0
 expect par33 0
+expect par34 0
 expect enagree 0
 listen
 # ---- the header says the mode; no pattern while it is Phrases
@@ -32,7 +33,22 @@ said ARP PATTERN Up-Down
 spin K3 1
 said ARP PATTERN Random
 spin K3 1
+expect par33 4
+said ARP PATTERN Conv
+spin K3 1
+expect par33 5
+said ARP PATTERN PedT
+spin K3 1
+expect par33 6
+said ARP PATTERN PedR
+spin K3 1
+expect par33 0
 said ARP PATTERN Up
+spin K3 -1
+expect par33 6
+said ARP PATTERN PedR
+spin K3 -1
+spin K3 -1
 spin K3 -1
 expect par33 3
 said ARP PATTERN Random
@@ -74,7 +90,7 @@ setpar 9 50
 # ---- the help card has it
 press ARP
 wait 1000
-said SEL + KNOB 2, 3: ARP, ITS PATTERN
+said SEL + KNOB 2-4: ARP, PATTERN, SKIP
 release ARP
 wait 100
 expect view 2
@@ -106,8 +122,145 @@ expect par13 51
 expect par14 11
 expect par32 1
 expect par33 1
+expect par34 0
+spin K4 1
+expect par15 1
+expect par34 0
+tap LFO
+wait 200
+press SEL
+spin K4 -1
+release SEL
+expect par15 0
 tap ARP
 wait 200
+# ---- SEL + KNOB 4: Arp's skip, a quantity: to its ends and no further, and the knob's own value does not move
+expect par11 0
+press SEL
+wait 100
+spin K4 1
+expect par34 1
+expect par11 0
+said ARP SKIP 1
+wait 100
+spin K4 -1
+expect par34 0
+said ARP SKIP 0
+wait 100
+spin K4 -1
+expect par34 0
+setpar 34 99
+wait 100
+spin K4 1
+expect par34 100
+said ARP SKIP 100
+wait 100
+spin K4 1
+expect par34 100
+setpar 34 0
+wait 100
+spin K4 1
+spin K4 1
+spin K4 1
+spin K4 1
+spin K4 1
+spin K4 1
+expect par34 >6
+setpar 34 29
+wait 100
+spin K4 1
+expect par34 30
+said ARP SKIP 30
+release SEL
+wait 2500
+expect view 2
+expect enagree 0
+expect stale 0
+expect soundis=Auto/Arp/Down/S30 1
+shot melody_arp_skip.png
+tap ENV
+wait 100
+tap ARP
+wait 300
+said Melody page: Level 60, Rate 1/8, Tone 50, Octave 0. Sound Auto, mode Arp, pattern Down, skip 30
+# the header shows each change, the longest name it has included
+press SEL
+spin K1 1
+spin K1 1
+spin K1 1
+spin K1 1
+spin K1 1
+release SEL
+setpar 34 100
+expect par31 5
+expect par34 100
+wait 2500
+expect stale 0
+expect soundis=Arp/Down/S100 1
+shot melody_arp_glass.png
+press SEL
+spin K3 1
+spin K3 1
+spin K3 1
+spin K3 1
+release SEL
+expect par33 5
+wait 2500
+expect stale 0
+setpar 34 75
+wait 300
+expect stale 0
+expect soundis=Arp/PedT/S75 1
+shot melody_arp_long.png
+setpar 34 100
+expect unfit 0
+press SEL
+spin K3 -1
+spin K3 -1
+spin K3 -1
+spin K3 -1
+spin K1 -1
+spin K1 -1
+spin K1 -1
+spin K1 -1
+spin K1 -1
+release SEL
+setpar 34 30
+expect par33 1
+expect par34 30
+expect par31 0
+wait 2500
+expect stale 0
+# at Skip 0, and in Phrases, no word of it
+setpar 34 0
+expect soundis=Auto/Arp/Down 1
+tap ENV
+wait 100
+tap ARP
+wait 300
+said Melody page: Level 60, Rate 1/8, Tone 50, Octave 0. Sound Auto, mode Arp, pattern Down
+tap ENV
+wait 100
+listen
+tap ARP
+wait 300
+unsaid skip
+setpar 34 30
+setpar 32 0
+tap ENV
+wait 100
+tap ARP
+wait 300
+said Melody page: Level 60, Rate 50, Tone 50, Octave 0. Sound Auto, mode Phrases
+tap ENV
+wait 100
+listen
+tap ARP
+wait 300
+unsaid skip
+expect soundis=Auto/Phrases 1
+setpar 32 1
+wait 300
 # ---- back to Phrases, and to Arp, in the middle of whatever is playing: no note stays down
 press SEL
 spin K2 1
@@ -130,15 +283,17 @@ expect saving 0
 expect ducked 0
 expect playing 1
 expect par32 1
+expect par34 30
 expect enagree 0
 wait 500
 expect bellson <2
-# ---- it is kept with the piece, and a recipe has Phrases. A quick turn: the last piece, all of it, within the queue's guarantee (a piece is 40 commands)
+# ---- it is kept with the piece, and a recipe has Phrases, and no skip. A quick turn: the last piece, all of it, within the queue's guarantee (a piece is 41 commands)
 turn PRESET 1 1
 wait 100
 expect piece 1
 expect par32 0
 expect par33 0
+expect par34 0
 expect enagree 0
 wait 100
 turn PRESET 3 1
@@ -151,6 +306,7 @@ wait 30
 expect piece 0
 expect par32 1
 expect par33 1
+expect par34 30
 expect enagree 0
 flood 200
 turn PRESET 1 1
@@ -159,10 +315,12 @@ wait 60
 expect enagree 0
 expect par32 1
 expect par33 1
+expect par34 30
 flood 200
 wait 60
 expect enagree 0
 expect par32 1
+expect par34 30
 # ---- the panic and the way back: nothing, and then it plays on
 panic
 wait 200
@@ -174,6 +332,7 @@ wait 3000
 expect silent 0
 expect playing 1
 expect par32 1
+expect par34 30
 wait 1000
 expect bellson <2
 # ---- what is chosen survives the power going off: Arp in the piece playing
@@ -184,34 +343,40 @@ wait 300
 expect piece 0
 expect par32 1
 expect par33 1
+expect par34 30
 expect enagree 0
-# ---- SAVE held: the piece back to its recipe: Phrases, and Up
+# ---- SAVE held: the piece back to its recipe: Phrases, Up, no skip
 press SAVE
 wait 1600
 release SAVE
 wait 100
 expect par32 0
 expect par33 0
+expect par34 0
 expect enagree 0
 wait 800
-# ---- a save of another format: the recipes. 7 had no mode or pattern: as it is, whole but for the format; and as format 7 was laid out
+# ---- a save of another format: the recipes. 8 had no skip: as it is, whole but for the format; and as format 8 was laid out
 tap ARP
 wait 100
 press SEL
 spin K2 1
 release SEL
+setpar 34 40
 wait 100
 expect par32 1
+expect par34 40
 tap SAVE
 wait 800
 reboot
 wait 300
 expect par32 1
+expect par34 40
 storeold
 reboot
 wait 300
 expect par32 0
 expect par33 0
+expect par34 0
 expect enagree 0
 tap ARP
 wait 100
@@ -246,8 +411,49 @@ spin K2 1
 release SEL
 tap SAVE
 wait 800
-storebad 3 33 4
+storebad 3 33 7
 reboot
 wait 300
 expect par32 0
 expect par33 0
+tap ARP
+wait 100
+press SEL
+spin K2 1
+release SEL
+tap SAVE
+wait 800
+storebad 3 34 101
+reboot
+wait 300
+expect par32 0
+expect par34 0
+tap ARP
+wait 100
+press SEL
+spin K2 1
+spin K3 -1
+release SEL
+setpar 34 100
+expect par33 6
+expect par34 100
+tap SAVE
+wait 800
+reboot
+wait 300
+expect par33 6
+expect par34 100
+tap ARP
+wait 100
+press SEL
+spin K3 1
+spin K2 1
+release SEL
+setpar 34 0
+tap SAVE
+wait 800
+storebad -1 34 -1
+reboot
+wait 300
+expect par32 0
+expect par34 0

@@ -14,6 +14,7 @@
  *   HOME + SELECT  tempo   ALGORITHM mode (loads a pool)   PRESETS the piece (Root is on the Setup page)
  *   SEL + KNOB 1   on Keys, Melody and Bass: the layer's sound (Keys: SEL + KNOB 2, the pad's). The four knobs are as ever otherwise; SEL + a knob on the other pages too
  *   SEL + KNOB 2, SEL + KNOB 3   on Melody: Phrases or Arp, and Arp's pattern. In Arp, Rate is its division
+ *   SEL + KNOB 4   on Melody: Arp's skip, 0-100 (as a knob, not round and round)
  *   HOME ENV ARP LFO SEQ FX GLO   the pages: Home, Keys, Melody, Bass, Drums, Space, Setup (the SELECT encoder steps through them)
  *   KNOB 1-4       the page's four values
  *   SAVE           saves (it also saves by itself a few seconds after a change, while resting);
@@ -302,9 +303,13 @@ static const struct {
     uint8_t view, knob, par;
     const char *say, *spoken;
 } SOUND_KNOB[] = {{V_KEYS, 0, P_KEYSND, "KEYS SOUND", ". Sound "}, {V_KEYS, 1, P_PADSND, "PAD SOUND", ", pad sound "}, {V_MOTIFS, 0, P_MELSND, "MELODY SOUND", ". Sound "},
-                  {V_MOTIFS, 1, P_MELMODE, "MELODY MODE", ", mode "}, {V_MOTIFS, 2, P_ARPPAT, "ARP PATTERN", ", pattern "}, {V_BASS, 0, P_BASSSND, "BASS SOUND", ". Sound "}};
+                  {V_MOTIFS, 1, P_MELMODE, "MELODY MODE", ", mode "}, {V_MOTIFS, 2, P_ARPPAT, "ARP PATTERN", ", pattern "}, {V_MOTIFS, 3, P_ARPSKIP, "ARP SKIP", ", skip "}, {V_BASS, 0, P_BASSSND, "BASS SOUND", ". Sound "}};
 #define NSOUND_KNOBS ((int)(sizeof SOUND_KNOB / sizeof SOUND_KNOB[0]))
-static int sound_said(int i) { return SOUND_KNOB[i].par != P_ARPPAT || proj.par[P_MELMODE]; }   /* (the page has no use for a pattern in Phrases: its knob still sets it) */
+static int sound_said(int i)                    /* (the page has no use for a pattern or a skip in Phrases, or a skip of 0: their knobs still set them) */
+{
+    const int p = SOUND_KNOB[i].par;
+    return p == P_ARPSKIP ? proj.par[P_MELMODE] && proj.par[P_ARPSKIP] : p != P_ARPPAT || proj.par[P_MELMODE];
+}
 static int sound_turn(int knob, int32_t e)      /* 1: it was a sound's */
 {
     int i;
@@ -312,7 +317,10 @@ static int sound_turn(int knob, int32_t e)      /* 1: it was a sound's */
         if (SOUND_KNOB[i].view == ui.view && SOUND_KNOB[i].knob == knob) {
             const int p = SOUND_KNOB[i].par, n = en_param_info(p)->hi + 1;
             char t[16];
-            knob_set(p, (proj.par[p] + (e > 0 ? 1 : -1) + n) % n);
+            if (p == P_ARPSKIP)                  /* a quantity, not a list: to its ends and no further, faster for a long turn */
+                turn(EN_K1 + knob, p, e);
+            else
+                knob_set(p, (proj.par[p] + (e > 0 ? 1 : -1) + n) % n);
             en_param_text(p, proj.par[p], t);
             if (p == P_MELSND)
                 en_mel_hear();
@@ -1098,6 +1106,8 @@ static int page_sounds(int view, char *b, int leave)
             en_param_text(SOUND_KNOB[i].par, proj.par[SOUND_KNOB[i].par], t);
             if (n)
                 b[n++] = '/';
+            if (SOUND_KNOB[i].par == P_ARPSKIP)
+                b[n++] = 'S';                    /* (a bare number is not a word for what it is) */
             while (t[k])
                 b[n++] = t[k++];
         }
@@ -1189,7 +1199,7 @@ static uint32_t header_sig(int sc)
     if (sc == SC_PAGE && ui.view == V_SETUP)
         h = hash(hash(h, scr.r_cpu | scr.r_max << 8), scr.r_x | scr.r_s << 16);
     else if (sc == SC_PAGE || sc == SC_HOLD)
-        h = hash(hash(h, chord_sig()), en_held | (uint32_t)proj.par[P_KEYSND] << 1 | (uint32_t)proj.par[P_PADSND] << 3 | (uint32_t)proj.par[P_BASSSND] << 5 | (uint32_t)proj.par[P_MELSND] << 7 | (uint32_t)proj.par[P_MELMODE] << 10 | (uint32_t)proj.par[P_ARPPAT] << 11);
+        h = hash(hash(h, chord_sig()), en_held | (uint32_t)proj.par[P_KEYSND] << 1 | (uint32_t)proj.par[P_PADSND] << 3 | (uint32_t)proj.par[P_BASSSND] << 5 | (uint32_t)proj.par[P_MELSND] << 7 | (uint32_t)proj.par[P_MELMODE] << 10 | (uint32_t)proj.par[P_ARPPAT] << 11 | (uint32_t)proj.par[P_ARPSKIP] << 14);
     return h;
 }
 
@@ -1342,7 +1352,7 @@ static int help_lines(int b, const char *l[HELP_LINES])
     switch (b) {
     case B_HOME: L("TEMPO, ENERGY, EVOLVE, STYLE"); L("HOLD + TURN SELECT: TEMPO"); L("SEL + KEY: CHORDS ON IT, OR NOT"); L("SEL + HOME: HANDS OR AUTO"); break;
     case B_ENV: L("THE KEYS AND THE PAD"); L("LEVEL, BLOOM, BRIGHT, NOTES"); L("SEL + ENV: ON OR OFF"); L("SEL + KNOB 1, KNOB 2: THE SOUNDS"); break;
-    case B_ARP: L("THE MELODY: LEVEL, RATE, TONE, OCT"); L("SEL + ARP: ON OR OFF"); L("SEL + KNOB 1: THE SOUND"); L("SEL + KNOB 2, 3: ARP, ITS PATTERN"); break;
+    case B_ARP: L("THE MELODY: LEVEL, RATE, TONE, OCT"); L("SEL + ARP: ON OR OFF"); L("SEL + KNOB 1: THE SOUND"); L("SEL + KNOB 2-4: ARP, PATTERN, SKIP"); break;
     case B_LFO: L("THE BASS"); L("LEVEL, MOVE, GLIDE, OCTAVE"); L("SEL + LFO: ON OR OFF"); L("SEL + KNOB 1: THE SOUND"); break;
     case B_SEQ: L("THE DRUMS"); L("LEVEL, BREAKS, HATS, KIT"); L("SEL + SEQ: KICK AND SNARE"); L(" ON OR OFF"); break;
     case B_FX: L("THE SPACE"); L("ECHO, ECHO TIME, REVERB,"); L(" SIZE"); L("SEL + FX: HATS ON OR OFF"); break;
@@ -2544,9 +2554,9 @@ static int ui_unfit(void)                             /* the host's "unfit": wha
     for (v = 0; v < NVIEWS; v++) {
         char c[24];
         const project_t k = proj;
-        for (x = 0; x < 56; x++) {
-            int16_t *q[6] = {&proj.par[P_KEYSND], &proj.par[P_PADSND], &proj.par[P_BASSSND], &proj.par[P_MELSND], &proj.par[P_MELMODE], &proj.par[P_ARPPAT]};
-            *q[0] = (int16_t)(x % 4), *q[1] = (int16_t)(x / 4 % 4), *q[2] = (int16_t)(x % 4), *q[3] = (int16_t)(x % 7), *q[4] = (int16_t)(x / 7 % 2), *q[5] = (int16_t)(x / 14 % 4);
+        for (x = 0; x < 7 * 2 * EN_ARP_NPATTERNS * 3; x++) {
+            int16_t *q[7] = {&proj.par[P_KEYSND], &proj.par[P_PADSND], &proj.par[P_BASSSND], &proj.par[P_MELSND], &proj.par[P_MELMODE], &proj.par[P_ARPPAT], &proj.par[P_ARPSKIP]};
+            *q[0] = (int16_t)(x % 4), *q[1] = (int16_t)(x / 4 % 4), *q[2] = (int16_t)(x % 4), *q[3] = (int16_t)(x % 7), *q[4] = (int16_t)(x / 7 % 2), *q[5] = (int16_t)(x / 14 % EN_ARP_NPATTERNS), *q[6] = (int16_t)(x / (14 * EN_ARP_NPATTERNS) * 50);
             if (page_sound(v, c))
                 n += unfit_one(&FONT_XS, c, HEADER_SOUND_ROOM(v), "the header's sound");
         }

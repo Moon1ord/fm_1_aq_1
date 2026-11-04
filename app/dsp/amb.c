@@ -32,7 +32,7 @@ static const en_param_t PARAMS[P_NPARAMS] = {
     {"Root", 0, 11, 2},       {"Tune", -50, 50, 0},    {"MIDI out", 0, 1, 1},
     {"Mode", 0, EN_NMODES - 1, 3},
     {"Keys sound", 0, 3, 0},  {"Pad sound", 0, 3, 0},  {"Bass sound", 0, 3, 0}, {"Mel sound", 0, EN_NTIMBRES, 0},
-    {"Mel mode", EN_MEL_PHRASES, EN_MEL_ARP, EN_MEL_PHRASES}, {"Arp pattern", EN_ARP_UP, EN_ARP_NPATTERNS - 1, EN_ARP_UP},
+    {"Mel mode", EN_MEL_PHRASES, EN_MEL_ARP, EN_MEL_PHRASES}, {"Arp pattern", EN_ARP_UP, EN_ARP_NPATTERNS - 1, EN_ARP_UP}, {"Arp skip", 0, 100, 0},
 };
 const en_param_t *en_param_info(int i) { return (i >= 0 && i < P_NPARAMS) ? &PARAMS[i] : &PARAMS[0]; }
 
@@ -40,19 +40,19 @@ const en_param_t *en_param_info(int i) { return (i >= 0 && i < P_NPARAMS) ? &PAR
  * the sound by ear: Breaks at or under the style's own (50) and Jungle's lower still, the hats no louder to speak of, Move at or under the style's own so that
  * the bass stays long, lone notes down and bloom up for chords that flow. Tune and MIDI out are taken from here by neither: they belong to the player, not
  * the piece */
-/*                       Tem  En Evo St            Key Blo Bri No  Mot Rat Ton Oc  Bas Mov Gli BO  Drm Brk Hat Ki  Ech ET Rev Siz  Rt Tun MI  Md               the sounds: keys, pad, bass, melody; the melody's mode, Arp's pattern */
+/*                       Tem  En Evo St            Key Blo Bri No  Mot Rat Ton Oc  Bas Mov Gli BO  Drm Brk Hat Ki  Ech ET Rev Siz  Rt Tun MI  Md               the sounds: keys, pad, bass, melody; the melody's mode, Arp's pattern, Arp's skip */
 static const struct {
     const char *name;
     int16_t v[P_NPARAMS];
 } PIECES[EN_NPIECES] = {
-    {"Load Screen", {170, 70, 50, EN_ST_LIQUID,   60, 50, 50, 3,  60, 50, 50, 0,  50, 50, 10, 0,  45, 50, 50, 0,  40, 3, 65, 80,  2, 0, 1,  MODE_LYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP}},
-    {"Aqua",        {172, 70, 55, EN_ST_LIQUID,   58, 40, 72, 3,  66, 60, 72, 0,  46, 50, 10, 0,  45, 40, 55, 0,  46, 3, 58, 70,  9, 0, 1,  MODE_IONIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP}},
-    {"Skyline",     {180, 70, 55, EN_ST_ROLLER,   50, 45, 62, 2,  62, 55, 60, 0,  48, 25, 10, 0,  46, 20, 50, 0,  35, 1, 55, 88,  7, 0, 1,  MODE_MIXOLYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP}},
-    {"Rainfall",    {160, 50, 40, EN_ST_DRIFT,    64, 65, 44, 2,  48, 35, 38, 0,  42, 50, 15, 0,  36, 20, 40, 1,  50, 2, 78, 88,  0, 0, 1,  MODE_DORIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP}},
-    {"Aurora",      {164, 55, 40, EN_ST_LOADING,  72, 85, 35, 1,  46, 40, 30, 0,  42, 40, 15, 0,  36, 25, 38, 1,  48, 4, 92, 98,  4, 0, 1,  MODE_LYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP}},
-    {"Lagoon",      {168, 70, 45, EN_ST_ROLLER,   56, 60, 25, 2,  52, 45, 25, 0,  68, 30, 22, 0,  36, 30, 28, 1,  30, 3, 55, 70,  8, 0, 1,  MODE_IONIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP}},
-    {"Save Point",  {152, 25, 30, EN_ST_DRIFT,    50, 80, 30, 1,  38, 25, 25, 0,  34, 50, 20, 0,  22,  0, 30, 1,  38, 3, 62, 78, 10, 0, 1,  MODE_PENT_MAJ,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP}},
-    {"Afterglow",   {166, 68, 50, EN_ST_JUNGLE,   62, 55, 42, 2,  58, 50, 45, 0,  50, 40, 14, 0,  42, 30, 42, 1,  44, 2, 68, 84,  5, 0, 1,  MODE_AEOLIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP}},
+    {"Load Screen", {170, 70, 50, EN_ST_LIQUID,   60, 50, 50, 3,  60, 50, 50, 0,  50, 50, 10, 0,  45, 50, 50, 0,  40, 3, 65, 80,  2, 0, 1,  MODE_LYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0}},
+    {"Aqua",        {172, 70, 55, EN_ST_LIQUID,   58, 40, 72, 3,  66, 60, 72, 0,  46, 50, 10, 0,  45, 40, 55, 0,  46, 3, 58, 70,  9, 0, 1,  MODE_IONIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0}},
+    {"Skyline",     {180, 70, 55, EN_ST_ROLLER,   50, 45, 62, 2,  62, 55, 60, 0,  48, 25, 10, 0,  46, 20, 50, 0,  35, 1, 55, 88,  7, 0, 1,  MODE_MIXOLYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0}},
+    {"Rainfall",    {160, 50, 40, EN_ST_DRIFT,    64, 65, 44, 2,  48, 35, 38, 0,  42, 50, 15, 0,  36, 20, 40, 1,  50, 2, 78, 88,  0, 0, 1,  MODE_DORIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0}},
+    {"Aurora",      {164, 55, 40, EN_ST_LOADING,  72, 85, 35, 1,  46, 40, 30, 0,  42, 40, 15, 0,  36, 25, 38, 1,  48, 4, 92, 98,  4, 0, 1,  MODE_LYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0}},
+    {"Lagoon",      {168, 70, 45, EN_ST_ROLLER,   56, 60, 25, 2,  52, 45, 25, 0,  68, 30, 22, 0,  36, 30, 28, 1,  30, 3, 55, 70,  8, 0, 1,  MODE_IONIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0}},
+    {"Save Point",  {152, 25, 30, EN_ST_DRIFT,    50, 80, 30, 1,  38, 25, 25, 0,  34, 50, 20, 0,  22,  0, 30, 1,  38, 3, 62, 78, 10, 0, 1,  MODE_PENT_MAJ,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0}},
+    {"Afterglow",   {166, 68, 50, EN_ST_JUNGLE,   62, 55, 42, 2,  58, 50, 45, 0,  50, 40, 14, 0,  42, 30, 42, 1,  44, 2, 68, 84,  5, 0, 1,  MODE_AEOLIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0}},
 };
 
 const char *en_piece_name(int i) { return PIECES[(unsigned)i < EN_NPIECES ? i : 0].name; }
@@ -73,7 +73,7 @@ static const char *const KEYS_SOUND_NAME[4] = {"Electric", "Clear", "Organ", "Fe
 static const char *const PAD_SOUND_NAME[4] = {"Warm", "Airy", "Choral", "Deep"};
 static const char *const BASS_SOUND_NAME[4] = {"Warm", "Sub", "Hollow", "Round"};
 static const char *const MEL_MODE_NAME[2] = {"Phrases", "Arp"};
-static const char *const ARP_PAT_NAME[EN_ARP_NPATTERNS] = {"Up", "Down", "Up-Down", "Random"};
+static const char *const ARP_PAT_NAME[EN_ARP_NPATTERNS] = {"Up", "Down", "Up-Down", "Random", "Conv", "PedT", "PedR"};
 
 static char *itoa_s(int v, char *b)
 {
@@ -2720,6 +2720,8 @@ void en_arp_start(en_arp_t *a)
 {
     a->last = 0u;
     a->dir = 1;
+    a->at = 0u;
+    a->pat = EN_ARP_UP;
 }
 
 /* the first of them from n going dir, n itself not; lo..hi; -1 none */
@@ -2732,12 +2734,52 @@ static int arp_from(int n, uint32_t tones, int lo, int hi, int dir)
     return -1;
 }
 
+/* Converge and the pedals go by place in the figure, not by the note: position at of the chord's notes in the register, low to high. A chord that changes: the same place in the new one (a pedal stays every other note);
+ * a note that would sound twice, the place after it */
+static int arp_place(const uint8_t *o, int c, int pattern, uint32_t at)
+{
+    if (pattern == EN_ARP_CONVERGE)
+        return o[at & 1u ? (uint32_t)c - 1u - at / 2u : at / 2u];
+    if (pattern == EN_ARP_PEDTOP)
+        return at & 1u ? o[at / 2u] : o[c - 1];
+    return at & 1u ? o[at / 2u + 1u] : o[0];
+}
+static int arp_figure(en_arp_t *a, uint32_t tones, int lo, int hi, int pattern)
+{
+    uint8_t o[25];
+    int c = 0, i, m;
+    uint32_t len, at;
+    for (i = lo; i <= hi; i++)
+        if (pc_in(tones, i))
+            o[c++] = (uint8_t)i;
+    if (c < 2)                                   /* (not with 24 semitones) */
+        return c ? o[0] : lo;
+    len = pattern == EN_ARP_CONVERGE ? (uint32_t)c : 2u * ((uint32_t)c - 1u);
+    at = a->at % len;
+    m = arp_place(o, c, pattern, at);
+    if (m == a->last) {
+        at = (at + 1u) % len;
+        m = arp_place(o, c, pattern, at);
+    }
+    a->at = (uint8_t)((at + 1u) % len);
+    return m;
+}
+
 int en_arp_next(en_arp_t *a, uint32_t tones, int key, int pattern, uint32_t h)
 {
     int lo, hi, n = a->last, m = -1;
     en_arp_range(key, &lo, &hi);
     if (!(tones & 0xFFFu))                       /* (no notes: there is always a root; a place in the register, never astray) */
         tones = 1u << (key % 12);
+    if (a->pat != pattern) {                     /* a figure begins at its beginning */
+        a->pat = (uint8_t)pattern;
+        a->at = 0u;
+    }
+    if (pattern >= EN_ARP_CONVERGE) {
+        m = arp_figure(a, tones, lo, hi, pattern);
+        a->last = (uint8_t)m;
+        return m;
+    }
     if (n && (n < lo || n > hi))
         n = n < lo ? lo - 1 : hi + 1;            /* (the key moved under it) */
     switch (pattern) {
@@ -2784,6 +2826,29 @@ int en_arp_next(en_arp_t *a, uint32_t tones, int key, int pattern, uint32_t h)
         m = lo;                                  /* (a register with none of them: not with 24 semitones) */
     a->last = (uint8_t)m;
     return m;
+}
+
+/* Skip's rhythm: a bar's own order of its steps, out of the seed and the place in the bar, the first in it the first to rest. The bar's downbeat last of all; a beat, and less so an eighth, later than a lone sixteenth,
+ * by a margin and not a rule, or it would only ever be a grid. How many rest is the setting's share of the bar's steps, so a higher Skip is a lower one's rests and more. O(the bar's steps), and only at a Skip above 0 */
+static uint32_t arp_rest_order(uint32_t seed, uint32_t place)
+{
+    const uint32_t h = hhash(seed, place, 50u) >> 16;
+    return !place ? 0x20000u : !(place & 3u) ? h + 0x6000u : !(place & 1u) ? h + 0x2000u : h;
+}
+int en_arp_rest(uint32_t seed, uint32_t step, int div, int skip)
+{
+    const uint32_t d = (uint32_t)div, n = 16u / d, place = step & 15u;
+    uint32_t own, before = 0u, i;
+    if (skip <= 0)
+        return 0;
+    if (skip >= 100)
+        return 1;
+    own = arp_rest_order(seed, place);
+    for (i = 0u; i < 16u; i += d) {
+        const uint32_t k = arp_rest_order(seed, i);
+        before += k < own || (k == own && i < place);
+    }
+    return before < (uint32_t)skip * n / 100u;
 }
 
 /* what Auto has Arp sound in. Tone's window, as a phrase's (en_mel_next), less the two whose attack is longer than a good part of a sixteenth */
@@ -3365,7 +3430,7 @@ static void mel_chord(uint32_t s)
 #define MEL_RATE_CLOSE 80
 static int mel_close_up(void) { return hands && par[P_MRATE] > MEL_RATE_CLOSE; }
 
-/* ------- Arp. The chord sounding, a note a division, on the grid, while the song plays, heard or not: a mode change has only this to do: the next step is the other's. The key let go a little before the next and what
+/* ------- Arp. The chord sounding, a note a division (less Skip's rests), on the grid, while the song plays, heard or not: a mode change has only this to do: the next step is the other's. The key let go a little before the next and what
  * was down before that lets go when it is struck; a phrase cut off just rings out. Its timbre stays for ARP_TIMBRE_BARS, in time with the song and the seed, not with what was played. Softer the more of them there are;
  * and each its own small difference, out of the seed. A long sound's tail is kept to 2 divisions, so a voice is free by the third note after it and what is taken has died away, and it costs no more than it must: at a sixteenth 176 ms, against Glass's 800 */
 #define ARP_TIMBRE_BARS 32u
@@ -3387,6 +3452,8 @@ static void arp_step(uint32_t s)
         const float len = (float)div * step_len;
         float vel = div == 1u ? 0.40f : div == 2u ? 0.44f : 0.48f;
         bell_t *v;
+        if (en_arp_rest(song_seed, s, (int)div, par[P_ARPSKIP]))
+            return;                              /* the figure has moved on (en_arp_next above); no voice, no MIDI, and the last note's key has gone up by itself */
         vel += (float)(vary % 7u) * 0.01f - 0.03f + (s & 15u ? 0.0f : 0.03f);
         v = bell_strike(par[P_MELSND] ? par[P_MELSND] - 1 : own, own, en_mel_fold(base + 12 * par[P_MOCT]), vel, 0, (int32_t)(len * 0.85f), (s / div) & 1u ? 0.10f : -0.10f, (int32_t)(vary % 120u));
         v->rdec = fm_minf(v->rdec, fm_expf(-6.9f / (ARP_RELEASE_DIVS * len)));

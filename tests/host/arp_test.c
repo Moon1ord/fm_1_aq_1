@@ -22,6 +22,10 @@ static uint32_t off_chord, off_range, double_on, off_unowed, note_at_step_off;
 static uint32_t key_high;                        /* the keys' notes at or over this: 0 not looked at */
 static int key_watch;
 static uint32_t step_div;
+#define REC_STEPS 4096u
+static uint8_t rec_note[REC_STEPS];              /* what the melody's channel struck on each step of the song, while rec_on */
+static int rec_on;
+static uint32_t other_hash;                      /* and the other channels' MIDI, with its step */
 static uint32_t rot12_t(uint32_t t, int by)
 {
     by = (by % 12 + 12) % 12;
@@ -35,6 +39,13 @@ void en_midi_out(uint32_t st, uint32_t d1, uint32_t d2)
     for (i = 0; i < 4; i++)
         mhash = (mhash ^ v[i]) * 16777619u;
     midi_n++;
+    if (rec_on && st < 0xF0u && c != 1) {
+        other_hash = (other_hash ^ st) * 16777619u;
+        other_hash = (other_hash ^ (d1 << 8 | d2)) * 16777619u;
+        other_hash = (other_hash ^ en_test_song()) * 16777619u;
+    }
+    if (rec_on && k == 0x90 && d2 && c == 1 && en_test_song() < REC_STEPS)
+        rec_note[en_test_song()] = (uint8_t)d1;
     if (st >= 0xF0u)
         return;
     if (k == 0x90 && d2) {
@@ -881,32 +892,37 @@ static void t_queue(void)
     uint32_t i;
     printf("  a piece: %d commands, the queue %u\n", P_NPARAMS + 6, EN_ROOM_MAX);
     CHECK(P_NPARAMS + 6 <= (int)EN_ROOM_MAX, "a piece no longer fits");
-    CHECK(P_NPARAMS + 6 == 40, "a piece's commands: %d", P_NPARAMS + 6);
+    CHECK(P_NPARAMS + 6 == 41, "a piece's commands: %d", P_NPARAMS + 6);
     CHECK(EN_ROOM_MAX == 56u, "the queue as it was");
     en_init();
     run(256u, 256u);
     CHECK(en_room() == EN_ROOM_MAX, "room %u", en_room());
-    for (i = 0u; i < 40u; i++)
+    for (i = 0u; i < 41u; i++)
         en_set(P_MELMODE, (int)(i & 1u));
-    CHECK(!en_dropped(), "forty dropped");
-    CHECK(en_room() == EN_ROOM_MAX - 40u, "room %u", en_room());
+    CHECK(!en_dropped(), "forty-one dropped");
+    CHECK(en_room() == EN_ROOM_MAX - 41u, "room %u", en_room());
     for (i = 0u; i < EN_ROOM_MAX; i++)
-        en_set(P_ARPPAT, (int)(i & 3u));
+        en_set(P_ARPPAT, (int)(i & 7u) % EN_ARP_NPATTERNS);
     CHECK(en_dropped() && !en_dropped(), "a flood: it says so, once");
     run(256u, 256u);
     CHECK(en_room() == EN_ROOM_MAX, "room %u after a block", en_room());
     /* its range */
     en_set(P_MELMODE, 7);
     en_set(P_ARPPAT, 9);
+    en_set(P_ARPSKIP, 101);
     run(256u, 256u);
-    CHECK(en_test_par(P_MELMODE) == EN_MEL_ARP && en_test_par(P_ARPPAT) == EN_ARP_RANDOM, "out of range: %d %d", en_test_par(P_MELMODE), en_test_par(P_ARPPAT));
+    CHECK(en_test_par(P_MELMODE) == EN_MEL_ARP && en_test_par(P_ARPPAT) == EN_ARP_PEDROOT && en_test_par(P_ARPSKIP) == 100, "out of range: %d %d %d", en_test_par(P_MELMODE), en_test_par(P_ARPPAT), en_test_par(P_ARPSKIP));
     en_set(P_MELMODE, -1);
     en_set(P_ARPPAT, -1);
+    en_set(P_ARPSKIP, -1);
     run(256u, 256u);
-    CHECK(en_test_par(P_MELMODE) == EN_MEL_PHRASES && en_test_par(P_ARPPAT) == EN_ARP_UP, "out of range: %d %d", en_test_par(P_MELMODE), en_test_par(P_ARPPAT));
+    CHECK(en_test_par(P_MELMODE) == EN_MEL_PHRASES && en_test_par(P_ARPPAT) == EN_ARP_UP && en_test_par(P_ARPSKIP) == 0, "out of range: %d %d %d", en_test_par(P_MELMODE), en_test_par(P_ARPPAT), en_test_par(P_ARPSKIP));
+    CHECK(en_param_info(P_ARPSKIP)->lo == 0 && en_param_info(P_ARPSKIP)->hi == 100 && en_param_info(P_ARPSKIP)->def == 0, "Skip's range");
+    CHECK(en_param_info(P_ARPPAT)->hi == 6, "the patterns: %d", en_param_info(P_ARPPAT)->hi + 1);
+    CHECK(EN_ARP_UP == 0 && EN_ARP_DOWN == 1 && EN_ARP_UPDOWN == 2 && EN_ARP_RANDOM == 3 && EN_ARP_CONVERGE == 4 && EN_ARP_PEDTOP == 5 && EN_ARP_PEDROOT == 6, "a stored pattern keeps its meaning");
     /* the words */
     {
-        static const char *const W[4] = {"Up", "Down", "Up-Down", "Random"};
+        static const char *const W[EN_ARP_NPATTERNS] = {"Up", "Down", "Up-Down", "Random", "Conv", "PedT", "PedR"};
         char t[16];
         int p;
         en_param_text(P_MELMODE, EN_MEL_PHRASES, t);
@@ -925,9 +941,533 @@ static void t_queue(void)
             int16_t par[P_NPARAMS];
             uint16_t pool;
             en_piece(i2, par, &pool);
-            CHECK(par[P_MELMODE] == EN_MEL_PHRASES && par[P_ARPPAT] == EN_ARP_UP, "piece %d: %d %d", i2, par[P_MELMODE], par[P_ARPPAT]);
+            CHECK(par[P_MELMODE] == EN_MEL_PHRASES && par[P_ARPPAT] == EN_ARP_UP && par[P_ARPSKIP] == 0, "piece %d: %d %d %d", i2, par[P_MELMODE], par[P_ARPPAT], par[P_ARPSKIP]);
         }
     }
+}
+
+/* ---- the patterns after the first four: each note where it should be, on a known chord, and on every chord and key */
+static int chord_notes(uint32_t tones, int key, int *o)
+{
+    int lo, hi, n, c = 0;
+    en_arp_range(key, &lo, &hi);
+    for (n = lo; n <= hi; n++)
+        if (tones >> (n % 12) & 1u)
+            o[c++] = n;
+    return c;
+}
+static void t_modes(void)
+{
+    static const int C_CONV[7] = {72, 96, 76, 91, 79, 88, 84};
+    static const int C_PEDT[12] = {96, 72, 96, 76, 96, 79, 96, 84, 96, 88, 96, 91};
+    static const int C_PEDR[12] = {72, 76, 72, 79, 72, 84, 72, 88, 72, 91, 72, 96};
+    static const uint32_t CHORDS[6] = {0x091u, 0x891u, 0x895u, 0x0A5u, 0x249u, 0x081u};
+    int i, key, c;
+    en_arp_t a;
+    /* C major, key C: C4 up to C6 as this register has it: 72 76 79 84 88 91 96 */
+    en_arp_start(&a);
+    for (i = 0; i < 7 * 3; i++) {
+        const int m = en_arp_next(&a, 0x091u, 0, EN_ARP_CONVERGE, 1u);
+        CHECK(m == C_CONV[i % 7], "converge, step %d: %d, not %d", i, m, C_CONV[i % 7]);
+    }
+    en_arp_start(&a);
+    for (i = 0; i < 12 * 3; i++) {
+        const int m = en_arp_next(&a, 0x091u, 0, EN_ARP_PEDTOP, 1u);
+        CHECK(m == C_PEDT[i % 12], "pedal top, step %d: %d, not %d", i, m, C_PEDT[i % 12]);
+    }
+    en_arp_start(&a);
+    for (i = 0; i < 12 * 3; i++) {
+        const int m = en_arp_next(&a, 0x091u, 0, EN_ARP_PEDROOT, 1u);
+        CHECK(m == C_PEDR[i % 12], "pedal root, step %d: %d, not %d", i, m, C_PEDR[i % 12]);
+    }
+    /* the same on every chord and key, worked out from its notes */
+    for (key = 0; key < 12; key++)
+        for (c = 0; c < 6; c++) {
+            const uint32_t tones = rot12_t(CHORDS[c], key);
+            int o[32], n;
+            n = chord_notes(tones, key, o);
+            en_arp_start(&a);
+            for (i = 0; i < n * 3; i++) {
+                const int k = i % n, want = k & 1 ? o[n - 1 - k / 2] : o[k / 2], m = en_arp_next(&a, tones, key, EN_ARP_CONVERGE, 1u);
+                CHECK(m == want, "converge, key %d chord %d step %d: %d, not %d", key, c, i, m, want);
+            }
+            en_arp_start(&a);
+            for (i = 0; i < (n - 1) * 6; i++) {
+                const int k = i % (2 * (n - 1)), want = k & 1 ? o[k / 2] : o[n - 1], m = en_arp_next(&a, tones, key, EN_ARP_PEDTOP, 1u);
+                CHECK(m == want, "pedal top, key %d chord %d step %d: %d, not %d", key, c, i, m, want);
+            }
+            en_arp_start(&a);
+            for (i = 0; i < (n - 1) * 6; i++) {
+                const int k = i % (2 * (n - 1)), want = k & 1 ? o[k / 2 + 1] : o[0], m = en_arp_next(&a, tones, key, EN_ARP_PEDROOT, 1u);
+                CHECK(m == want, "pedal root, key %d chord %d step %d: %d, not %d", key, c, i, m, want);
+            }
+        }
+    /* a chord that changes under it: never the same note twice, always one of the chord's, the pedal still every other note */
+    {
+        int p;
+        for (p = EN_ARP_CONVERGE; p < EN_ARP_NPATTERNS; p++) {
+            int last = 0, was_pedal = -1;
+            uint32_t h = 2166136261u;
+            en_arp_start(&a);
+            for (i = 0; i < 4000; i++) {
+                int run_of, j;
+                uint32_t tones;
+                int o[32], n, lo, hi;
+                h = h * 16777619u + 7u;
+                key = (int)(h >> 8) % 12;
+                tones = rot12_t(CHORDS[(h >> 16) % 6u], (int)(h >> 20) % 12);
+                run_of = 1 + (int)(h >> 26) % 9;
+                n = chord_notes(tones, key, o);
+                en_arp_range(key, &lo, &hi);
+                was_pedal = -1;
+                for (j = 0; j < run_of; j++) {
+                    const int m = en_arp_next(&a, tones, key, p, h);
+                    CHECK(m >= lo && m <= hi, "pattern %d: %d out of %d..%d", p, m, lo, hi);
+                    CHECK(tones >> (m % 12) & 1u, "pattern %d: %d off the chord", p, m);
+                    CHECK(m != last, "pattern %d: %d twice, over a change of chord", p, m);
+                    if (p != EN_ARP_CONVERGE) {
+                        const int is = m == (p == EN_ARP_PEDTOP ? o[n - 1] : o[0]);
+                        if (was_pedal == 0)
+                            CHECK(is, "pattern %d: two notes running with no pedal", p);
+                        if (was_pedal == 1)
+                            CHECK(!is, "pattern %d: the pedal twice", p);
+                        was_pedal = is;
+                    }
+                    last = m;
+                }
+            }
+        }
+    }
+    /* a turn of the pattern: a new one from its own beginning; from what is left of another, nothing out of bounds; the first four go on from the note, as they always have */
+    en_arp_start(&a);
+    for (i = 0; i < 5; i++)
+        en_arp_next(&a, 0x091u, 0, EN_ARP_CONVERGE, 1u);
+    CHECK(en_arp_next(&a, 0x091u, 0, EN_ARP_PEDTOP, 1u) == 96, "to pedal top: from its beginning");
+    CHECK(en_arp_next(&a, 0x091u, 0, EN_ARP_PEDTOP, 1u) == 72, "pedal top's second");
+    en_arp_start(&a);
+    en_arp_next(&a, 0x091u, 0, EN_ARP_UP, 1u);
+    en_arp_next(&a, 0x091u, 0, EN_ARP_UP, 1u);   /* 76 */
+    CHECK(en_arp_next(&a, 0x091u, 0, EN_ARP_CONVERGE, 1u) == 72, "up, then converge: its lowest");
+    CHECK(en_arp_next(&a, 0x091u, 0, EN_ARP_CONVERGE, 1u) == 96, "converge's second");
+    CHECK(en_arp_next(&a, 0x091u, 0, EN_ARP_UP, 1u) == 72, "converge, then up: up from where it is, over the top");
+    CHECK(en_arp_next(&a, 0x091u, 0, EN_ARP_CONVERGE, 1u) == 96, "up, then converge: its lowest is what just sounded, so the next");
+}
+
+/* ---- Skip, the rule: what share of a bar's steps, which, and the same ones again */
+static uint32_t bar_rests(uint32_t seed, int div, int skip, uint32_t bar)
+{
+    uint32_t m = 0u, i;
+    for (i = 0u; i < 16u; i += (uint32_t)div)
+        if (en_arp_rest(seed, bar * 16u + i, div, skip))
+            m |= 1u << i;
+    return m;
+}
+static int bits16(uint32_t m)
+{
+    int n = 0;
+    while (m) {
+        n += (int)(m & 1u);
+        m >>= 1;
+    }
+    return n;
+}
+static void t_skip_rule(void)
+{
+    static const int DIV[3] = {4, 2, 1};
+    uint32_t sd;
+    int d;
+    for (d = 0; d < 3; d++) {
+        const int n = 16 / DIV[d];
+        uint32_t beat = 0u, off = 0u, nb = 0u, no = 0u;
+        for (sd = 0u; sd < 400u; sd++) {
+            const uint32_t seed = sd * 2654435761u + 17u;
+            int p;
+            uint32_t was = 0u;
+            for (p = 0; p <= 100; p++) {
+                const uint32_t m = bar_rests(seed, DIV[d], p, 0u);
+                uint32_t b;
+                CHECK(bits16(m) == p * n / 100, "division %d Skip %d: %d rests of %d", DIV[d], p, bits16(m), n);
+                CHECK(!(was & ~m), "division %d: the rests of Skip %d not all in Skip %d: %04x, %04x", DIV[d], p - 1, p, was, m);
+                if (p < 100)
+                    CHECK(!(m & 1u), "division %d Skip %d: the downbeat rests", DIV[d], p);
+                for (b = 1u; b < 5u; b++)
+                    CHECK(bar_rests(seed, DIV[d], p, b * 37u) == m, "division %d Skip %d: another bar, another rhythm", DIV[d], p);
+                was = m;
+            }
+            CHECK(bar_rests(seed, DIV[d], 0, 0u) == 0u, "Skip 0 rests");
+            CHECK(bits16(bar_rests(seed, DIV[d], 100, 0u)) == n, "Skip 100 strikes");
+            if (d == 2) {                        /* the beats sound more than the rest, a preference and no more */
+                const uint32_t m = bar_rests(seed, 1, 50, 0u);
+                uint32_t i;
+                for (i = 1u; i < 16u; i++) {
+                    if (!(i & 3u)) {
+                        nb++;
+                        beat += m >> i & 1u;
+                    } else if (i & 1u) {
+                        no++;
+                        off += m >> i & 1u;
+                    }
+                }
+            }
+        }
+        if (d == 2) {
+            const double b = (double)beat / (double)nb, o = (double)off / (double)no;
+            printf("  Skip 50 at a sixteenth, %u seeds: a beat rests %.0f%%, an odd sixteenth %.0f%%\n", 400u, b * 100.0, o * 100.0);
+            CHECK(b < o, "a beat rests as often as an odd sixteenth: %f %f", b, o);
+            CHECK(b > 0.05, "a beat never rests: the rhythm is only the grid: %f", b);
+        }
+    }
+    /* the seed's: another piece another rhythm. Not one figure for all, and not a plain grid */
+    for (d = 0; d < 3; d++) {
+        static const int WANT[3] = {3, 10, 60};
+        uint32_t seen[400];
+        int ns = 0;
+        for (sd = 0u; sd < 400u; sd++) {
+            const uint32_t m = bar_rests(sd * 2654435761u + 5u, DIV[d], 50, 0u);
+            int k, f = 0;
+            for (k = 0; k < ns; k++)
+                f |= seen[k] == m;
+            if (!f)
+                seen[ns++] = m;
+        }
+        printf("  Skip 50 at %d: %d figures in 400 seeds\n", DIV[d], ns);
+        CHECK(ns >= WANT[d], "Skip 50, division %d: only %d figures in 400 seeds", DIV[d], ns);
+    }
+}
+
+/* ---- Skip, played: what a step strikes, a note a step, on the grid */
+static uint8_t rec_been[REC_STEPS];
+static void rec_clear(void)
+{
+    memset(rec_note, 0, sizeof rec_note);
+    other_hash = 2166136261u;
+    rec_on = 1;
+}
+static void rec_run(uint32_t seed, int rate, int pattern, int skip, int mode, int nexts)
+{
+    uint32_t i;
+    start(seed, EN_ST_ROLLER, mode);
+    all_on();
+    en_set(P_MELMODE, EN_MEL_ARP);
+    en_set(P_ARPPAT, pattern);
+    en_set(P_ARPSKIP, skip);
+    en_set(P_MRATE, rate);
+    en_set(P_TEMPO, 180);
+    en_play(1);
+    en_render(buf, 16u, GAIN);
+    rec_clear();
+    memset(rec_been, 0, sizeof rec_been);
+    for (i = 0u; i < 3200u; i++) {
+        en_test_ticks(1u);
+        if (en_test_song() - 1u < REC_STEPS)     /* (the step it played: a jump is on the bar, before it) */
+            rec_been[en_test_song() - 1u] = 1u;
+        if (nexts && !(i % 800u)) {              /* (a section's jump goes past some steps) */
+            en_next();
+            en_render(buf, 16u, GAIN);
+        }
+    }
+    rec_on = 0;
+}
+static void t_skip_played(void)
+{
+    static const int RATE[3] = {10, 50, 90}, DIV[3] = {4, 2, 1}, PAT[4] = {EN_ARP_UP, EN_ARP_RANDOM, EN_ARP_PEDROOT, EN_ARP_CONVERGE}, SHARE[3] = {25, 50, 75};
+    static uint8_t zero[REC_STEPS];
+    int d, q, s;
+    for (d = 0; d < 3; d++)
+        for (q = 0; q < 4; q++) {
+            const uint32_t seed = 900u + (uint32_t)(d * 4 + q);
+            uint32_t oh, was_rests = 0u;
+            rec_run(seed, RATE[d], PAT[q], 0, EN_HANDS, 0);
+            memcpy(zero, rec_note, sizeof zero);
+            oh = other_hash;
+            {                                    /* Skip 0: every step of the grid a note */
+                uint32_t st, miss = 0u, off = 0u;
+                for (st = 64u; st < 3200u; st++) {
+                    if (st % (uint32_t)DIV[d])
+                        off += zero[st] != 0u;
+                    else
+                        miss += zero[st] == 0u;
+                }
+                CHECK(!miss && !off, "division %d pattern %d Skip 0: %u steps without a note, %u notes off the grid", DIV[d], PAT[q], miss, off);
+            }
+            for (s = 0; s < 3; s++) {
+                uint32_t st, grid = 0u, rests = 0u, wrong = 0u, moved = 0u, seen_seed;
+                uint32_t first = 0u, mask = 0u, bad_bars = 0u, bar;
+                rec_run(seed, RATE[d], PAT[q], SHARE[s], EN_HANDS, 0);
+                seen_seed = en_test_seed();
+                for (st = 64u; st < 3200u; st += (uint32_t)DIV[d]) {
+                    const int r = en_arp_rest(seen_seed, st, DIV[d], SHARE[s]);
+                    grid++;
+                    rests += rec_note[st] == 0u;
+                    wrong += r ? rec_note[st] != 0u : rec_note[st] != zero[st];   /* a rest in the running figure: the same note, or none */
+                    moved += !r && !zero[st];
+                }
+                CHECK(!wrong, "division %d pattern %d Skip %d: %u steps not as Skip 0 less its rests", DIV[d], PAT[q], SHARE[s], wrong);
+                CHECK(!moved, "(nothing at Skip 0 where there is a note now)");
+                CHECK(other_hash == oh, "division %d pattern %d Skip %d: the other layers' MIDI moved", DIV[d], PAT[q], SHARE[s]);
+                {                                /* its share, within a percentage point over 200 bars */
+                    const double share = (double)rests / (double)grid * 100.0;
+                    if (!q)
+                        printf("  Skip %d at %d: %.1f%% of %u steps struck nothing\n", SHARE[s], DIV[d], share, grid);
+                    CHECK(share > (double)SHARE[s] - 1.0 && share < (double)SHARE[s] + 1.0, "division %d Skip %d: a share of %f", DIV[d], SHARE[s], share);
+                }
+                /* the same rests on repeat, heard, and each setting's within the next's */
+                for (bar = 4u; bar < 200u; bar++) {
+                    uint32_t i;
+                    mask = 0u;
+                    for (i = 0u; i < 16u; i += (uint32_t)DIV[d])
+                        if (!rec_note[bar * 16u + i])
+                            mask |= 1u << i;
+                    if (bar == 4u)
+                        first = mask;
+                    bad_bars += mask != first;
+                }
+                CHECK(!bad_bars, "division %d Skip %d: %u bars of another rhythm", DIV[d], SHARE[s], bad_bars);
+                if (s)
+                    CHECK(!(was_rests & ~first), "division %d: the rests of Skip %d, %04x, not all in Skip %d's, %04x", DIV[d], SHARE[s - 1], was_rests, SHARE[s], first);
+                was_rests = first;
+            }
+            /* through sections and in Auto the same rule, by the bar */
+            for (s = 0; s < 2; s++) {
+                uint32_t st, wrong = 0u, been = 0u;
+                rec_run(seed, RATE[d], PAT[q], 50, s ? EN_AUTO : EN_HANDS, 1);
+                for (st = 64u; st < REC_STEPS; st += (uint32_t)DIV[d])
+                    if (rec_been[st]) {
+                        been++;
+                        wrong += en_arp_rest(en_test_seed(), st, DIV[d], 50) != !rec_note[st];
+                    }
+                CHECK(!wrong, "division %d %s through sections: %u steps not by the rule", DIV[d], s ? "Auto" : "Hands", wrong);
+                CHECK(been > 300u / (uint32_t)DIV[d], "division %d %s through sections: only %u steps", DIV[d], s ? "Auto" : "Hands", been);
+            }
+        }
+}
+
+/* every chord and key, at a sixteenth at 180, Skip on the new patterns too: of the chord, in range, one key at a time */
+static void t_skip_every_chord(void)
+{
+    static const int SKIP[4] = {25, 50, 75, 99};
+    int m, key, p, runs = 0;
+    for (m = 0; m < EN_NMODES; m++)
+        for (key = 0; key < 12; key++)
+            for (p = 0; p < EN_ARP_NPATTERNS; p++) {
+                start(300u + (uint32_t)(m * 12 + key), p % EN_NSTYLES, EN_HANDS);
+                en_set(P_TEMPO, 180);
+                en_set(P_MODE, m);
+                en_set(P_ROOT, key);
+                en_pool(EN_MODE_POOL[m]);
+                en_set(P_MELMODE, EN_MEL_ARP);
+                en_set(P_ARPPAT, p);
+                en_set(P_ARPSKIP, SKIP[(m + key + p) & 3]);
+                en_set(P_MRATE, 100);
+                en_set(P_EVOLVE, 100);
+                en_play(1);
+                en_render(buf, 16u, GAIN);
+                en_arp_range(key, &mel_lo, &mel_hi);
+                mel_chord_check = mel_range_check = 1;
+                en_test_ticks(800u);
+                CHECK(ons[1] > 0u, "mode %d key %d pattern %d: nothing", m, key, p);
+                CHECK(!off_chord && !off_range, "mode %d key %d pattern %d: %u off the chord, %u out of range", m, key, p, off_chord, off_range);
+                CHECK(most_down <= 1, "mode %d key %d pattern %d: %d keys down", m, key, p, most_down);
+                CHECK(!double_on && !off_unowed, "mode %d key %d pattern %d: pairs: %u twice on, %u off with none on", m, key, p, double_on, off_unowed);
+                CHECK(nd[1] == en_test_bells_on(), "mode %d key %d pattern %d: the ledger", m, key, p);
+                runs++;
+            }
+    printf("  every chord with Skip: %d runs of 800 sixteenths at 180\n", runs);
+}
+
+/* the silences: Skip 100 strikes nothing, no voice, no MIDI, the rest going on; at once on the way there and back; and it goes on composing the note: Skip's off is the note it would have been */
+static void t_skip_silent(void)
+{
+    static const int RATE[3] = {10, 50, 90};
+    int d;
+    for (d = 0; d < 3; d++) {
+        start(1100u + (uint32_t)d, EN_ST_LIQUID, EN_HANDS);
+        all_on();
+        en_set(P_MELMODE, EN_MEL_ARP);
+        en_set(P_ARPSKIP, 100);
+        en_set(P_MRATE, RATE[d]);
+        en_set(P_MELSND, EN_TB_GLASS + 1);
+        en_play(1);
+        ledger = 1;
+        run(SEC(12.0f), 256u);
+        CHECK(ons[1] == 0u, "Skip 100, Rate %d: %u notes", RATE[d], ons[1]);
+        CHECK(voices_most == 0u, "Skip 100, Rate %d: %u voices", RATE[d], voices_most);
+        CHECK(ons[0] + ons[2] + ons[3] + ons[9] > 10u, "Skip 100: and the others?");
+        /* on the way back, the next step's */
+        en_set(P_ARPSKIP, 0);
+        run(SEC(2.0f), 256u);
+        CHECK(ons[1] >= 3u, "Skip 100 to 0, Rate %d: %u notes in 2 s", RATE[d], ons[1]);
+        en_set(P_ARPSKIP, 100);
+        run(SEC(0.5f), 256u);
+        counts_clear();
+        run(SEC(2.0f), 256u);
+        CHECK(ons[1] == 0u, "to Skip 100, Rate %d: %u notes more", RATE[d], ons[1]);
+        run(SEC(2.0f), 256u);
+        CHECK(en_test_bells_on() == 0 && nd[1] == 0, "to Skip 100, Rate %d: a key down", RATE[d]);
+        CHECK(en_test_bell_voices() == 0, "to Skip 100, Rate %d: %d voices sounding after 4.5 s", RATE[d], en_test_bell_voices());
+        ledger = 0;
+    }
+    /* only the melody, at Skip 100: nothing to hear */
+    start(1110u, EN_ST_LIQUID, EN_HANDS);
+    only_melody();
+    en_set(P_MELMODE, EN_MEL_ARP);
+    en_set(P_ARPSKIP, 100);
+    en_set(P_MRATE, 90);
+    en_play(1);
+    run(SEC(3.0f), 256u);
+    meter_clear();
+    run(SEC(2.0f), 256u);
+    CHECK(rms_now() < 1e-4, "only the melody at Skip 100: %f", rms_now());
+    /* the melody off: the same MIDI, rests and all */
+    {
+        uint32_t a, n;
+        start(1120u, EN_ST_LIQUID, EN_HANDS);
+        all_on();
+        en_set(P_MELMODE, EN_MEL_ARP);
+        en_set(P_ARPSKIP, 50);
+        en_set(P_MRATE, 90);
+        en_play(1);
+        run(SEC(12.0f), 256u);
+        a = mhash;
+        n = midi_n;
+        start(1120u, EN_ST_LIQUID, EN_HANDS);
+        all_on();
+        en_set(P_MELMODE, EN_MEL_ARP);
+        en_set(P_ARPSKIP, 50);
+        en_set(P_MRATE, 90);
+        en_play(1);
+        run(SEC(4.0f), 256u);
+        en_layer(EN_L_MEL, 0);
+        run(SEC(8.0f), 256u);
+        CHECK(mhash == a && midi_n == n, "Skip 50, the melody off: its MIDI moved");
+    }
+    CHECK(!led_bad, "the ledger: %u bad blocks", led_bad);
+}
+
+/* ---- MIDI pairs, the ledger: at each setting, through changes of the pattern and of Skip of any size at any moment, a panic and a new piece */
+static void t_skip_pairs(void)
+{
+    uint32_t i, sd;
+    int skip, q;
+    for (skip = 0; skip <= 100; skip += 5) {
+        start(1200u + (uint32_t)skip, EN_ST_LIQUID, EN_HANDS);
+        all_on();
+        en_set(P_MELMODE, EN_MEL_ARP);
+        en_set(P_MRATE, skip & 1 ? 50 : 90);
+        en_set(P_ARPPAT, skip / 5 % EN_ARP_NPATTERNS);
+        en_set(P_ARPSKIP, skip);
+        en_play(1);
+        ledger = 1;
+        run(SEC(5.0f), 256u);
+        ledger = 0;
+        CHECK(!double_on && !off_unowed, "Skip %d: pairs: %u twice on, %u off with none on", skip, double_on, off_unowed);
+        CHECK(most_down <= 1, "Skip %d: %d keys down", skip, most_down);
+    }
+    /* changed at any moment */
+    start(1300u, EN_ST_ROLLER, EN_HANDS);
+    all_on();
+    en_set(P_MELMODE, EN_MEL_ARP);
+    en_set(P_MRATE, 100);
+    en_play(1);
+    ledger = 1;
+    for (i = 0u; i < 3000u; i++) {
+        const uint32_t h = i * 2654435761u;
+        en_set(P_ARPSKIP, (int)(h >> 8) % 101);
+        en_set(P_ARPPAT, (int)(h >> 16) % EN_ARP_NPATTERNS);
+        if (!(i % 37u))
+            en_set(P_MELMODE, (int)(h >> 24 & 1u));
+        if (!(i % 211u))
+            en_set(P_MRATE, (int)(h >> 20) % 101);
+        run(256u + 64u * (i % 7u), 256u);
+    }
+    CHECK(!double_on && !off_unowed, "changes: pairs: %u twice on, %u off with none on", double_on, off_unowed);
+    CHECK(most_down <= 1, "changes: %d keys down", most_down);
+    en_set(P_MELMODE, EN_MEL_ARP);
+    en_set(P_ARPSKIP, 100);
+    run(SEC(3.0f), 256u);
+    CHECK(nd[1] == 0, "changes, to Skip 100: %d keys down", nd[1]);
+    ledger = 0;
+    /* a panic, in a figure with rests: nothing; a restore, the same rests */
+    for (q = 0; q < EN_ARP_NPATTERNS; q++) {
+        start(1400u + (uint32_t)q, EN_ST_LIQUID, EN_HANDS);
+        en_set(P_MELMODE, EN_MEL_ARP);
+        en_set(P_ARPPAT, q);
+        en_set(P_ARPSKIP, 50);
+        en_set(P_MRATE, 100);
+        en_play(1);
+        ledger = 1;
+        run(SEC(3.0f) + (uint32_t)q * 256u, 256u);
+        en_play(0);
+        en_panic();
+        ledger = 0;
+        run(256u, 256u);
+        CHECK(nd[1] == 0 && en_test_bell_voices() == 0, "a panic, pattern %d: %d down, %d voices", q, nd[1], en_test_bell_voices());
+        counts_clear();
+        en_set(P_ARPSKIP, 25);                   /* (a change through the silence, too) */
+        run(SEC(1.0f), 256u);
+        CHECK(ons[1] == 0u, "silent, and %u notes", ons[1]);
+        en_restore();
+        run(SEC(3.0f), 256u);
+        ledger = 1;
+        CHECK(ons[1] > 5u, "back, pattern %d: %u notes", q, ons[1]);
+        CHECK(!double_on && !off_unowed, "a panic, pattern %d: pairs", q);
+        run(SEC(1.0f), 256u);
+        ledger = 0;
+    }
+    /* a new piece, as project_apply and owed_tick do it: from Skip to its Skip and pattern */
+    for (sd = 0u; sd < 8u; sd++) {
+        int p;
+        int16_t par[P_NPARAMS];
+        uint16_t pool;
+        start(1500u + sd, EN_ST_LIQUID, EN_HANDS);
+        all_on();
+        en_set(P_MELMODE, EN_MEL_ARP);
+        en_set(P_ARPPAT, EN_ARP_CONVERGE + (int)(sd % 3u));
+        en_set(P_ARPSKIP, sd & 1u ? 60 : 30);
+        en_set(P_MRATE, 90);
+        en_play(1);
+        ledger = 1;
+        run(SEC(2.0f) + sd * 512u, 256u);
+        en_piece((int)sd, par, &pool);
+        CHECK(par[P_ARPSKIP] == 0, "piece %u: a recipe with Skip %d", sd, par[P_ARPSKIP]);
+        par[P_MELMODE] = EN_MEL_ARP;
+        par[P_MRATE] = 90;
+        par[P_ARPPAT] = (int16_t)(EN_ARP_PEDTOP + (int)(sd & 1u));
+        par[P_ARPSKIP] = (int16_t)(sd & 2u ? 40 : 0);
+        for (p = 0; p < P_NPARAMS; p++)
+            en_set(p, par[p]);
+        en_pool(pool);
+        en_seed(1000u + sd);
+        en_regrow();
+        counts_clear();
+        run(SEC(6.0f), 256u);
+        CHECK(ons[1] > 10u, "piece %u: %u notes", sd, ons[1]);
+        CHECK(!double_on && !off_unowed, "piece %u: pairs: %u, %u", sd, double_on, off_unowed);
+        CHECK(most_down <= 1, "piece %u: %d keys down", sd, most_down);
+        ledger = 0;
+    }
+    CHECK(!led_bad, "the ledger: %u bad blocks", led_bad);
+}
+
+/* ---- the voices: at a sixteenth, every new pattern and Skip, none taken while it can be heard */
+static void t_skip_voices(void)
+{
+    int p, t;
+    for (p = EN_ARP_CONVERGE; p < EN_ARP_NPATTERNS; p++)
+        for (t = EN_NTIMBRES; t >= EN_NTIMBRES - 1; t--) {
+            start(1600u + (uint32_t)p, EN_ST_LIQUID, EN_HANDS);
+            en_test_bell_stolen_clear();
+            en_set(P_TEMPO, 180);
+            en_set(P_MELMODE, EN_MEL_ARP);
+            en_set(P_MRATE, 100);
+            en_set(P_ARPPAT, p);
+            en_set(P_MELSND, t);
+            en_set(P_MTONE, 100);
+            en_play(1);
+            run(SEC(15.0f), 256u);
+            CHECK(voices_most <= 3u, "pattern %d timbre %d: %u voices", p, t, voices_most);
+            CHECK(en_test_bell_stolen() < 0.02f, "pattern %d timbre %d: a voice taken at %f", p, t, (double)en_test_bell_stolen());
+        }
 }
 
 /* ---- how often, in Phrases. Hands, section by section; phrases in three minutes at 170 (2040 sixteenths), and the longest silence between the end of one and the first note of the next */
@@ -1062,10 +1602,63 @@ static void t_pins(void)
     }
 }
 
+/* ---- what must not have moved: Arp in its first four patterns and Skip 0: renders of b34adef, the commit before Skip. The last of each Rate's five goes through the four */
+static const struct {
+    int rate, pat;
+    uint32_t audio, midi, n;
+} ARP_PIN[] = {
+    {10, 0, 0x982d1da2u, 0xf26f09e3u, 2972u},
+    {10, 1, 0xd98e6ac2u, 0xef5927d9u, 3187u},
+    {10, 2, 0x0e3b321bu, 0x5cf6b216u, 3003u},
+    {10, 3, 0xc953b36du, 0xc1bcb05au, 2783u},
+    {10, 4, 0x2137f413u, 0xd018f03fu, 2612u},
+    {50, 0, 0xdb6f89a1u, 0xecc350e7u, 3142u},
+    {50, 1, 0x6889f4deu, 0x6eb6e816u, 3357u},
+    {50, 2, 0x9b94feebu, 0x254035fau, 3173u},
+    {50, 3, 0x709552deu, 0x34425677u, 2953u},
+    {50, 4, 0x30f7a56eu, 0x2c625027u, 2782u},
+    {90, 0, 0x423b578bu, 0xb028b589u, 3482u},
+    {90, 1, 0x55e590deu, 0x95845f37u, 3697u},
+    {90, 2, 0xc3f31d64u, 0x8b585de2u, 3513u},
+    {90, 3, 0x12f2d925u, 0x6a75d9f4u, 3293u},
+    {90, 4, 0x3e6960ccu, 0x4da961deu, 3122u},
+};
+static void t_arp_pins(void)
+{
+    uint32_t i;
+    for (i = 0u; i < sizeof ARP_PIN / sizeof ARP_PIN[0]; i++) {
+        const int p = ARP_PIN[i].pat;
+        uint32_t t;
+        start(4321u + (uint32_t)p, p % EN_NSTYLES, EN_HANDS);
+        all_on();
+        en_set(P_MELMODE, EN_MEL_ARP);
+        en_set(P_ARPPAT, p & 3);
+        en_set(P_MRATE, ARP_PIN[i].rate);
+        en_play(1);
+        mhash = ahash = 2166136261u;
+        frames = midi_n = 0u;
+        for (t = 0u; t < 44100u * 30u / 256u; t++) {
+            if (p == 4 && !(t % 300u))
+                en_set(P_ARPPAT, (int)(t / 300u & 3u));
+            run(256u, 256u);
+        }
+        CHECK(ahash == ARP_PIN[i].audio, "Arp, Rate %d pattern %d: the sound moved: %08x", ARP_PIN[i].rate, p, ahash);
+        CHECK(mhash == ARP_PIN[i].midi && midi_n == ARP_PIN[i].n, "Arp, Rate %d pattern %d: MIDI moved: %08x, %u messages", ARP_PIN[i].rate, p, mhash, midi_n);
+    }
+}
+
 int main(void)
 {
     t_pure();
+    t_modes();
+    t_skip_rule();
     t_every_chord();
+    t_skip_every_chord();
+    t_skip_played();
+    t_skip_silent();
+    t_skip_pairs();
+    t_skip_voices();
+    t_arp_pins();
     t_division();
     t_no_pauses();
     t_mute();

@@ -24,3 +24,6 @@ NOT IN THE SCALE	not done: that note is not in the scale
 NO DRUMS NO BREAK	no break: the drums are not playing
 Arp	arpeggio
 Up-Down	up and down
+Conv	converging
+PedT	pedal on the top note
+PedR	pedal on the lowest note

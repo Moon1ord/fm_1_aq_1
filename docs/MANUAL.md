@@ -99,6 +99,7 @@ The drawing at the top shows most of them; here they all are.
 | SELECT + KNOB 1 | On the Keys, Melody and Bass pages: the layer's sound (see "Sounds"). The knob's value doesn't move. |
 | SELECT + KNOB 2 | On the Keys page: the pad's sound. On the Melody page: Phrases or Arp (see "Arp"). |
 | SELECT + KNOB 3 | On the Melody page: Arp's pattern. |
+| SELECT + KNOB 4 | On the Melody page: Arp's skip, how many of its notes rest (see "Arp"). Octave doesn't move. |
 | OCT− / OCT+ | The melody's octave, two down to two up, from any page. |
 | MASTER | Volume. |
 | SAVE | Saves all eight pieces. Held for 1.5 s: puts the piece back to its recipe. |
@@ -211,7 +212,7 @@ In Auto:
 ## 6. The pieces
 
 PRESETS chooses one of eight pieces. Each is a recipe: key, mode, tempo, style and every knob. Each remembers how you
-left it, including its scale, its degrees, its sounds, the melody's Phrases or Arp and Hands or Auto. A card shows the piece for a moment. Each new piece, and
+left it, including its scale, its degrees, its sounds, the melody's Phrases or Arp with Arp's pattern and Skip, and Hands or Auto. A card shows the piece for a moment. Each new piece, and
 each power-on, starts composing from a new seed, so the settings are kept but the music is always new.
 
 Hold SAVE for 1.5 s to put the piece you're on back to its recipe. Tune, MIDI out and Lights are the same for all pieces.
@@ -279,15 +280,31 @@ Seven pages, each on its own button, with four values on KNOB 1–4. SELECT step
 #### Arp
 
 The melody has two modes, kept with the piece. **Phrases** composes, as above. **Arp** plays the notes of the chord sounding,
-one after another with no pauses, through two octaves of the melody's register, and follows each new chord at once. Hold SELECT
-and turn KNOB 2 for the mode, KNOB 3 for the pattern: **Up**, **Down**, **Up-Down** or **Random**. The top line says it for a
-moment (`MELODY MODE` `Arp`, `ARP PATTERN` `Up-Down`) and then keeps it next to the page's name, `Auto/Arp/Up-Down`.
+one after another, on the grid, through two octaves of the melody's register, and follows each new chord at once. Hold SELECT
+and turn KNOB 2 for the mode, KNOB 3 for the pattern:
+
+- **Up**, **Down**, **Up-Down**, **Random**.
+- **Converge** (`Conv`): from the outside in: the lowest, the highest, the next lowest, the next highest.
+- **Pedal top** (`PedT`): the top note every other note, the others in turn from the bottom up.
+- **Pedal root** (`PedR`): the lowest note every other note, the others in turn from the bottom up. "Root" is the lowest note
+  of the two octaves, which isn't always the chord's root.
+
+KNOB 4, with SELECT held, is **Skip**, 0 to 100: the share of the division's steps that strike no note, no voice and no MIDI. At
+0 every step plays. At 100 Arp is silent, though the mode stays Arp. In between the grid doesn't shift:
+a figure runs on through its rests, so a rest takes out the note that would have been there and the next step plays what it
+always would. Which steps rest is a one-bar rhythm made from the piece's seed: the same in every bar while the setting holds,
+another in another piece. Turning Skip up keeps the rests you have and adds to them. The bar's first beat is the last to go, and
+the other beats tend to outlast the sixteenths between them. A bar has 4, 8 or 16 steps at 1/4, 1/8 and 1/16, so Skip moves in
+those steps: at 1/4 only 25, 50 and 75 change anything.
+
+The top line says each for a moment (`MELODY MODE` `Arp`, `ARP PATTERN` `Up-Down`, `ARP SKIP` `25`) and then keeps them next to the
+page's name, `Auto/Arp/Up-Down/S25` (no `S` at Skip 0); a long sound's name gives way to them when there is no room.
 
 The four knobs stay what they are. Level and Octave as ever. Rate is the division. Tone, with the Auto sound, chooses one voice
 from what it allows, leaving out the two with a slow attack, and Auto changes it every 32 bars or so, never note by note; a sound
 you choose is that sound, and Tone how bright it is. Arp plays softly, under the mix; a long sound's tail is shortened to fit the
 division. It uses the melody's voices and MIDI channel 2. SELECT + ARP turns it on and off like any layer, and off it still sends
-its MIDI. Back in Phrases, a phrase comes at its next chance.
+its MIDI. Back in Phrases, a phrase comes at its next chance, and pattern and Skip wait for the next time in Arp.
 
 ### LFO: Bass
 
@@ -376,7 +393,7 @@ The sound doesn't change what's composed, and MIDI out is the same whichever you
 The screen shows one of these, the first that applies, in this order: a help card; Degrees; the title at power-on; the
 save; a piece's card; a break; a page; then the rest, the hold or Home.
 
-**Top line:** on Home, the piece with its root and mode; on a page, the page's name, its sound (Keys: the keys' sound and the pad's, `Felt/Warm`; Melody: the sound, the mode and in Arp the pattern, `Auto/Arp/Up`) and the chord (Setup: its reading
+**Top line:** on Home, the piece with its root and mode; on a page, the page's name, its sound (Keys: the keys' sound and the pad's, `Felt/Warm`; Melody: the sound, the mode and in Arp the pattern and any skip, `Auto/Arp/Up/S25`) and the chord (Setup: its reading
 instead; if there is no room, the chord gives way). On the right, the tempo (EXT when it follows MIDI clock, with a mark while resting), a dot when there are
 unsaved changes, and the battery. Messages (`ADDED F#`, `BREAK ON THE BAR`) show here for a moment.
 
@@ -570,7 +587,8 @@ The defaults are Load Screen's; each piece has its own.
 | Keys, SELECT + KNOB 2 | Pad's sound | Warm, Airy, Choral, Deep | Warm |
 | Melody, SELECT + KNOB 1 | Melody's sound | Auto, Flute, Vocal, Vibes, Marimba, Music box, Glass | Auto |
 | Melody, SELECT + KNOB 2 | Melody's mode | Phrases, Arp | Phrases |
-| Melody, SELECT + KNOB 3 | Arp's pattern | Up, Down, Up-Down, Random | Up |
+| Melody, SELECT + KNOB 3 | Arp's pattern | Up, Down, Up-Down, Random, Conv, PedT, PedR | Up |
+| Melody, SELECT + KNOB 4 | Arp's skip | 0–100 | 0 |
 | Bass, SELECT + KNOB 1 | Bass's sound | Warm, Sub, Hollow, Round | Warm |
 
 ---

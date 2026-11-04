@@ -41,7 +41,8 @@ wait 20000
 # 1:20 Rate 20: 1/4
 setpar 9 20
 press SEL
-spin K3 1
+setpar 33 0
+wait 1
 release SEL
 echo arp 1/4 up
 wait 20000
@@ -63,7 +64,8 @@ wait 20000
 # 2:40 Rate 85: 1/16
 setpar 9 85
 press SEL
-spin K3 1
+setpar 33 0
+wait 1
 release SEL
 echo arp 1/16 up
 wait 20000

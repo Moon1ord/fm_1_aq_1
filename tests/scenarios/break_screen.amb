@@ -1,0 +1,97 @@
+# The break's frame is for a break that is heard. Rest in the middle of one and the rest's screen or the page is up, by PLAY or by MIDI Stop; it comes back with the sound. In Auto, a break the arranger plays with the drums muted or at level 0 leaves the page alone
+wait 3000
+press SEL
+tap SEQ
+release SEL
+wait 3000
+expect level >1
+# ---- PLAY, in a called break, on Home
+press SEL
+tap EDIT
+release SEL
+wait 1700
+expect breakbars >0
+expect screen 3
+expect view 0
+tap PLAY
+wait 200
+expect playing 0
+expect screen 6
+wait 5000
+expect playing 0
+expect screen 6
+# a page's button, resting: the page
+tap ENV
+wait 400
+expect view 1
+expect screen 2
+tap HOME
+wait 400
+expect screen 6
+# ---- and back: the break goes on where it stopped, its frame with it, and ends
+tap PLAY
+wait 60
+expect playing 1
+expect breakbars >0
+expect screen 3
+wait 7000
+expect breakbars 0
+expect screen 1
+# ---- MIDI Stop in a called break, MIDI Continue
+press SEL
+tap EDIT
+release SEL
+wait 1700
+expect breakbars >0
+expect screen 3
+midi FC 00 00
+wait 200
+expect playing 0
+expect screen 6
+midi FB 00 00
+wait 60
+expect playing 1
+expect screen 3
+wait 7000
+expect breakbars 0
+expect screen 1
+
+# ---- Auto, the arranger's breaks: the frame, with the drums on (counted, frame by frame: when each break comes is the arranger's)
+reboot
+press SEL
+tap HOME
+release SEL
+wait 100
+style jungle
+energy 100
+breaks 100
+seed 11
+wait 40000
+expect mode 0
+expect brkshown >0
+expect brkquiet 0
+expect brkwrong 0
+# ---- the same at level 0: breaks composed as ever, and no frame
+setpar 16 0
+expect par16 0
+wait 100
+expect brkquiet <30
+wait 40000
+expect brkquiet >60
+expect brkwrong 0
+# ---- the same, muted: a page stays a page
+setpar 16 45
+wait 8000
+expect level >1
+press SEL
+tap SEQ
+release SEL
+wait 100
+expect mutedrums 1
+tap ENV
+drawreset
+wait 40000
+expect mutedrums 1
+expect view 1
+expect brkquiet >120
+expect brkwrong 0

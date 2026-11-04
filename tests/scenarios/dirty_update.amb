@@ -1,0 +1,36 @@
+# An update cancelled at the computer: the platform panics, then starts the UI again. What was not saved is still not saved, and is still known to be
+wait 3000
+spin K2 5
+expect dirty 1
+panic
+wait 300
+uiinit
+wait 300
+# it has nothing to write yet: it grows, and an autosave is for a rest
+expect store_writes 0
+expect dirty 1
+wait 6000
+expect playing 1
+expect dirty 1
+expect store_writes 0
+# a rest: saved by itself, and now it is clean
+tap PLAY
+wait 4400
+expect store_writes 1
+expect dirty 0
+# nothing changed: a cancelled update has nothing to save
+tap PLAY
+wait 500
+panic
+wait 300
+uiinit
+wait 800
+expect dirty 0
+tap PLAY
+wait 5000
+expect store_writes 1
+# ---- a power cycle forgets: what is unsaved is gone and nothing is dirty
+spin K2 5
+expect dirty 1
+reboot
+expect dirty 0

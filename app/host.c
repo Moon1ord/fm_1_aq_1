@@ -4,7 +4,7 @@
  * "expect", its command, a reboot and the screen reader's dump.
  *
  * AMB-1's checks: playing held silent midionN keysdown bellson bassdown keyson breakbars barpos stepofbar bars chordhash view piece pool dirty sixteenths ext pad_level bass_level chordroot chordN loopnotes
- * parN battery section style level mask enmask keyslit help ringN mode arrange enagree absent sysnotes sysnote ducked saving writepeak mutekeys mutemel mutebass mutedrums mutehats gainN meterN dimN litN screen eye smile blinks wipes wiping drawrows drawbytes drawpx artbytes stale (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
+ * parN battery section style level mask enmask keyslit help ringN mode arrange enagree brkshown brkquiet brkwrong absent sysnotes sysnote ducked saving writepeak mutekeys mutemel mutebass mutedrums mutehats gainN meterN dimN litN screen eye smile blinks wipes wiping drawrows drawbytes drawpx artbytes stale (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
  * values, help lines and messages wider than their places. Its commands:
  * storeamb (what AMB-1 leaves in the store: its magic and format, nothing of ours); storeold (the project as it is, whole, but
  * for the format before this one); battery N (the battery read as N,
@@ -102,6 +102,12 @@ int app_expect(const char *what, int *got)
         g = (int)scr.blinks;
     else if (!strcmp(what, "readsheds"))          /* Setup's reading as shown: its S */
         g = (int)scr.r_s;
+    else if (!strcmp(what, "brkshown"))           /* frames so far: of the break's frame */
+        g = (int)scr.brk_shown;
+    else if (!strcmp(what, "brkquiet"))           /* of a break nobody hears: resting, the drums muted or at level 0 */
+        g = (int)scr.brk_quiet;
+    else if (!strcmp(what, "brkwrong"))           /* of the frame over one of those */
+        g = (int)scr.brk_wrong;
     else if (!strcmp(what, "wipes"))              /* whole pictures so far */
         g = (int)scr.wipes;
     else if (!strcmp(what, "wiping"))             /* rows of a picture to go */
@@ -290,6 +296,7 @@ void app_host_reboot(void)
     memset(&proj, 0, sizeof proj);
     memset(&midi_owed, 0, sizeof midi_owed);
     owed = 0u;
+    ui.dirty = 0u;
 }
 
 void app_speak_dump(void) { speak_dump(); }

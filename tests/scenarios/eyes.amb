@@ -1,0 +1,54 @@
+# The eyes: closed with no drums, half open with drums, open on a full beat or for 8 s after a new section. Half time ranks below the light beat
+wait 8000
+expect mutedrums 1
+expect screen 1
+expect eye 0
+# ---- half time: half open
+energy 20
+press SEL
+tap SEQ
+release SEL
+wait 3000
+expect mutedrums 0
+expect level 4
+wait 9000
+expect eye 1
+# ---- the light beat: half open
+energy 40
+wait 3000
+expect level 2
+expect eye 1
+# ---- a full beat: open
+energy 70
+wait 3000
+expect level 3
+expect eye 2
+# ---- level 0: no drums heard, closed
+setpar 16 0
+wait 400
+expect eye 0
+setpar 16 45
+wait 400
+expect eye 2
+# ---- a new section on a light beat: open for 8 s, then half
+energy 40
+wait 3000
+expect level 2
+expect eye 1
+tap EDIT
+wait 2500
+expect eye 2
+wait 9000
+expect eye 1
+# ---- half time, likewise
+energy 20
+wait 3000
+expect level 4
+expect eye 1
+# ---- muted: closed
+press SEL
+tap SEQ
+release SEL
+wait 400
+expect mutedrums 1
+expect eye 0

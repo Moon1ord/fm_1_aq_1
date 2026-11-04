@@ -1,0 +1,47 @@
+# EDIT pressed during a save: each press as it was, SELECT or not, whatever comes after it
+wait 3000
+press SEL
+tap SEQ
+release SEL
+wait 3000
+listen
+# ---- a break asked for, then the next section
+tap SAVE
+wait 30
+expect saving 1
+press SEL
+tap EDIT
+release SEL
+wait 30
+tap EDIT
+wait 1500
+said NEXT SECTION
+expect breakbars >0
+expect saving 0
+wait 6000
+# ---- the next section, then a break asked for: each its own
+tap SAVE
+wait 30
+expect saving 1
+tap EDIT
+wait 30
+press SEL
+tap EDIT
+release SEL
+wait 1500
+said NEXT SECTION
+expect breakbars >0
+expect saving 0
+wait 6000
+# ---- SELECT let go before EDIT is: a break still. It is EDIT's press that counts
+tap SAVE
+wait 30
+press SEL
+press EDIT
+wait 5
+release SEL
+wait 5
+release EDIT
+wait 1500
+unsaid NEXT SECTION
+expect breakbars >0

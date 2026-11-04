@@ -89,6 +89,7 @@ static struct {
     uint32_t eye_t, blink_t, blink_bar, bar_seen, open_until, smile_until, chord_seen, feather_t, star_t, star_bar;
 #ifdef PLAT_HOST
     uint32_t f_rows, f_bytes, f_px, p_rows, p_bytes, p_px, t_bytes, wipes, blinks;   /* the simulator's: a frame's, the most in one, all so far */
+    uint32_t brk_shown, brk_quiet, brk_wrong;   /* and frames: of the break's frame; of a break under way that nobody hears; of the frame over one */
 #endif
 } scr;
 
@@ -157,13 +158,14 @@ static void itoa_u(uint32_t v, char *b)
 #define SAVE_LATE 400u                 /* the engine has not said zero by now: no render running, so nothing to cut */
 #define SAVE_BACK 300u
 #define SAVE_QUEUE 8u
+#define Q_SEL 0x80u
 enum { SV_IDLE, SV_FADE, SV_RETURN };
 static struct {
     uint8_t st, manual;                /* manual: SAVE's. It reports and nothing cancels it; an autosave does neither */
     uint8_t ok;                        /* the write went well */
     uint8_t failed;                    /* the last write failed: no autosave until something changes (no breathing every few seconds) */
     uint8_t hushed;                    /* a panic, and no ui_init yet: nothing saves itself */
-    uint8_t n, q[SAVE_QUEUE];          /* buttons pressed during it, in order: played after it. A knob, a key or PLAY is not held up */
+    uint8_t n, q[SAVE_QUEUE];          /* buttons pressed during it, in order, with Q_SEL for an EDIT that had SELECT down: played after it. A knob, a key or PLAY is not held up */
     uint32_t t;
 } sv;
 
@@ -481,11 +483,11 @@ static int save_holds(int b)
         return 1;
     }
     if (sv.n < SAVE_QUEUE)
-        sv.q[sv.n++] = (uint8_t)b;
+        sv.q[sv.n++] = (uint8_t)(b == B_EDIT && ui.edit_sel ? (uint32_t)b | Q_SEL : (uint32_t)b);
     return 1;
 }
 
-static void button_now(int b)
+static void button_now(int b, int edit_sel)
 {
     int v;
     if (b == B_GLO && ui.view == V_SETUP) {      /* GLO on Setup: the reading starts afresh */
@@ -500,7 +502,7 @@ static void button_now(int b)
         }
     switch (b) {
     case B_EDIT:
-        edit(ui.edit_sel);
+        edit(edit_sel);
         break;
     case B_PLAY:
         sp_tp.playing = !en_playing;
@@ -535,7 +537,7 @@ static void button_now(int b)
 static void button(int b)
 {
     if (!save_holds(b))
-        button_now(b);
+        button_now(b, ui.edit_sel);
 }
 
 /* MIDI in (USB and the TRS jack): channel 1 notes add or remove their note from the scale; clock and
@@ -738,6 +740,8 @@ static int save_shown(uint32_t now)    /* SAVE's, not an autosave's; a failed on
         return 1;
     return ui.save_t && now - ui.save_t < SAVE_ANIM;
 }
+/* a break the player hears: resting it is only where the song stopped; with the drums muted or at level 0 there is no break to see (edit's own conditions for asking for one) */
+static int break_heard(void) { return en_break_bars && en_playing && proj.par[P_DRUMS] > 0 && !en_mute_drums; }
 static int scene_pick(uint32_t now)
 {
     if (ui.help)
@@ -750,7 +754,7 @@ static int scene_pick(uint32_t now)
         return SC_SAVE;
     if ((int32_t)(scr.card_until - now) > 0 && (int32_t)(ui.turn_t - scr.card_t) <= 0)
         return SC_CARD;
-    if (en_break_bars && now >= ui.touch_until)
+    if (break_heard() && now >= ui.touch_until)
         return SC_BREAK;
     if (ui.view != V_GARDEN)
         return SC_PAGE;
@@ -1339,12 +1343,12 @@ static uint32_t knob_sig(int i)
 enum { EYE_CLOSED, EYE_HALF, EYE_OPEN };
 static int eye_wanted(uint32_t now)
 {
-    const int drums = !en_mute_drums && !(en_layers_absent >> EN_L_DRUMS & 1u);
+    const int drums = !en_mute_drums && !(en_layers_absent >> EN_L_DRUMS & 1u) && proj.par[P_DRUMS] > 0;
     const uint32_t t = now - scr.blink_t;
     int w;
     if (scr.scene != SC_HOME || !drums)
         return EYE_CLOSED;
-    w = en_drum_level >= 3u || (int32_t)(scr.open_until - now) > 0 ? EYE_OPEN : EYE_HALF;
+    w = en_drum_level == 3u || (int32_t)(scr.open_until - now) > 0 ? EYE_OPEN : EYE_HALF;   /* (3 the full beat; 4, half time, ranks under the light one: amb.c LV_RANK) */
     if (scr.blinking) {
         if (t < 2u * EYE_STEP)
             return EYE_CLOSED;
@@ -1817,6 +1821,14 @@ static void scr_frame(void)
     scr.now = now;
     sc = scene_pick(now);
 #ifdef PLAT_HOST
+    {
+        const int quiet = en_break_bars && (!en_playing || en_mute_drums || !proj.par[P_DRUMS]);
+        scr.brk_shown += sc == SC_BREAK;
+        scr.brk_quiet += quiet;
+        scr.brk_wrong += quiet && sc == SC_BREAK;
+    }
+#endif
+#ifdef PLAT_HOST
     if (!scr.settling)
         scr.f_rows = scr.f_bytes = scr.f_px = 0u;
 #endif
@@ -2004,7 +2016,7 @@ static void save_tick(void)
             sv.n--;
             for (i = 0; i < sv.n; i++)
                 sv.q[i] = sv.q[i + 1u];
-            button_now(b);
+            button_now(b & ~(int)Q_SEL, b & Q_SEL ? 1 : 0);
         } else if (autosave_due(now)) {
             save_begin(0);
         }
@@ -2598,8 +2610,11 @@ static void speak_dump(void)
 
 void ui_init(void)
 {
+    const uint8_t dirty = ui.dirty;              /* an update cancelled comes here with the project as it was: what was not saved still is not. (A power-on: zero, like all the RAM) */
     memset(&ui, 0, sizeof ui);
     memset(&sv, 0, sizeof sv);
+    ui.dirty = dirty;
+    ui.act_t = plat_ms();                        /* (this start is the last touch: no autosave before it has grown, while the engine still says it is not playing) */
     ui.touched = -1;
     memset(&scr, 0, sizeof scr);
     memset(el, 0, sizeof el);

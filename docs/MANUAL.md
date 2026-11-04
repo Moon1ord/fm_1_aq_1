@@ -100,6 +100,7 @@ The drawing at the top shows most of them; here they all are.
 | SELECT + KNOB 2 | On the Keys page: the pad's sound. On the Melody page: the melody's mode, Phrases, Arp, Keys or Keys Arp (see "The melody's modes"). |
 | SELECT + KNOB 3 | On the Melody page: the arpeggio's pattern. |
 | SELECT + KNOB 4 | On the Melody page: the arpeggio's skip, how many of its notes rest (see "Arp"). Octave doesn't move. |
+| SELECT, FX or GLO + KNOB 1–4 | On the Space page: the keys' and the melody's effects and sends (see "The keys' and the melody's effects"). |
 | SELECT + REC | On the Melody page in Keys Arp: Latch (see "Playing it yourself"). Anywhere else, REC as ever. |
 | OCT− / OCT+ | The melody's octave, two down to two up, from any page. For what you play, it counts from the next key you press. |
 | MASTER | Volume. |
@@ -381,6 +382,36 @@ its MIDI. Back in Phrases, a phrase comes at its next chance, and pattern and Sk
 - **Reverb:** how much goes to the plate.
 - **Size:** how long the plate rings and how many times the echo comes back.
 
+#### The keys' and the melody's effects
+
+The keys and the melody can each have one effect, and their own sends to the echo and the reverb. These are the Space page's
+under a held button, with the four knobs as they were. Left knobs for the keys, right knobs for the melody:
+
+| Hold | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
+|---|---|---|---|---|
+| SELECT | Keys' effect | Keys' Motion | Melody's effect | Melody's Motion |
+| FX | Keys' Echo | Keys' Reverb | Melody's Echo | Melody's Reverb |
+| GLO | Keys' Depth | | Melody's Depth | |
+
+The header shows what is on with its Motion, `KChor50/MFilt70`; with both Off it says nothing. A turn says the value by itself.
+Letting go of FX or GLO after a turn does nothing else, so GLO doesn't take you to Setup.
+
+- **Effect:** Off, Chorus, Autopan, Tremolo or Filter. A change goes over in a few hundredths of a second, in mid-note too. Off is the sound as it was.
+  - **Chorus:** a short delay that moves, a little out of tune with what goes in, a different way to each side.
+  - **Autopan:** from side to side, in time with the tempo. The level stays.
+  - **Tremolo:** the level up and down, in time with the tempo. What goes to the echo and the reverb stays as it is, so the room doesn't pump.
+  - **Filter:** a low-pass that moves. It has too little resonance to whistle, and it never closes below the notes it's on when it's moving, so it takes the shine and not the level.
+- **Depth:** how far it goes, 0–100. For the Filter, how far it closes.
+- **Motion:** how much the instrument moves it, 0–100. At 0 it stands at one setting: Chorus 0.6 Hz, Autopan a turn a bar, Tremolo in quarters, the Filter where Depth puts it.
+  Above 0 it composes the movement, from the song's seed, so the same seed moves the same way, and on the music's own lines. More Motion means more of the phrases take the composed choice and the things that move go further:
+  - Every 8-bar phrase: the rate, which way it goes first, and the shape of the wave. A breakdown, an intro or a way out is slow: Autopan a turn in four bars, Tremolo in halves. The hats and the light section go at a turn in two bars and in quarters; the full section at a turn a bar, sometimes two, and in eighths. Chorus goes from 0.35 to about 0.9 Hz in the same way.
+  - Through a phrase: the Filter opens to a peak late in the phrase and closes by its end, opening wider in the full section. Chorus gets deeper as the phrase goes on. Tremolo eases in its last bar.
+  - With the music: on the keys, a long chord gets all of the depth and a one-bar chord less, and the Filter opens a little with each chord. On the melody, the effect is shallower while no phrase is under way, the Filter opens a little with each note, and Autopan turns the other way with each new phrase.
+- **Echo, Reverb:** how much of the layer goes to each, as a share of what it always sent: 100 as it was, 0 none, 200 twice. The page's own Echo and Reverb still set the room as a whole.
+
+All of it is kept with the piece. The recipes have the effects Off and the sends at 100. The effects are on the melody's notes whoever plays them, Keys and Keys Arp too.
+The pad has none: it has its own way into the mix, and stays on it, and so does the bass. MIDI never changes with any of this.
+
 ### GLO: Setup
 
 ![The Setup page, with its reading at the top: CPU, M, X, S](img/screen-setup.png "The Setup page")
@@ -639,6 +670,11 @@ The defaults are Load Screen's; each piece has its own.
 | Melody, SELECT + KNOB 4 | The arpeggio's skip | 0–100 | 0 |
 | Melody, in Keys Arp, SELECT + REC | Latch | Off, On | Off |
 | Bass, SELECT + KNOB 1 | Bass's sound | Warm, Sub, Hollow, Round | Warm |
+| Space, SELECT + KNOB 1, 3 | Keys' effect, melody's effect | Off, Chorus, Autopan, Tremolo, Filter | Off |
+| Space, SELECT + KNOB 2, 4 | Keys' Motion, melody's Motion | 0–100 | 50 |
+| Space, GLO + KNOB 1, 3 | Keys' Depth, melody's Depth | 0–100 | 50 |
+| Space, FX + KNOB 1, 3 | Keys' Echo, melody's Echo | 0–200 | 100 |
+| Space, FX + KNOB 2, 4 | Keys' Reverb, melody's Reverb | 0–200 | 100 |
 
 ---
 

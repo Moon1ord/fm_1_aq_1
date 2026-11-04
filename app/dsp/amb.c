@@ -34,6 +34,8 @@ static const en_param_t PARAMS[P_NPARAMS] = {
     {"Keys sound", 0, 3, 0},  {"Pad sound", 0, 3, 0},  {"Bass sound", 0, 3, 0}, {"Mel sound", 0, EN_NTIMBRES, 0},
     {"Mel mode", EN_MEL_PHRASES, EN_MEL_KEYS_ARP, EN_MEL_PHRASES}, {"Arp pattern", EN_ARP_UP, EN_ARP_NPATTERNS - 1, EN_ARP_UP}, {"Arp skip", 0, 100, 0},
     {"Arp latch", 0, 1, 0},
+    {"Keys FX", EN_FX_OFF, EN_NFX - 1, EN_FX_OFF}, {"Keys motion", 0, 100, 50}, {"Keys depth", 0, 100, 50}, {"Keys echo", 0, 200, 100}, {"Keys reverb", 0, 200, 100},
+    {"Melody FX", EN_FX_OFF, EN_NFX - 1, EN_FX_OFF}, {"Mel motion", 0, 100, 50}, {"Mel depth", 0, 100, 50}, {"Mel echo", 0, 200, 100}, {"Mel reverb", 0, 200, 100},
 };
 const en_param_t *en_param_info(int i) { return (i >= 0 && i < P_NPARAMS) ? &PARAMS[i] : &PARAMS[0]; }
 
@@ -41,19 +43,19 @@ const en_param_t *en_param_info(int i) { return (i >= 0 && i < P_NPARAMS) ? &PAR
  * the sound by ear: Breaks at or under the style's own (50) and Jungle's lower still, the hats no louder to speak of, Move at or under the style's own so that
  * the bass stays long, lone notes down and bloom up for chords that flow. Tune and MIDI out are taken from here by neither: they belong to the player, not
  * the piece */
-/*                       Tem  En Evo St            Key Blo Bri No  Mot Rat Ton Oc  Bas Mov Gli BO  Drm Brk Hat Ki  Ech ET Rev Siz  Rt Tun MI  Md               the sounds: keys, pad, bass, melody; the melody's mode, the arpeggios' pattern, skip and latch. (Phrases here is Auto's; a piece's recipe is in Hands, and the project makes its mode Keys, with Phrases kept for Auto: project.c) */
+/*                       Tem  En Evo St            Key Blo Bri No  Mot Rat Ton Oc  Bas Mov Gli BO  Drm Brk Hat Ki  Ech ET Rev Siz  Rt Tun MI  Md               the sounds: keys, pad, bass, melody; the melody's mode, the arpeggios' pattern, skip and latch; then the keys' effect, its Motion and Depth, their Echo and Reverb, and the melody's: Off, and 100 for sends that are as they always were. (Phrases here is Auto's; a piece's recipe is in Hands, and the project makes its mode Keys, with Phrases kept for Auto: project.c) */
 static const struct {
     const char *name;
     int16_t v[P_NPARAMS];
 } PIECES[EN_NPIECES] = {
-    {"Load Screen", {170, 70, 50, EN_ST_LIQUID,   60, 50, 50, 3,  60, 50, 50, 0,  50, 50, 10, 0,  45, 50, 50, 0,  40, 3, 65, 80,  2, 0, 1,  MODE_LYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0}},
-    {"Aqua",        {172, 70, 55, EN_ST_LIQUID,   58, 40, 72, 3,  66, 60, 72, 0,  46, 50, 10, 0,  45, 40, 55, 0,  46, 3, 58, 70,  9, 0, 1,  MODE_IONIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0}},
-    {"Skyline",     {180, 70, 55, EN_ST_ROLLER,   50, 45, 62, 2,  62, 55, 60, 0,  48, 25, 10, 0,  46, 20, 50, 0,  35, 1, 55, 88,  7, 0, 1,  MODE_MIXOLYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0}},
-    {"Rainfall",    {160, 50, 40, EN_ST_DRIFT,    64, 65, 44, 2,  48, 35, 38, 0,  42, 50, 15, 0,  36, 20, 40, 1,  50, 2, 78, 88,  0, 0, 1,  MODE_DORIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0}},
-    {"Aurora",      {164, 55, 40, EN_ST_LOADING,  72, 85, 35, 1,  46, 40, 30, 0,  42, 40, 15, 0,  36, 25, 38, 1,  48, 4, 92, 98,  4, 0, 1,  MODE_LYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0}},
-    {"Lagoon",      {168, 70, 45, EN_ST_ROLLER,   56, 60, 25, 2,  52, 45, 25, 0,  68, 30, 22, 0,  36, 30, 28, 1,  30, 3, 55, 70,  8, 0, 1,  MODE_IONIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0}},
-    {"Save Point",  {152, 25, 30, EN_ST_DRIFT,    50, 80, 30, 1,  38, 25, 25, 0,  34, 50, 20, 0,  22,  0, 30, 1,  38, 3, 62, 78, 10, 0, 1,  MODE_PENT_MAJ,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0}},
-    {"Afterglow",   {166, 68, 50, EN_ST_JUNGLE,   62, 55, 42, 2,  58, 50, 45, 0,  50, 40, 14, 0,  42, 30, 42, 1,  44, 2, 68, 84,  5, 0, 1,  MODE_AEOLIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0}},
+    {"Load Screen", {170, 70, 50, EN_ST_LIQUID,   60, 50, 50, 3,  60, 50, 50, 0,  50, 50, 10, 0,  45, 50, 50, 0,  40, 3, 65, 80,  2, 0, 1,  MODE_LYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0,  EN_FX_OFF, 50, 50, 100, 100,  EN_FX_OFF, 50, 50, 100, 100}},
+    {"Aqua",        {172, 70, 55, EN_ST_LIQUID,   58, 40, 72, 3,  66, 60, 72, 0,  46, 50, 10, 0,  45, 40, 55, 0,  46, 3, 58, 70,  9, 0, 1,  MODE_IONIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0,  EN_FX_OFF, 50, 50, 100, 100,  EN_FX_OFF, 50, 50, 100, 100}},
+    {"Skyline",     {180, 70, 55, EN_ST_ROLLER,   50, 45, 62, 2,  62, 55, 60, 0,  48, 25, 10, 0,  46, 20, 50, 0,  35, 1, 55, 88,  7, 0, 1,  MODE_MIXOLYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0,  EN_FX_OFF, 50, 50, 100, 100,  EN_FX_OFF, 50, 50, 100, 100}},
+    {"Rainfall",    {160, 50, 40, EN_ST_DRIFT,    64, 65, 44, 2,  48, 35, 38, 0,  42, 50, 15, 0,  36, 20, 40, 1,  50, 2, 78, 88,  0, 0, 1,  MODE_DORIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0,  EN_FX_OFF, 50, 50, 100, 100,  EN_FX_OFF, 50, 50, 100, 100}},
+    {"Aurora",      {164, 55, 40, EN_ST_LOADING,  72, 85, 35, 1,  46, 40, 30, 0,  42, 40, 15, 0,  36, 25, 38, 1,  48, 4, 92, 98,  4, 0, 1,  MODE_LYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0,  EN_FX_OFF, 50, 50, 100, 100,  EN_FX_OFF, 50, 50, 100, 100}},
+    {"Lagoon",      {168, 70, 45, EN_ST_ROLLER,   56, 60, 25, 2,  52, 45, 25, 0,  68, 30, 22, 0,  36, 30, 28, 1,  30, 3, 55, 70,  8, 0, 1,  MODE_IONIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0,  EN_FX_OFF, 50, 50, 100, 100,  EN_FX_OFF, 50, 50, 100, 100}},
+    {"Save Point",  {152, 25, 30, EN_ST_DRIFT,    50, 80, 30, 1,  38, 25, 25, 0,  34, 50, 20, 0,  22,  0, 30, 1,  38, 3, 62, 78, 10, 0, 1,  MODE_PENT_MAJ,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0,  EN_FX_OFF, 50, 50, 100, 100,  EN_FX_OFF, 50, 50, 100, 100}},
+    {"Afterglow",   {166, 68, 50, EN_ST_JUNGLE,   62, 55, 42, 2,  58, 50, 45, 0,  50, 40, 14, 0,  42, 30, 42, 1,  44, 2, 68, 84,  5, 0, 1,  MODE_AEOLIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0,  EN_FX_OFF, 50, 50, 100, 100,  EN_FX_OFF, 50, 50, 100, 100}},
 };
 
 const char *en_piece_name(int i) { return PIECES[(unsigned)i < EN_NPIECES ? i : 0].name; }
@@ -75,6 +77,7 @@ static const char *const PAD_SOUND_NAME[4] = {"Warm", "Airy", "Choral", "Deep"};
 static const char *const BASS_SOUND_NAME[4] = {"Warm", "Sub", "Hollow", "Round"};
 static const char *const MEL_MODE_NAME[4] = {"Phrases", "Arp", "Keys", "Keys Arp"};
 static const char *const ARP_PAT_NAME[EN_ARP_NPATTERNS] = {"Up", "Down", "Up-Down", "Random", "Conv", "PedT", "PedR", "Played"};
+const char *const EN_FX_NAME[EN_NFX] = {"Off", "Chorus", "Autopan", "Tremolo", "Filter"};
 
 static char *itoa_s(int v, char *b)
 {
@@ -122,6 +125,8 @@ void en_param_text(int i, int v, char *b)
         s = MEL_MODE_NAME[(unsigned)v < 4u ? v : 0];
     else if (i == P_ARPPAT)
         s = ARP_PAT_NAME[(unsigned)v < EN_ARP_NPATTERNS ? v : 0];
+    else if (i == P_KFX || i == P_MFX)
+        s = EN_FX_NAME[(unsigned)v < EN_NFX ? v : 0];
     if (s) {
         int k = 0;
         while (s[k] && k < 9) {
@@ -253,7 +258,7 @@ static float knob_curve(int v, int mid, float lo, float base, float hi)
 
 /* ------------------------------------------------------------ commands --- */
 enum { C_SET, C_POOL, C_MASK, C_PLAY, C_NEXT, C_BREAK, C_HOLD, C_SEED, C_PANIC, C_RESTORE, C_CLOCK, C_REGROW, C_LAYER, C_SEEK, C_ARRANGE, C_SYS, C_HEAR };
-/* The main loop runs between blocks, and a whole piece is 42 of these, so the queue can fill. The keys played are not among them: en_keys is one word. What is lost of the two kinds costs differently:
+/* The main loop runs between blocks, and a whole piece is 52 of these, so the queue can fill. The keys played are not among them: en_keys is one word. What is lost of the two kinds costs differently:
  *   post: values the project can say again (en_dropped: the app says them all once there is room), and what does not matter once its moment has gone (a clock, a blip);
  *   post_hand: what a hand or the platform asked for only once (PLAY, a break, a layer, the panic and the way back). The last EN_ROOM_KEPT places are theirs.
  * The volume's duck is not here at all: it is one word (en_duck) */
@@ -3002,6 +3007,9 @@ uint32_t en_test_mel_heard;
 static uint32_t bell_case[2];
 #endif
 
+static uint8_t fx_note;                          /* the melody's last note, and how many: for the effects, which follow it */
+static uint32_t fx_notes;
+
 static void bell_up(bell_t *v)                   /* its key lets go: it rings out */
 {
     if (v->down) {
@@ -3052,6 +3060,8 @@ static void bell_set(bell_t *v, int timbre, int n, float vel, int echo, int32_t 
     en_mel_voice_t tv;
     float p;
     en_mel_voice(timbre, par[P_MTONE], &tv);
+    fx_note = (uint8_t)n;
+    fx_notes++;
     v->on = 1u;
     v->sh = 0.0f;
     v->hand = 0u;
@@ -4329,6 +4339,10 @@ static void heads_step(uint32_t n)
     vmax = 0.008f / fm_maxf(echo_len, 100.0f);
     want = fm_clampf((head2_t - head2) * (1.0f / (2.0f * TAPE_SR)), -vmax, vmax);
     head2_v = fm_flush(head2_v + (want - head2_v) * fm_minf((float)n * (1.0f / EN_SR), 1.0f));
+    plex_lp = fm_flush(plex_lp);                 /* Echo at 0, or nothing going to it, for long: their ones and zeros have gone, and these would stay among the denormals */
+    plex_lp2 = fm_flush(plex_lp2);
+    tape_lp = fm_flush(tape_lp);
+    tape_hp = fm_flush(tape_hp);
 }
 
 /* one sample of both: the input (a mono send) to the tape's heads (el, er) and the Echoplex (xl, xr) */
@@ -4374,6 +4388,162 @@ static inline void echoes(float in, float *el, float *er, float *xl, float *xr)
     }
 }
 
+/* ------------------------------------------------------------- the effects --- */
+/* One effect at a time on the keys' bus, one at a time on the melody's: Off, Chorus, Autopan, Tremolo, Filter. The pad does not pass through the keys': it has its own filter and its own way to the mix and the room (render_pad),
+ * and it stays on them; so does the bass. Off is a branch: the bus goes as it always went, to the bit, and so it does with an effect back at Off once its fade is over.
+ *
+ * What the player sets, by piece: the effect; Depth, how far it goes (0 nothing to speak of, 100 its widest, every one of them bounded so that nothing whistles, pumps or goes out of tune); Motion, how much of the movement below is allowed;
+ * and the layer's own sends to the Echo and the Reverb, 100 what they always were, 200 twice that.
+ * What the instrument composes (en_fx_compose): all of the rest, out of hashes of the song's seed (never the engine's random numbers, so nothing else moves, and a seed plays the same effects again), on the lines the music already has. Motion 0: none of it, the effect
+ * stands at a fixed setting: Chorus 0.6 Hz, Autopan a bar's turn, Tremolo in quarters, Filter at the place Depth says. A phrase is eight bars; Motion is the chance that a phrase takes the composed choice rather than the fixed one, and how far the things that move at all do.
+ *   On a phrase line (a section starts on one):
+ *     Autopan's rate: by the section. A turn in four bars in the intro, the breakdown and the way out, two in the hats and the light, one a bar in the full; a full phrase may go at two a bar, at wide Motion.
+ *     Tremolo's division: by the section. 1/2 in the intro, the breakdown and the way out, 1/4 in the hats and the light, 1/8 in the full.
+ *     Chorus's rate: by the section, 0.35 to 0.8 Hz, give or take by the phrase's hash.
+ *     Direction: which side Autopan goes to first, whether Tremolo swells on the beat or off it, which way Chorus's pitch goes first. Shape: a sine, a wave that lingers at its ends, a sharper one.
+ *     Every wave is at its start on a phrase line (Autopan and Tremolo are locked to the grid, a whole number of turns in four bars), so a new rate goes on from where the old one left it, with no jump, and a new direction goes by way of the middle.
+ *   Through a phrase:
+ *     Filter opens across it to a peak in its seventh or eighth bar, and closes by its end, so the next phrase starts shut: wide in the full section, less so in the others. Depth is how far it shuts; Motion how much of the way back it opens.
+ *     Chorus deepens as the phrase goes on. Tremolo eases in the last bar.
+ *   With the chords and the melody:
+ *     Keys: a long chord takes the effect's whole depth, a chord of a bar less of it. Filter opens a little with each new chord, and never shuts below the chord's top note.
+ *     Melody: a little less while no phrase is under way, whether composed, an arpeggio or the player's. Filter opens a little with each note, and never shuts below it. Autopan changes direction with each new phrase of the melody.
+ * The Filter is two poles, a resonance too low to whistle, and it takes what goes to the room with it through one pole more. Autopan and Tremolo are on what goes to the mix only, so the room does not pump; Chorus's delay is in the mix, the room hears the bus as it was. Keys and Keys Arp are the melody's voices, and go the same way. */
+enum { EN_FX_KEYS, EN_FX_MEL, EN_FX_NLAYERS };
+typedef char fx_layers_are_the_layers[EN_L_KEYS == EN_FX_KEYS && EN_L_MEL == EN_FX_MEL ? 1 : -1];
+typedef char fx_pars_in_a_row[P_KMOTION == P_KFX + 1 && P_KDEPTH == P_KFX + 2 && P_KECHO == P_KFX + 3 && P_KREV == P_KFX + 4 && P_MFX == P_KFX + 5 && P_MREV == P_MFX + 4 ? 1 : -1];
+#define FX_DL_N 512u                             /* 11.6 ms of the bus in mono, 16 bits: Chorus's, a kilobyte each. All the pool has room for: the build insists on 8192 B spare (base/tools/build.py), and it had 11856 */
+#define FX_DL_MASK (FX_DL_N - 1u)
+static int16_t fx_dl[EN_FX_NLAYERS][FX_DL_N] EN_POOL;
+typedef struct {
+    uint8_t want, kind;                          /* what is asked; what is running, until its fade is done */
+    uint8_t stale;                               /* compose now: not only on the bar */
+    uint8_t cycles;                              /* the plan's */
+    uint16_t fill;                               /* Chorus: its delay is being filled, before anyone hears it */
+    uint16_t w;                                  /* its place */
+    float wet0, wet;                             /* the effect's share: where the block starts, where it ends */
+    float ph, err;                               /* the wave, in turns; what it has still to come to the grid */
+    float depth, depth_to, shape, shape_to, hz, hz_to;
+    float open, open_to, open_rate, lift, floor_hz, floor_to, note_floor, fc;
+    float a0[3], a1[3], c0, c1;                  /* Filter: its numbers where the block starts and ends */
+    float ic[4], slp[2];                         /* its state */
+    float g0[2], g1[2];                          /* Autopan, Tremolo: each side's gain; Chorus: dry, wet */
+    float d0[2], d1[2];                          /* Chorus: each side's delay, samples */
+    float eg, eg0, eg_to, rg, rg0, rg_to;        /* the sends */
+    uint32_t song, chord, notes, bar;            /* what it has seen go by */
+} fx_t;
+static fx_t fx[EN_FX_NLAYERS];
+static uint8_t fx_stirred;                       /* something to do: an effect, a send not as ever, or a value just told. No: nothing is looked at */
+static uint8_t fx_bus[EN_FX_NLAYERS];            /* the layer goes through its bus */
+
+static void fx_stir(void)
+{
+    fx[0].stale = fx[1].stale = 1u;
+    fx_stirred = 1u;
+}
+
+static void fx_gains_flat(fx_t *f)
+{
+    f->g0[0] = f->g0[1] = f->g1[0] = f->g1[1] = 1.0f;
+}
+
+static void fx_init(void)
+{
+    int l;
+    uint32_t i;
+    for (l = 0; l < EN_FX_NLAYERS; l++) {
+        fx_t *f = &fx[l];
+        f->want = f->kind = EN_FX_OFF;
+        f->wet = f->wet0 = f->ph = f->err = 0.0f;
+        f->eg = f->eg0 = f->eg_to = f->rg = f->rg0 = f->rg_to = 1.0f;
+        fx_gains_flat(f);
+        fx_bus[l] = 0u;
+        for (i = 0u; i < FX_DL_N; i++)
+            fx_dl[l][i] = 0;
+    }
+    fx_note = 0u;
+    fx_notes = 0u;
+    fx_stirred = 0u;
+}
+
+static void fx_settle(void)                      /* (en_init: told the defaults, nothing has happened) */
+{
+    fx_stirred = 0u;
+    fx[0].stale = fx[1].stale = 0u;
+}
+
+static void fx_quiet(void)                       /* a panic: nothing of the bus is kept. It comes back as an effect comes in, by its fade */
+{
+    int l;
+    for (l = 0; l < EN_FX_NLAYERS; l++) {
+        fx_t *f = &fx[l];
+        f->kind = EN_FX_OFF;
+        f->wet = f->wet0 = 0.0f;
+        f->eg = f->eg0 = f->eg_to;
+        f->rg = f->rg0 = f->rg_to;
+        fx_gains_flat(f);
+        f->ic[0] = f->ic[1] = f->ic[2] = f->ic[3] = f->slp[0] = f->slp[1] = 0.0f;
+    }
+    fx_stir();
+}
+
+/* the sections, in the order of en_sec: intro, hats, light, breakdown, full, way out */
+static const uint8_t FX_PAN_CYCLES[EN_NSECTIONS] = {1u, 2u, 2u, 1u, 4u, 1u};
+static const uint8_t FX_TREM_CYCLES[EN_NSECTIONS] = {8u, 16u, 16u, 8u, 32u, 8u};
+static const float FX_CHORUS_HZ[EN_NSECTIONS] = {0.35f, 0.5f, 0.55f, 0.35f, 0.8f, 0.4f};
+static const float FX_FILTER_TOP[EN_NSECTIONS] = {0.55f, 0.7f, 0.8f, 0.6f, 1.0f, 0.6f};
+static const float FX_SHAPES[3] = {0.0f, 0.5f, -0.25f};
+
+void en_fx_compose(const en_fx_in_t *in, en_fx_plan_t *o)
+{
+    const float m = (float)in->motion * 0.01f, d = (float)in->depth * 0.01f;
+    const uint32_t bar = in->step / 16u, pos = bar % EN_ARR_PHRASE;
+    const uint32_t h = hhash(in->seed, bar / EN_ARR_PHRASE, 300u + (uint32_t)in->layer * 16u + (uint32_t)in->fx);
+    const uint32_t h2 = hhash(in->seed, bar / EN_ARR_PHRASE, 340u + (uint32_t)in->layer * 16u + (uint32_t)in->fx);
+    const int sec = (unsigned)in->section < EN_NSECTIONS ? in->section : EN_SEC_LIGHT;
+    const float draw[4] = {(float)(h & 255u) / 256.0f, (float)(h >> 8 & 255u) / 256.0f, (float)(h >> 16 & 255u) / 256.0f, (float)(h >> 24) / 256.0f};
+    const float spare = (float)(h2 & 255u) / 256.0f;
+    const int takes_rate = draw[0] < m, takes_dir = draw[1] < m, takes_shape = draw[2] < m;
+    /* what the music sounding asks of the depth: a chord of a bar has less of it, a melody at rest less */
+    const float with = in->layer == EN_FX_KEYS ? 1.0f - m * (in->chord_bars <= 1 ? 0.3f : in->chord_bars == 2 ? 0.15f : 0.0f)
+                                               : 1.0f - m * (in->mel_on ? 0.0f : 0.3f);
+    int dir = takes_dir && (h2 >> 8 & 1u) ? -1 : 1;
+    o->cycles = 0u;
+    o->depth = o->hz = o->open = 0.0f;
+    o->shape = takes_shape ? FX_SHAPES[h2 >> 9 & 1u ? 1 : (h2 >> 10 & 1u) * 2u] : 0.0f;
+    switch (in->fx) {
+    case EN_FX_AUTOPAN:
+        o->cycles = takes_rate ? FX_PAN_CYCLES[sec] : 4u;
+        if (sec == EN_SEC_FULL && spare < m * 0.25f)
+            o->cycles = 8u;
+        if (in->layer == EN_FX_MEL && m > 0.0f && (in->mel_count & 1u))
+            dir = -dir;
+        o->depth = d * (1.0f - m * 0.5f * draw[3]) * with;
+        break;
+    case EN_FX_TREMOLO:
+        o->cycles = takes_rate ? FX_TREM_CYCLES[sec] : 16u;
+        o->depth = d * (1.0f - (pos == EN_ARR_PHRASE - 1u ? 0.4f * m : 0.0f)) * with;
+        break;
+    case EN_FX_CHORUS:
+        o->hz = takes_rate ? FX_CHORUS_HZ[sec] * (0.85f + 0.3f * draw[3]) : 0.6f;
+        o->depth = d * (1.0f - 0.3f * m * (1.0f - (float)pos * (1.0f / (float)(EN_ARR_PHRASE - 1u)))) * with;
+        break;
+    case EN_FX_FILTER: {
+        const float peak = draw[3] < 0.5f ? 6.0f / 8.0f : 7.0f / 8.0f;
+        const float t = (float)(pos + 1u) * (1.0f / (float)EN_ARR_PHRASE), up = t / peak;   /* at the end of this bar */
+        float c = t < peak ? (draw[2] < 0.5f ? up : up * up) : (1.0f - t) / (1.0f - peak);
+        c *= FX_FILTER_TOP[sec];
+        if (in->layer == EN_FX_MEL && !in->mel_on)
+            c *= 0.5f;
+        o->open = (1.0f - d) + m * d * c;
+        break;
+    }
+    default:
+        break;
+    }
+    o->dir = (int8_t)dir;
+}
+
 /* ------------------------------------------------------------ parameters --- */
 static int pulse;
 static uint32_t ext_age;
@@ -4390,6 +4560,7 @@ uint32_t en_test_chord_left(void) { return ch_left; }
 uint32_t en_test_section_bar(void) { return (song - arr_start) / 16u; }
 uint32_t en_test_section_bars(void) { return arr_cur.bars; }
 int en_test_silent(void) { return silent; }
+float en_test_echo_state(void) { return fm_fabsf(plex_lp) + fm_fabsf(plex_lp2) + fm_fabsf(tape_lp) + fm_fabsf(tape_hp); }
 float en_test_mute_gain(int l) { return mute_pos[l] * mute_pos[l]; }
 float en_test_bass_song(void) { return bass_song_t; }
 float en_test_duck(void) { return fm_maxf(duck0, duck1); }
@@ -4594,6 +4765,10 @@ static void apply(int p, int v)
         echo_time();
         break;
     case P_ROOT: harm_due = 1u; break;
+    case P_KFX: case P_MFX: fx[p == P_MFX].want = (uint8_t)v; fx_stir(); break;
+    case P_KMOTION: case P_KDEPTH: case P_MMOTION: case P_MDEPTH: fx_stir(); break;
+    case P_KECHO: case P_MECHO: fx[p == P_MECHO].eg_to = (float)v / 100.0f; fx_stir(); break;   /* (100: 1 itself) */
+    case P_KREV: case P_MREV: fx[p == P_MREV].rg_to = (float)v / 100.0f; fx_stir(); break;
     default: break;
     }
 }
@@ -4707,6 +4882,7 @@ static void quiet(void)
     sys.left = 0u;
     sys.rise = 0u;
     vol_reset();
+    fx_quiet();
     break_due = 0u;
     silent = 1u;
     restore_due = 0u;
@@ -4849,12 +5025,14 @@ void en_init(void)
     arp_now = 0u;
     mute_on_bar = 0u;
     en_section = en_drum_level = en_break_bars = en_drum_next = 0u;
+    fx_init();
     brk_init();                                  /* before apply: it resets what apply sets */
     for (i = 0; i < P_NPARAMS; i++)              /* the tempo last: until it is set, what needs all of them waits (echo_time, harmony) */
         if (i != P_TEMPO)
             apply(i, PARAMS[i].def);
     apply(P_TEMPO, PARAMS[P_TEMPO].def);
     bass_lvl = bass_vol;
+    fx_settle();
     pad_s = *pad_to;
     keys_bus = keys_bus_to;
     sounds_moving = 0u;
@@ -5100,6 +5278,455 @@ static float mixl[BLK], mixr[BLK], rsend[BLK], esend[BLK];
 
 /* the melodic bus: filled by the pad, then (the same memory) by the piano */
 static float padl[BLK], padr[BLK];
+static float fx_rs[BLK], fx_es[BLK];             /* a bus's sends, on their way (one bus at a time) */
+
+#if defined EN_HOST || defined PLAT_HOST
+float en_test_fx_dry = 1.0f;
+#endif
+
+#define FX_FADE (1.0f / (0.03f * EN_SR))         /* an effect's share: all or none in 30 ms */
+#define FX_CHORUS_MS (0.006f * EN_SR)            /* where its taps stand, and how far they go at most: a short delay, not a doubling */
+#define FX_CHORUS_MOVE (0.0022f * EN_SR)
+#define FX_CHORUS_BEND (0.00125f * EN_SR)        /* samples times Hz: at a higher rate it goes less far, so that it bends by 14 cents at the very most */
+#define FX_TOP_HZ 7000.0f
+#define FX_K 1.2f                                /* the filter's damping: a Q of 0.83, no whistle */
+static const float FX_FLOOR_HZ[EN_FX_NLAYERS] = {700.0f, 1700.0f};   /* the lowest it shuts: under the notes it would take level, not colour. The melody's goes up with its octave: fx_floor */
+
+static float fx_floor(int l)
+{
+    return l == EN_FX_MEL && par[P_MOCT] > 0 ? FX_FLOOR_HZ[l] * (par[P_MOCT] > 1 ? 4.0f : 2.0f) : FX_FLOOR_HZ[l];
+}
+static float fx_top(int l) { return l == EN_FX_MEL && par[P_MOCT] > 1 ? 1.5f * FX_TOP_HZ : FX_TOP_HZ; }
+
+static inline float fx_wave(float s, float a) { return s * (1.0f + a) - a * s * s * s; }
+
+/* the wave and the filter: where each will have got to by the end of the block */
+static void fx_targets(fx_t *f, uint32_t n)
+{
+    const float nf = (float)n;
+    if (f->depth != f->depth_to) {
+        f->depth += (f->depth_to - f->depth) * fm_minf(nf * (f->kind == EN_FX_CHORUS ? 1.0f / (2.0f * EN_SR) : 1.0f / (0.25f * EN_SR)), 1.0f);
+        if (fm_fabsf(f->depth_to - f->depth) < 1e-5f)
+            f->depth = f->depth_to;
+    }
+    if (f->shape != f->shape_to) {
+        f->shape += (f->shape_to - f->shape) * fm_minf(nf * (1.0f / (0.25f * EN_SR)), 1.0f);
+        if (fm_fabsf(f->shape_to - f->shape) < 1e-5f)
+            f->shape = f->shape_to;
+    }
+    if (f->kind == EN_FX_FILTER) {
+        float at, top;
+        if (f->open != f->open_to) {
+            f->open += f->open_rate * nf;
+            if ((f->open_rate > 0.0f) == (f->open > f->open_to))
+                f->open = f->open_to;
+        }
+        if (f->lift > 0.0f) {
+            f->lift -= f->lift * fm_minf(nf * (1.0f / (0.7f * EN_SR)), 1.0f);
+            if (f->lift < 1e-4f)
+                f->lift = 0.0f;
+        }
+        if (f->floor_hz != f->floor_to) {
+            f->floor_hz += (f->floor_to - f->floor_hz) * fm_minf(nf * (1.0f / (0.1f * EN_SR)), 1.0f);
+            if (fm_fabsf(f->floor_to - f->floor_hz) < 0.1f)
+                f->floor_hz = f->floor_to;
+        }
+        at = fm_clampf(f->open + f->lift, 0.0f, 1.0f);
+        top = fm_log2f(fx_top(f == &fx[EN_FX_MEL]) / f->floor_hz);
+        f->fc = f->floor_hz * fm_exp2f(at * top);
+        {
+            const float g = fm_tanf(FM_PI * f->fc * (1.0f / EN_SR)), a = 1.0f / (1.0f + g * (g + FX_K));
+            f->a0[0] = f->a1[0];
+            f->a0[1] = f->a1[1];
+            f->a0[2] = f->a1[2];
+            f->c0 = f->c1;
+            f->a1[0] = a;
+            f->a1[1] = g * a;
+            f->a1[2] = g * g * a;
+            f->c1 = g / (1.0f + g);
+        }
+        return;
+    }
+    {
+        float inc;
+        if (f->kind == EN_FX_CHORUS) {
+            if (f->hz != f->hz_to) {
+                f->hz += (f->hz_to - f->hz) * fm_minf(nf * (1.0f / EN_SR), 1.0f);
+                if (fm_fabsf(f->hz_to - f->hz) < 1e-4f)
+                    f->hz = f->hz_to;
+            }
+            inc = f->hz * (1.0f / EN_SR);
+        } else {                                 /* a whole number of turns in four bars, on the grid */
+            const float c = f->err * fm_minf(nf * (1.0f / (0.1f * EN_SR)), 1.0f);
+            f->ph += c;
+            f->err -= c;
+            inc = (float)f->cycles * (1.0f / 64.0f) / step_len;
+        }
+        f->ph += inc * nf;
+        f->ph -= fm_floorf(f->ph);
+    }
+    f->g0[0] = f->g1[0];
+    f->g0[1] = f->g1[1];
+    if (f->kind == EN_FX_AUTOPAN) {
+        /* the side the wave says, at equal power; a stereo bus keeps its own width in the middle. (ph >= 0 as sine wants it) */
+        const float p = f->depth * 0.85f * f->wet * fx_wave(sine(f->ph), f->shape), a = (1.0f + p) * 0.125f;
+        f->g1[0] = 1.41421356f * sine(0.25f + a);
+        f->g1[1] = 1.41421356f * sine(a);
+    } else if (f->kind == EN_FX_TREMOLO) {
+        /* around unity, so its power stays: at the top of the wave on the beat, or off it by the direction */
+        const float d = f->depth * 0.40f * f->wet, y = fx_wave(sine(f->ph + 0.25f), f->shape);
+        f->g1[0] = f->g1[1] = (1.0f + d * y) * (1.0f - 0.25f * d * d);
+    } else {
+        const float k = fm_minf(1.5f * fm_fabsf(f->depth), 1.0f);
+        float move = FX_CHORUS_MOVE * f->depth;
+        const float most = FX_CHORUS_BEND / fm_maxf(f->hz, 0.1f);
+        move = fm_clampf(move, -most, most);
+        f->d0[0] = f->d1[0];
+        f->d0[1] = f->d1[1];
+        f->d1[0] = FX_CHORUS_MS + move * fx_wave(sine(f->ph), f->shape);
+        f->d1[1] = FX_CHORUS_MS + move * fx_wave(sine(f->ph + 0.25f), f->shape);
+        f->g1[0] = 1.0f - 0.18f * k * f->wet;
+        f->g1[1] = 0.55f * k * f->wet;
+    }
+}
+
+/* what the instrument has made of this moment, for the effect running */
+static void fx_plan(fx_t *f, int l, int snap)
+{
+    en_fx_in_t in;
+    en_fx_plan_t p;
+    const int base = P_KFX + 5 * l;
+    const uint32_t step = song ? song - 1u : 0u;
+    const float nf = 16.0f * step_len;
+    in.fx = f->kind;
+    in.motion = par[base + 1];
+    in.depth = par[base + 2];
+    in.layer = l;
+    in.seed = song_seed;
+    in.step = step;
+    in.section = part_now.section;
+    in.chord_bars = ch_now.bars;
+    in.mel_on = mel_on || hand_busy || par[P_MELMODE] == EN_MEL_ARP;
+    in.mel_count = phr_at;
+    en_fx_compose(&in, &p);
+    f->cycles = p.cycles;
+    f->depth_to = p.depth * (float)p.dir;
+    f->shape_to = p.shape;
+    f->hz_to = p.hz;
+    f->open_to = p.open;
+    f->open_rate = (f->open_to - f->open) * (1.0f / nf);
+    if (snap) {
+        f->depth = f->depth_to;
+        f->shape = f->shape_to;
+        f->hz = f->hz_to;
+        f->open = f->open_to;
+    }
+}
+
+static void fx_enter(fx_t *f, int l)             /* its fade is done: nothing of the old one is heard, and nothing of the new one yet */
+{
+    f->kind = f->want;
+    f->stale = 0u;
+    f->song = song;
+    f->bar = song ? (song - 1u) / 16u : 0u;
+    f->chord = ch_count;
+    f->notes = fx_notes;
+    if (f->kind == EN_FX_OFF)
+        return;
+    fx_plan(f, l, 1);
+    f->ic[0] = f->ic[1] = f->ic[2] = f->ic[3] = f->slp[0] = f->slp[1] = 0.0f;
+    f->lift = 0.0f;
+    f->floor_hz = f->floor_to = fx_floor(l);
+    f->note_floor = 0.0f;
+    f->err = 0.0f;
+    fx_gains_flat(f);
+    if (f->kind == EN_FX_AUTOPAN || f->kind == EN_FX_TREMOLO) {
+        const float t = (float)((song ? song - 1u : 0u) % 64u) * (float)f->cycles * (1.0f / 64.0f);
+        f->ph = t - fm_floorf(t);
+    }
+    if (f->kind == EN_FX_CHORUS) {
+        f->fill = FX_DL_N;
+        f->g1[0] = 1.0f;
+        f->g1[1] = 0.0f;
+        f->d1[0] = f->d1[1] = FX_CHORUS_MS;
+    } else {
+        f->fill = 0u;
+    }
+    if (f->kind == EN_FX_FILTER) {               /* its numbers as they are now, so the first block does not glide from nothing */
+        f->fc = FX_TOP_HZ;
+        f->a1[0] = f->a1[1] = f->a1[2] = f->c1 = 0.0f;
+        fx_targets(f, 0u);
+        f->a0[0] = f->a1[0];
+        f->a0[1] = f->a1[1];
+        f->a0[2] = f->a1[2];
+        f->c0 = f->c1;
+    }
+}
+
+/* the moments it follows: the song's lines, a new chord, the melody's notes */
+static void fx_follow(fx_t *f, int l)
+{
+    const float m = (float)par[P_KFX + 5 * l + 1] * 0.01f;
+    int moved = f->stale;
+    if (f->song != song) {
+        const uint32_t step = song ? song - 1u : 0u, bar = step / 16u;
+        f->song = song;
+        if (bar != f->bar) {
+            f->bar = bar;
+            moved = 1;
+        }
+        if (f->kind == EN_FX_AUTOPAN || f->kind == EN_FX_TREMOLO) {   /* where the grid says the wave should be */
+            const float t = (float)(step % 64u) * (float)f->cycles * (1.0f / 64.0f);
+            float e = (t - fm_floorf(t)) - f->ph;
+            e -= fm_floorf(e + 0.5f);
+            f->err = e;
+        }
+    }
+    if (moved) {
+        f->stale = 0u;
+        fx_plan(f, l, 0);
+    }
+    if (f->kind == EN_FX_FILTER) {
+        const float d = (float)par[P_KFX + 5 * l + 2] * 0.01f;
+        int pitch = -1;
+        if (l == EN_FX_KEYS) {
+            if (f->chord != ch_count) {
+                int i;
+                f->chord = ch_count;
+                pitch = 0;
+                for (i = 0; i < 4; i++)
+                    pitch = ch_now.keys_v[i] > pitch ? ch_now.keys_v[i] : pitch;
+            }
+        } else if (f->notes != fx_notes) {
+            f->notes = fx_notes;
+            pitch = fx_note;
+        }
+        if (pitch >= 0 && m > 0.0f) {
+            f->lift = fm_maxf(f->lift, 0.12f * m * d);
+            f->note_floor = 1.3f * mtof((float)pitch);
+        }
+        f->floor_to = m > 0.0f ? fm_clampf(f->note_floor, fx_floor(l), 6800.0f) : fx_floor(l);
+    }
+}
+
+/* once a chunk, while there is anything to do */
+static void fx_control(uint32_t n)
+{
+    const float k = fm_minf((float)n * (1.0f / (0.05f * EN_SR)), 1.0f);
+    uint8_t any = 0u;
+    int l;
+    for (l = 0; l < EN_FX_NLAYERS; l++) {
+        fx_t *f = &fx[l];
+        f->eg0 = f->eg;
+        f->rg0 = f->rg;
+        if (f->eg != f->eg_to) {
+            f->eg += (f->eg_to - f->eg) * k;
+            if (fm_fabsf(f->eg_to - f->eg) < 1e-4f)
+                f->eg = f->eg_to;
+        }
+        if (f->rg != f->rg_to) {
+            f->rg += (f->rg_to - f->rg) * k;
+            if (fm_fabsf(f->rg_to - f->rg) < 1e-4f)
+                f->rg = f->rg_to;
+        }
+        f->wet0 = f->wet;
+        if (f->kind != f->want && f->wet <= 0.0f) {
+            f->wet0 = 0.0f;
+            fx_enter(f, l);
+        }
+        if (f->kind == EN_FX_OFF) {
+            f->stale = 0u;                       /* (nothing running to compose for; it does on its way in) */
+        } else {
+            const float step = (float)n * FX_FADE;
+            fx_follow(f, l);
+            if (f->kind != f->want)
+                f->wet = fm_maxf(f->wet - step, 0.0f);
+            else if (f->fill)
+                f->fill = (uint16_t)((uint32_t)f->fill > n ? (uint32_t)f->fill - n : 0u);
+            else
+                f->wet = fm_minf(f->wet + step, 1.0f);
+            fx_targets(f, n);
+        }
+        fx_bus[l] = (uint8_t)(f->kind != EN_FX_OFF || f->want != EN_FX_OFF || f->eg != 1.0f || f->eg0 != 1.0f || f->eg_to != 1.0f || f->rg != 1.0f || f->rg0 != 1.0f || f->rg_to != 1.0f);
+        any |= fx_bus[l];
+    }
+    fx_stirred = any;
+}
+
+/* the filter: two poles after Zavalishin's trapezoidal state variable filter, whose numbers can move under it */
+static inline float fx_svf(float x, float *s1, float *s2, float a1, float a2, float a3)
+{
+    const float i1 = *s1, i2 = *s2, v3 = x - i2, v1 = a1 * i1 + a2 * v3, v2 = i2 + a2 * i1 + a3 * v3;
+    *s1 = 2.0f * v1 - i1;
+    *s2 = 2.0f * v2 - i2;
+    return v2;
+}
+
+/* a bus through its effect, and on to the mix and the room. l, r, rs, es: the block as the layer would have said it */
+static void fx_block(fx_t *f, float *restrict l, float *restrict r, float *restrict rs, float *restrict es, uint32_t n)
+{
+    const float inv = 1.0f / (float)n;
+    uint32_t j;
+    switch (f->kind) {
+    case EN_FX_AUTOPAN:
+    case EN_FX_TREMOLO: {
+        float gl = f->g0[0], gr = f->g0[1];
+        const float dl = (f->g1[0] - gl) * inv, dr = (f->g1[1] - gr) * inv;
+        for (j = 0; j < n; j++) {
+            gl += dl;
+            gr += dr;
+            l[j] *= gl;
+            r[j] *= gr;
+        }
+        break;
+    }
+    case EN_FX_FILTER: {
+        float a1 = f->a0[0], a2 = f->a0[1], a3 = f->a0[2], c = f->c0;
+        const float da1 = (f->a1[0] - a1) * inv, da2 = (f->a1[1] - a2) * inv, da3 = (f->a1[2] - a3) * inv, dc = (f->c1 - c) * inv;
+        float i1 = f->ic[0], i2 = f->ic[1], i3 = f->ic[2], i4 = f->ic[3], s1 = f->slp[0], s2 = f->slp[1];
+        if (f->wet0 >= 1.0f && f->wet >= 1.0f) { /* (all of it, as nearly always: no multiplications for a share of 1) */
+            for (j = 0; j < n; j++) {
+                a1 += da1;
+                a2 += da2;
+                a3 += da3;
+                c += dc;
+                l[j] = fx_svf(l[j], &i1, &i2, a1, a2, a3);
+                r[j] = fx_svf(r[j], &i3, &i4, a1, a2, a3);
+                s1 += c * (rs[j] - s1);
+                rs[j] = s1;
+                s2 += c * (es[j] - s2);
+                es[j] = s2;
+            }
+        } else {
+            float w = f->wet0;
+            const float dw = (f->wet - w) * inv;
+            for (j = 0; j < n; j++) {
+                float x;
+                a1 += da1;
+                a2 += da2;
+                a3 += da3;
+                c += dc;
+                w += dw;
+                x = l[j];
+                l[j] = x + (fx_svf(x, &i1, &i2, a1, a2, a3) - x) * w;
+                x = r[j];
+                r[j] = x + (fx_svf(x, &i3, &i4, a1, a2, a3) - x) * w;
+                x = rs[j];
+                s1 += c * (x - s1);
+                rs[j] = x + (s1 - x) * w;
+                x = es[j];
+                s2 += c * (x - s2);
+                es[j] = x + (s2 - x) * w;
+            }
+        }
+        f->ic[0] = fm_flush(i1);
+        f->ic[1] = fm_flush(i2);
+        f->ic[2] = fm_flush(i3);
+        f->ic[3] = fm_flush(i4);
+        f->slp[0] = fm_flush(s1);
+        f->slp[1] = fm_flush(s2);
+        break;
+    }
+    case EN_FX_CHORUS: {                         /* the bus in mono, read twice between its samples, the two reads a quarter of the wave apart, one to a side: a chorus of its time, and a mono speaker still hears it */
+        int16_t *const b = fx_dl[f == &fx[EN_FX_MEL]];
+        uint32_t w = f->w;
+        float da = f->d0[0], db = f->d0[1], dry = f->g0[0], wet = f->g0[1];
+        const float dda = (f->d1[0] - da) * inv, ddb = (f->d1[1] - db) * inv, ddry = (f->g1[0] - dry) * inv, dwet = (f->g1[1] - wet) * inv;
+#if defined EN_HOST || defined PLAT_HOST
+        const float dry_test = en_test_fx_dry;
+#else
+        const float dry_test = 1.0f;
+#endif
+        for (j = 0; j < n; j++) {
+            const float at = (float)w + (float)FX_DL_N, pa = at - da, pb = at - db;
+            const int ia = (int)pa, ib = (int)pb;
+            float ta = (float)b[(uint32_t)ia & FX_DL_MASK], tb = (float)b[(uint32_t)ib & FX_DL_MASK], dg;
+            da += dda;
+            db += ddb;
+            dry += ddry;
+            wet += dwet;
+            b[w] = s16((l[j] + r[j]) * 0.5f);
+            ta += ((float)b[(uint32_t)(ia + 1) & FX_DL_MASK] - ta) * (pa - (float)ia);
+            tb += ((float)b[(uint32_t)(ib + 1) & FX_DL_MASK] - tb) * (pb - (float)ib);
+            dg = dry * dry_test;
+            l[j] = l[j] * dg + ta * (1.0f / 12000.0f) * wet;
+            r[j] = r[j] * dg + tb * (1.0f / 12000.0f) * wet;
+            w = (w + 1u) & FX_DL_MASK;
+        }
+        f->w = (uint16_t)w;
+        break;
+    }
+    default:
+        break;
+    }
+    if (f->rg0 == f->rg && f->eg0 == f->eg) {    /* (standing still: no lines to draw) */
+        const float rg = f->rg, eg = f->eg;
+        for (j = 0; j < n; j++) {
+            mixl[j] += l[j];
+            mixr[j] += r[j];
+            rsend[j] += rs[j] * rg;
+            esend[j] += es[j] * eg;
+        }
+    } else {
+        float rg = f->rg0, eg = f->eg0;
+        const float drg = (f->rg - rg) * inv, deg = (f->eg - eg) * inv;
+        for (j = 0; j < n; j++) {
+            rg += drg;
+            eg += deg;
+            mixl[j] += l[j];
+            mixr[j] += r[j];
+            rsend[j] += rs[j] * rg;
+            esend[j] += es[j] * eg;
+        }
+    }
+}
+
+#if defined EN_HOST || defined PLAT_HOST
+void en_test_fx_run(int layer, const float *il, const float *ir, const float *irs, const float *ies, float *ol, float *or_, float *ors, float *oes, uint32_t n)
+{
+    uint32_t j;
+    for (j = 0; j < n; j++) {
+        padl[j] = il[j];
+        padr[j] = ir[j];
+        fx_rs[j] = irs ? irs[j] : 0.0f;
+        fx_es[j] = ies ? ies[j] : 0.0f;
+        mixl[j] = mixr[j] = rsend[j] = esend[j] = 0.0f;
+    }
+    if (fx_stirred)
+        fx_control(n);
+    fx_block(&fx[layer], padl, padr, fx_rs, fx_es, n);
+    for (j = 0; j < n; j++) {
+        ol[j] = mixl[j];
+        or_[j] = mixr[j];
+        if (ors)
+            ors[j] = rsend[j];
+        if (oes)
+            oes[j] = esend[j];
+    }
+}
+float en_test_fx_q(int layer, int what)
+{
+    const fx_t *f = &fx[layer];
+    switch (what) {
+    case EN_FXQ_KIND: return (float)f->kind;
+    case EN_FXQ_WET: return f->wet;
+    case EN_FXQ_CYCLES: return (float)f->cycles;
+    case EN_FXQ_DEPTH: return f->depth;
+    case EN_FXQ_SHAPE: return f->shape;
+    case EN_FXQ_HZ: return f->hz;
+    case EN_FXQ_OPEN: return f->open;
+    case EN_FXQ_FC: return f->fc;
+    case EN_FXQ_ECHO: return f->eg;
+    case EN_FXQ_REV: return f->rg;
+    case EN_FXQ_BUS: return (float)fx_bus[layer];
+    case EN_FXQ_PHASE: return f->ph;
+    case EN_FXQ_DELAY: return f->d1[0];
+    case EN_FXQ_STATE: return fm_fabsf(f->ic[0]) + fm_fabsf(f->ic[1]) + fm_fabsf(f->ic[2]) + fm_fabsf(f->ic[3]) + fm_fabsf(f->slp[0]) + fm_fabsf(f->slp[1]);
+    default: return 0.0f;
+    }
+}
+#endif
+
 
 static void render_pad(uint32_t n)
 {
@@ -5295,6 +5922,29 @@ static void render_keys(uint32_t n)
     tr = trem0;
     gd = duck0;
     dg = (duck1 - duck0) * (1.0f / (float)n);
+    if (fx_bus[EN_FX_KEYS]) {                    /* an effect, or sends of their own: what would have gone to the mix and the room goes through it (padl, padr: the same memory) */
+        for (j = 0; j < n; j++) {
+            float l, r, a, b, dd;
+            eplp[0] += cl * (padl[j] - eplp[0]);
+            eplp[1] += cl * (padr[j] - eplp[1]);
+            tr += dt;
+            gd += dg;
+            dd = 1.0f - 0.05f * gd;
+            a = 1.0f - 0.14f * (1.0f + tr);
+            b = 1.0f - 0.14f * (1.0f - tr);
+            l = eplp[0] * mv;
+            r = eplp[1] * mv;
+            mv += md;
+            padl[j] = l * a * dd;
+            padr[j] = r * b * dd;
+            fx_rs[j] = (l + r) * 0.55f;
+            fx_es[j] = (l + r) * 0.42f;
+        }
+        fx_block(&fx[EN_FX_KEYS], padl, padr, fx_rs, fx_es, n);
+        eplp[0] = fm_flush(eplp[0]);
+        eplp[1] = fm_flush(eplp[1]);
+        return;
+    }
     for (j = 0; j < n; j++) {
         float l, r, a, b, dd;
         eplp[0] += cl * (padl[j] - eplp[0]);
@@ -5409,10 +6059,18 @@ static void render_bells(uint32_t n)
 {
     int i;
     const float g = bell_vol * BELL_GAIN, md = mgd[EN_L_MEL];
+    const int bus = fx_bus[EN_FX_MEL];           /* an effect, or sends of their own: the melody goes to its own bus first (padl, padr: free by now) */
+    float *restrict ml = bus ? padl : mixl, *restrict mr = bus ? padr : mixr, *restrict rs = bus ? fx_rs : rsend, *restrict es = bus ? fx_es : esend;
+    if (bus) {
+        uint32_t j;
+        for (j = 0; j < n; j++)
+            ml[j] = mr[j] = rs[j] = es[j] = 0.0f;
+    }
     for (i = 0; i < NBELL; i++) {
         bell_t *v = &bell[i];
         float cph = v->cph, mph = v->mph, amp = v->amp, idx = v->idx, att = v->att, esg = v->esg, cinc = v->cinc, minc = v->minc;
         const float keep = v->ifl, adec = v->adec;
+        const float vgl = v->gl, vgr = v->gr, idec = v->idec, edec = v->edec, arate = v->arate;
         float mv;
         uint32_t j = 0;
         if (!v->on) {
@@ -5448,10 +6106,10 @@ static void render_bells(uint32_t n)
         for (; j < n; j++) {
             const float m = sine(mph) * (idx + keep), x = sine(cph + m + 4.0f) * amp * att * g * mv;
             mv += md;
-            mixl[j] += x * v->gl;
-            mixr[j] += x * v->gr;
-            rsend[j] += x * 0.30f;
-            esend[j] += x * esg;
+            ml[j] += x * vgl;
+            mr[j] += x * vgr;
+            rs[j] += x * 0.30f;
+            es[j] += x * esg;
             cph += cinc;
             mph += minc;
             if (cph >= 1.0f)
@@ -5459,9 +6117,9 @@ static void render_bells(uint32_t n)
             if (mph >= 1.0f)
                 mph -= 1.0f;
             amp *= adec;
-            idx *= v->idec;
-            esg *= v->edec;
-            att += (1.0f - att) * v->arate;
+            idx *= idec;
+            esg *= edec;
+            att += (1.0f - att) * arate;
         }
         v->cph = cph;
         v->mph = mph;
@@ -5490,9 +6148,9 @@ static void render_bells(uint32_t n)
         float l = bell_gone[0], r = bell_gone[1], w = bell_gone[2];
         uint32_t j;
         for (j = 0; j < n; j++) {
-            mixl[j] += l;
-            mixr[j] += r;
-            rsend[j] += w;
+            ml[j] += l;
+            mr[j] += r;
+            rs[j] += w;
             l *= 0.993f;
             r *= 0.993f;
             w *= 0.993f;
@@ -5501,6 +6159,8 @@ static void render_bells(uint32_t n)
         bell_gone[1] = fm_flush(r);
         bell_gone[2] = fm_flush(w);
     }
+    if (bus)
+        fx_block(&fx[EN_FX_MEL], ml, mr, rs, es, n);
 }
 
 /* the break: far back. The kick and the snare dead centre, the top a little to one side; each through a gentle low-pass
@@ -5717,6 +6377,8 @@ static void control(uint32_t n)                 /* once a chunk: the slow things
             mel_heard();
     }
     sounds_step(n);
+    if (fx_stirred)                              /* (none of it, to the bit, while both are Off and their sends as ever) */
+        fx_control(n);
     mods_step(n);
     heads_step(n);
     brk_fc += (brk_fc_t - brk_fc) * fm_minf(slow * (lift_t > 0.0f ? 4.0f : 1.0f), 1.0f);

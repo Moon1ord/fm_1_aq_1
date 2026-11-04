@@ -1257,12 +1257,12 @@ static void t_random(void)
     CHECK(ev > 50000u, "only %u events", ev);
 }
 
-/* ---- the queue: a piece is 42 commands; the hand's keys do not go through it at all */
+/* ---- the queue: a piece is 52 commands; the hand's keys do not go through it at all */
 static void t_queue(void)
 {
     uint32_t i;
     printf("  a piece: %d commands, the queue %u\n", P_NPARAMS + 6, EN_ROOM_MAX);
-    CHECK(P_NPARAMS + 6 == 42, "a piece's commands: %d", P_NPARAMS + 6);
+    CHECK(P_NPARAMS + 6 == 52, "a piece's commands: %d", P_NPARAMS + 6);
     CHECK(P_NPARAMS + 6 <= (int)EN_ROOM_MAX, "a piece no longer fits");
     CHECK(EN_ROOM_MAX == 56u, "the queue as it was");
     en_init();

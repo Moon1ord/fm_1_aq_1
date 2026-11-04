@@ -42,6 +42,8 @@ enum {
     P_KEYSND, P_PADSND, P_BASSSND, P_MELSND,          /* the sounds: SEL + a knob (the first of each is the sound the owner approved; the melody's first is Auto, then each timbre + 1) */
     P_MELMODE, P_ARPPAT, P_ARPSKIP,                   /* the melody: Phrases, Arp, Keys or Keys Arp; the arpeggios' pattern and skip: SEL + KNOB 2, 3, 4 on its page */
     P_ARPLATCH,                                       /* Keys Arp's latch: what is let go plays on until the next hold: SEL + REC on its page */
+    P_KFX, P_KMOTION, P_KDEPTH, P_KECHO, P_KREV,      /* the keys' effect, how much the instrument moves it, how deep; their own sends, 100 as ever (en_fx_compose): the Space page's holds */
+    P_MFX, P_MMOTION, P_MDEPTH, P_MECHO, P_MREV,      /* the melody's: the same (the pad has none: it has its own way to the mix, and stays on it) */
     P_NPARAMS
 };
 typedef struct {
@@ -50,6 +52,29 @@ typedef struct {
 } en_param_t;
 const en_param_t *en_param_info(int i);
 void en_param_text(int i, int v, char *buf);   /* the value as the screen shows it (10 bytes) */
+
+/* The effects: one at a time on the keys' bus, one at a time on the melody's. Off: the bus goes as it always went, a branch and nothing else, to the bit. MIDI knows nothing of any of it.
+ * The instrument composes each effect's movement (en_fx_compose); the player says Depth, how far, and Motion, how much it may change. See "the effects" in amb.c */
+enum { EN_FX_OFF, EN_FX_CHORUS, EN_FX_AUTOPAN, EN_FX_TREMOLO, EN_FX_FILTER, EN_NFX };
+extern const char *const EN_FX_NAME[EN_NFX];
+typedef struct {
+    int fx, motion, depth;                     /* the player's: P_KFX .. (0..100) */
+    int layer;                                 /* EN_L_KEYS, EN_L_MEL */
+    uint32_t seed, step;                       /* the song's: the bar and the phrase are the step's */
+    int section;                               /* the arranger's, or Hands' */
+    int chord_bars;                            /* the chord sounding: 1, 2, 4 */
+    int mel_on;                                /* the melody: a phrase under way, an arpeggio, the player's hand */
+    uint32_t mel_count;                        /* the melody's phrases so far */
+} en_fx_in_t;
+typedef struct {
+    uint8_t cycles;                            /* Autopan, Tremolo: turns of the wave in four bars, a power of two, so every wave is at its start on a phrase line */
+    int8_t dir;                                /* which way it goes first, +1 or -1 */
+    float depth;                               /* how far, 0..1 */
+    float shape;                               /* the wave: 0 a sine, up it lingers at its ends, down it is sharper */
+    float hz;                                  /* Chorus: the wave's rate */
+    float open;                                /* Filter: where it has got to by the end of this bar, 0 shut .. 1 open */
+} en_fx_plan_t;
+void en_fx_compose(const en_fx_in_t *in, en_fx_plan_t *out);
 
 /* commands (main loop -> render) */
 void en_init(void);
@@ -197,6 +222,7 @@ uint32_t en_test_chord_left(void);              /* steps to the next chord */
 uint32_t en_test_section_bar(void);             /* this section's bar; how many it has */
 uint32_t en_test_section_bars(void);
 int en_test_silent(void);                       /* since en_panic */
+float en_test_echo_state(void);                 /* what is left in the echoes' filters */
 float en_test_mute_gain(int layer);             /* a layer's gain as it is now: 0 off .. 1 on */
 float en_test_bass_song(void);                  /* the arrangement's bass, where it is going: 0 absent */
 float en_test_duck(void);                       /* the duck the melodic bus last had, the more of its two ends */
@@ -213,6 +239,11 @@ void en_test_bass_note(int note, uint32_t steps);   /* a note of the bass, at on
 extern float en_test_keys_gain;                 /* the keys alone, against the pad: 1 as ever, 0 out of the mix: to hear the pad */
 extern int en_test_bell_struck;                 /* the timbre of the melody's last note, -1 none */
 extern uint32_t en_test_mel_heard;              /* the notes en_mel_hear has played */
+/* the effects, by themselves: a block through a layer's effect and sends (en_test_fx_run: in the render's own code, what comes out of the bus into the mix, and what it says to the room); where it has got to */
+void en_test_fx_run(int layer, const float *il, const float *ir, const float *irs, const float *ies, float *ol, float *or_, float *ors, float *oes, uint32_t n);
+enum { EN_FXQ_KIND, EN_FXQ_WET, EN_FXQ_CYCLES, EN_FXQ_DEPTH, EN_FXQ_SHAPE, EN_FXQ_HZ, EN_FXQ_OPEN, EN_FXQ_FC, EN_FXQ_ECHO, EN_FXQ_REV, EN_FXQ_BUS, EN_FXQ_STATE, EN_FXQ_PHASE, EN_FXQ_DELAY };
+float en_test_fx_q(int layer, int what);
+extern float en_test_fx_dry;                    /* Chorus: the dry part's gain is multiplied by this: 0, to measure the delay's pitch */
 float en_test_sound_now(int which);             /* where it has got to: 0 the pad's level, 1 the keys' bus */
 int en_test_bell_keys(void);                    /* the melody's keys down, whatever MIDI has been told */
 int en_test_bell_off_chord(void);               /* those of them that the chord sounding does not have */

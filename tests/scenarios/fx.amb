@@ -1,0 +1,364 @@
+# the effects, as a hand has them, on the Space page (the FX button): the left two knobs are the keys', the right two the melody's. SEL + KNOB 1-4: the keys' effect, their Motion, the melody's effect, its Motion. FX held + KNOB 1-4: Echo and Reverb of each. GLO held + KNOB 1, 3: Depth of each. The four knobs as ever otherwise; each piece keeps its own; a save keeps them, range-checked; an older save is not read. What it does to the sound: tests/host/fx_test.c
+wait 300
+expect unfit 0
+expect par36 0
+expect par37 50
+expect par38 50
+expect par39 100
+expect par40 100
+expect par41 0
+expect par42 50
+expect par43 50
+expect par44 100
+expect par45 100
+expect enagree 0
+listen
+tap FX
+wait 300
+said Space page: Echo 40, Echo time 1/4., Reverb 65, Size 80
+shot space_off.png
+# ---- SEL + KNOB 1: the keys' effect, a detent at a time, round. The page's knob does not move, no Degrees come
+press SEL
+spin K1 1
+expect par36 1
+expect par20 40
+said KEYS EFFECT Chorus
+spin K1 1
+expect par36 2
+spin K1 1
+expect par36 3
+spin K1 1
+expect par36 4
+spin K1 1
+expect par36 0
+spin K1 -1
+expect par36 4
+spin K1 -1
+spin K1 -1
+spin K1 -1
+expect par36 1
+expect view 5
+# ---- SEL + KNOB 2: its Motion, as a knob: to its ends and no further
+wait 300
+spin K2 3
+expect par37 53
+said KEYS MOTION 53
+setpar 37 99
+wait 300
+spin K2 3
+expect par37 100
+wait 300
+spin K2 -3
+expect par37 97
+# ---- SEL + KNOB 3 and 4: the melody's
+spin K3 -1
+expect par41 4
+said MELODY EFFECT Filter
+wait 300
+spin K4 -1
+expect par42 49
+said MELODY MOTION 49
+setpar 42 30
+release SEL
+wait 50
+expect view 5
+expect par20 40
+expect par21 3
+expect par22 65
+expect par23 80
+expect enagree 0
+# ---- what the header has, and what the page says
+wait 2000
+shot space_fx.png
+listen
+tap ENV
+wait 300
+tap FX
+wait 300
+said Space page: Echo 40, Echo time 1/4., Reverb 65, Size 80. Keys effect Chorus, motion 97, depth 50. Melody effect Filter, motion 30, depth 50
+# ---- FX held + KNOB 1-4: the sends. The page stays, nothing else moves
+press FX
+spin K1 -2
+expect par39 98
+said KEYS ECHO 98
+wait 300
+spin K2 2
+expect par40 102
+said KEYS REVERB 102
+wait 300
+spin K3 1
+expect par44 101
+said MELODY ECHO 101
+wait 300
+spin K4 -1
+expect par45 99
+said MELODY REVERB 99
+setpar 39 60
+setpar 40 120
+setpar 44 199
+setpar 45 1
+wait 300
+spin K3 3
+expect par44 200
+wait 300
+spin K4 -3
+expect par45 0
+release FX
+wait 100
+expect view 5
+expect par20 40
+expect par21 3
+expect par22 65
+expect par23 80
+expect help 0
+# ---- GLO held + KNOB 1, 3: Depth. The page stays: GLO's release is not a page, now. KNOB 2, 4 under it do nothing at all
+press GLO
+spin K1 3
+expect par38 53
+said KEYS DEPTH 53
+wait 300
+spin K3 -2
+expect par43 48
+said MELODY DEPTH 48
+setpar 38 80
+setpar 43 40
+wait 300
+spin K2 3
+wait 300
+spin K4 -2
+release GLO
+wait 100
+expect view 5
+expect par21 3
+expect par23 80
+expect enagree 0
+expect unfit 0
+# ---- a turn and nothing else under GLO: its release is still no page
+press GLO
+wait 300
+spin K3 1
+release GLO
+wait 100
+expect view 5
+expect par43 41
+setpar 43 40
+# ---- GLO and FX alone still are what they are. A card still comes, and says this
+press FX
+wait 1000
+expect help 1
+said SEL: EFFECT, MOTION
+release FX
+wait 100
+expect view 5
+tap GLO
+wait 100
+expect view 6
+# ---- elsewhere, none of this: GLO + a knob on Setup, FX + a knob on Setup, SEL + a knob on Setup are the knobs (as ever)
+press SEL
+spin K2 1
+expect par25 1
+spin K2 -1
+release SEL
+press GLO
+spin K2 1
+expect par25 1
+spin K2 -1
+release GLO
+wait 50
+expect view 6
+tap HOME
+wait 100
+press FX
+spin K2 1
+expect par1 71
+spin K2 -1
+expect par1 70
+release FX
+wait 100
+expect view 5
+# ---- Space again, a plain knob: its own value
+wait 300
+spin K1 3
+expect par20 43
+wait 300
+spin K1 -3
+expect par20 40
+# ---- the switches and the Degrees: SEL + FX is still the hats, and it still is after a turn
+expect mutehats 1
+press SEL
+tap FX
+release SEL
+wait 100
+expect mutehats 0
+press SEL
+tap FX
+release SEL
+wait 100
+expect mutehats 1
+# ---- each piece keeps its own. A quick turn: the last piece, all of it, within the queue's guarantee (a piece is 52 commands)
+turn PRESET 1 1
+wait 100
+expect piece 1
+expect par36 0
+expect par37 50
+expect par41 0
+expect par44 100
+expect enagree 0
+press SEL
+spin K3 1
+spin K3 1
+release SEL
+expect par41 2
+turn PRESET 3 1
+wait 30
+expect piece 4
+expect par41 0
+expect enagree 0
+turn PRESET -4 1
+wait 30
+expect piece 0
+expect par36 1
+expect par37 97
+expect par38 80
+expect par39 60
+expect par40 120
+expect par41 4
+expect par42 30
+expect par43 40
+expect par44 200
+expect par45 0
+expect enagree 0
+flood 200
+turn PRESET 1 1
+turn PRESET -1 1
+wait 60
+expect enagree 0
+expect par36 1
+expect par41 4
+expect par45 0
+# ---- a save keeps them, and a recipe goes back to Off and neutral
+tap SAVE
+wait 800
+reboot
+wait 300
+expect par36 1
+expect par37 97
+expect par38 80
+expect par39 60
+expect par40 120
+expect par41 4
+expect par42 30
+expect par43 40
+expect par44 200
+expect par45 0
+expect enagree 0
+press SAVE
+wait 1700
+release SAVE
+wait 100
+expect par36 0
+expect par37 50
+expect par38 50
+expect par39 100
+expect par40 100
+expect par41 0
+expect par42 50
+expect par43 50
+expect par44 100
+expect par45 100
+expect enagree 0
+# ---- what is out of range, by piece or in play, gives the recipes (Echo here, left at 33, comes back to its own): each of the ends. An older save is not read
+setpar 20 33
+tap SAVE
+wait 800
+storebad 3 36 5
+reboot
+wait 300
+expect par20 40
+expect par36 0
+setpar 20 33
+tap SAVE
+wait 800
+storebad -1 41 -1
+reboot
+wait 300
+expect par20 40
+expect par41 0
+setpar 20 33
+tap SAVE
+wait 800
+storebad 2 37 101
+reboot
+wait 300
+expect par20 40
+expect par37 50
+setpar 20 33
+tap SAVE
+wait 800
+storebad 4 38 -1
+reboot
+wait 300
+expect par20 40
+expect par38 50
+setpar 20 33
+tap SAVE
+wait 800
+storebad 1 40 201
+reboot
+wait 300
+expect par20 40
+expect par40 100
+setpar 20 33
+tap SAVE
+wait 800
+storebad 1 39 -1
+reboot
+wait 300
+expect par20 40
+expect par39 100
+setpar 20 33
+tap SAVE
+wait 800
+storebad 1 45 -1
+reboot
+wait 300
+expect par20 40
+expect par45 100
+setpar 20 33
+tap SAVE
+wait 800
+storebad 6 44 201
+reboot
+wait 300
+expect par20 40
+expect par44 100
+setpar 20 33
+tap SAVE
+wait 800
+storebad 7 42 101
+reboot
+wait 300
+expect par20 40
+expect par42 50
+setpar 20 33
+tap SAVE
+wait 800
+storebad 5 43 101
+reboot
+wait 300
+expect par20 40
+expect par43 50
+setpar 36 2
+tap SAVE
+wait 800
+storeold
+reboot
+wait 300
+expect par36 0
+setpar 36 2
+tap SAVE
+wait 800
+storeshort
+reboot
+wait 300
+expect par36 0

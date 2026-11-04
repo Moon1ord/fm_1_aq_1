@@ -304,7 +304,7 @@ expect par34 30
 expect enagree 0
 wait 500
 expect bellson <2
-# ---- it is kept with the piece, and a recipe has Keys in Hands, and no skip. A quick turn: the last piece, all of it, within the queue's guarantee (a piece is 42 commands)
+# ---- it is kept with the piece, and a recipe has Keys in Hands, and no skip. A quick turn: the last piece, all of it, within the queue's guarantee (a piece is 52 commands)
 turn PRESET 1 1
 wait 100
 expect piece 1

@@ -892,15 +892,15 @@ static void t_queue(void)
     uint32_t i;
     printf("  a piece: %d commands, the queue %u\n", P_NPARAMS + 6, EN_ROOM_MAX);
     CHECK(P_NPARAMS + 6 <= (int)EN_ROOM_MAX, "a piece no longer fits");
-    CHECK(P_NPARAMS + 6 == 42, "a piece's commands: %d", P_NPARAMS + 6);
+    CHECK(P_NPARAMS + 6 == 52, "a piece's commands: %d", P_NPARAMS + 6);
     CHECK(EN_ROOM_MAX == 56u, "the queue as it was");
     en_init();
     run(256u, 256u);
     CHECK(en_room() == EN_ROOM_MAX, "room %u", en_room());
-    for (i = 0u; i < 42u; i++)
+    for (i = 0u; i < 52u; i++)
         en_set(P_MELMODE, (int)(i & 1u));
-    CHECK(!en_dropped(), "forty-two dropped");
-    CHECK(en_room() == EN_ROOM_MAX - 42u, "room %u", en_room());
+    CHECK(!en_dropped(), "fifty-two dropped");
+    CHECK(en_room() == EN_ROOM_MAX - 52u, "room %u", en_room());
     for (i = 0u; i < EN_ROOM_MAX; i++)
         en_set(P_ARPPAT, (int)(i & 7u) % EN_ARP_NPATTERNS);
     CHECK(en_dropped() && !en_dropped(), "a flood: it says so, once");

@@ -20,7 +20,7 @@
 enum { OBJ_PROJ, OBJ_PANEL, OBJ_NOBJ };
 #define APP_STORE_MAP {0xFC000u, 0xDC000u}
 #define PROJ_MAGIC 0x31555141u           /* "AQU1" */
-#define PROJ_FORMAT 10u                  /* 10: the melody's keys: its modes Keys and Keys Arp, by piece, and Hands' and Auto's each its own (mel_other); Latch, by piece (a longer slot). 9: Arp's skip, by piece (a longer slot). 8: the melody's mode and Arp's pattern, by piece (a longer slot). 7: the sounds, by piece (a longer slot). 6: Hands is the recipes', and means the player's (an old save's Auto or Hands meant another thing: the recipes). 5: Auto or Hands, by piece. 4: the seven pages' knobs, the degrees (AMB-1's and older saves are not read: the recipes) */
+#define PROJ_FORMAT 11u                  /* 11: the keys' and the melody's effects and sends, by piece (a longer slot). 10: the melody's keys: its modes Keys and Keys Arp, by piece, and Hands' and Auto's each its own (mel_other); Latch, by piece (a longer slot). 9: Arp's skip, by piece (a longer slot). 8: the melody's mode and Arp's pattern, by piece (a longer slot). 7: the sounds, by piece (a longer slot). 6: Hands is the recipes', and means the player's (an old save's Auto or Hands meant another thing: the recipes). 5: Auto or Hands, by piece. 4: the seven pages' knobs, the degrees (AMB-1's and older saves are not read: the recipes) */
 #define NPIECES EN_NPIECES
 
 typedef struct {

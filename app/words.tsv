@@ -12,7 +12,8 @@ Mixolyd.	Mixolydian
 Mixolyd	Mixolydian
 Pent maj	pentatonic major
 Pent min	pentatonic minor
-ECHO, ECHO TIME	echo amount, echo time
+ECHO, TIME, REVERB	echo amount, echo time, reverb
+Autopan	auto pan
 Lights Keys	lights on the keys only
 5 S	5 seconds
 SEL +	select and

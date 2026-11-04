@@ -1,0 +1,88 @@
+# The melody's effects, on Load Screen, in context: the keys low, the bass, the drums and the hats low, in Phrases at Rate 88, so that it is mostly playing. Off for 20 s; then each of Chorus, Autopan, Tremolo, Filter: 30 s at Motion 0, still, and 30 s at Motion 70, moving, the next section asked for 10 s into that (Hands). Depth 50, the default. The times are in the file.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/fx_melody.amb app/build/listen
+setpar 32 0
+wait 100
+tap SAVE
+wait 800
+reboot
+seed 3101
+master 2430
+setpar 2 50
+press SEL
+tap ARP
+tap LFO
+tap SEQ
+tap FX
+release SEL
+setpar 12 25
+setpar 16 22
+setpar 18 25
+setpar 8 70
+setpar 4 40
+setpar 9 88
+wait 3000
+trace app/build/listen/fx_melody.trace
+wav fx_melody.wav
+tap FX
+wait 100
+expect par41 0
+# 0:00 Off
+wait 20000
+press SEL
+spin K3 1
+expect par41 1
+release SEL
+setpar 42 0
+# 0:20 Chorus Motion 0
+echo Chorus Motion 0
+wait 29900
+setpar 42 70
+# 0:50 Chorus Motion 70
+echo Chorus Motion 70
+wait 10000
+tap EDIT
+wait 19900
+press SEL
+spin K3 1
+expect par41 2
+release SEL
+setpar 42 0
+# 1:20 Autopan Motion 0
+echo Autopan Motion 0
+wait 29900
+setpar 42 70
+# 1:50 Autopan Motion 70
+echo Autopan Motion 70
+wait 10000
+tap EDIT
+wait 19900
+press SEL
+spin K3 1
+expect par41 3
+release SEL
+setpar 42 0
+# 2:20 Tremolo Motion 0
+echo Tremolo Motion 0
+wait 29900
+setpar 42 70
+# 2:50 Tremolo Motion 70
+echo Tremolo Motion 70
+wait 10000
+tap EDIT
+wait 19900
+press SEL
+spin K3 1
+expect par41 4
+release SEL
+setpar 42 0
+# 3:20 Filter Motion 0
+echo Filter Motion 0
+wait 29900
+setpar 42 70
+# 3:50 Filter Motion 70
+echo Filter Motion 70
+wait 10000
+tap EDIT
+wait 19900
+wavstop
+trace off

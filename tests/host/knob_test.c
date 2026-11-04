@@ -124,6 +124,8 @@ static void t_table(void)
         {P_ROOT, 0, 11, 2}, {P_TUNE, -50, 50, 0}, {P_MIDI, 0, 1, 1}, {P_MODE, 0, EN_NMODES - 1, 3},
         {P_KEYSND, 0, 3, 0}, {P_PADSND, 0, 3, 0}, {P_BASSSND, 0, 3, 0}, {P_MELSND, 0, EN_NTIMBRES, 0},
         {P_MELMODE, 0, 3, 0}, {P_ARPPAT, 0, 7, 0}, {P_ARPSKIP, 0, 100, 0}, {P_ARPLATCH, 0, 1, 0},
+        {P_KFX, 0, 4, 0}, {P_KMOTION, 0, 100, 50}, {P_KDEPTH, 0, 100, 50}, {P_KECHO, 0, 200, 100}, {P_KREV, 0, 200, 100},
+        {P_MFX, 0, 4, 0}, {P_MMOTION, 0, 100, 50}, {P_MDEPTH, 0, 100, 50}, {P_MECHO, 0, 200, 100}, {P_MREV, 0, 200, 100},
     };
     static const char *const STYLES[EN_NSTYLES] = {"Liquid", "Roller", "Jungle", "Half", "Drift", "Loading"};
     const int n = (int)(sizeof T / sizeof T[0]);

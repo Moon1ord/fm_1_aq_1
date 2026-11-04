@@ -16,6 +16,10 @@
  *   SEL + KNOB 2, SEL + KNOB 3   on Melody: Phrases, Arp, Keys or Keys Arp, and the arpeggios' pattern. In either arpeggio, Rate is its division
  *   SEL + KNOB 4   on Melody: the arpeggios' skip, 0-100 (as a knob, not round and round)
  *   SEL + REC      on Melody in Keys Arp: Latch (elsewhere REC, as ever)
+ *   On Space, the left two knobs are the keys', the right two the melody's:
+ *   SEL + KNOB 1-4 keys' effect, keys' Motion, melody's effect, melody's Motion
+ *   FX + KNOB 1-4  (FX held) keys' Echo, keys' Reverb, melody's Echo, melody's Reverb: their own sends, 100 as ever
+ *   GLO + KNOB 1, 3 (GLO held) keys' Depth, melody's Depth
  *   HOME ENV ARP LFO SEQ FX GLO   the pages: Home, Keys, Melody, Bass, Drums, Space, Setup (the SELECT encoder steps through them)
  *   KNOB 1-4       the page's four values
  *   SAVE           saves (it also saves by itself a few seconds after a change, while resting);
@@ -326,27 +330,42 @@ static void keys_mode(void)                     /* the mode has moved: between t
 }
 static int keys_play(void) { return ui.view == V_MOTIFS && mel_keys(); }
 
-/* SEL + a knob on a layer's page. Each detent is the next, round and round, as ALGORITHM's and PRESETS' are. SEL's other jobs: SEL + a button is on the press, so no turn is in it; SEL alone is the Degrees view,
+/* SEL + a knob on a layer's page; on Space, FX or GLO held too (SOUND_KNOB's hold). Each detent is the next, round and round, as ALGORITHM's and PRESETS' are. SEL's other jobs: SEL + a button is on the press, so no turn is in it; SEL alone is the Degrees view,
  * and as with SEL + a layer's button, a turn says this hold is not that (ui.sel_layer) */
 static const struct {
-    uint8_t view, knob, par;
+    uint8_t view, knob, par, hold;
     const char *say, *spoken;
-} SOUND_KNOB[] = {{V_KEYS, 0, P_KEYSND, "KEYS SOUND", ". Sound "}, {V_KEYS, 1, P_PADSND, "PAD SOUND", ", pad sound "}, {V_MOTIFS, 0, P_MELSND, "MELODY SOUND", ". Sound "},
-                  {V_MOTIFS, 1, P_MELMODE, "MELODY MODE", ", mode "}, {V_MOTIFS, 2, P_ARPPAT, "ARP PATTERN", ", pattern "}, {V_MOTIFS, 3, P_ARPSKIP, "ARP SKIP", ", skip "}, {V_BASS, 0, P_BASSSND, "BASS SOUND", ". Sound "}};
+} SOUND_KNOB[] = {{V_KEYS, 0, P_KEYSND, B_SEL, "KEYS SOUND", ". Sound "}, {V_KEYS, 1, P_PADSND, B_SEL, "PAD SOUND", ", pad sound "}, {V_MOTIFS, 0, P_MELSND, B_SEL, "MELODY SOUND", ". Sound "},
+                  {V_MOTIFS, 1, P_MELMODE, B_SEL, "MELODY MODE", ", mode "}, {V_MOTIFS, 2, P_ARPPAT, B_SEL, "ARP PATTERN", ", pattern "}, {V_MOTIFS, 3, P_ARPSKIP, B_SEL, "ARP SKIP", ", skip "}, {V_BASS, 0, P_BASSSND, B_SEL, "BASS SOUND", ". Sound "},
+                  {V_SPACE, 0, P_KFX, B_SEL, "KEYS EFFECT", ". Keys effect "}, {V_SPACE, 1, P_KMOTION, B_SEL, "KEYS MOTION", ", motion "}, {V_SPACE, 0, P_KDEPTH, B_GLO, "KEYS DEPTH", ", depth "},
+                  {V_SPACE, 2, P_MFX, B_SEL, "MELODY EFFECT", ". Melody effect "}, {V_SPACE, 3, P_MMOTION, B_SEL, "MELODY MOTION", ", motion "}, {V_SPACE, 2, P_MDEPTH, B_GLO, "MELODY DEPTH", ", depth "},
+                  {V_SPACE, 0, P_KECHO, B_FX, "KEYS ECHO", ". Keys echo "}, {V_SPACE, 1, P_KREV, B_FX, "KEYS REVERB", ". Keys reverb "}, {V_SPACE, 2, P_MECHO, B_FX, "MELODY ECHO", ". Melody echo "}, {V_SPACE, 3, P_MREV, B_FX, "MELODY REVERB", ". Melody reverb "}};
 #define NSOUND_KNOBS ((int)(sizeof SOUND_KNOB / sizeof SOUND_KNOB[0]))
 static int sound_said(int i)                    /* (the page has no use for a pattern or a skip outside an arpeggio, or a skip of 0: their knobs still set them) */
 {
     const int p = SOUND_KNOB[i].par;
+    if (p == P_KFX || p == P_MFX)                /* (Space says only what is not as it always was) */
+        return proj.par[p] != EN_FX_OFF;
+    if (p == P_KMOTION || p == P_KDEPTH)
+        return proj.par[P_KFX] != EN_FX_OFF;
+    if (p == P_MMOTION || p == P_MDEPTH)
+        return proj.par[P_MFX] != EN_FX_OFF;
+    if (p == P_KECHO || p == P_KREV || p == P_MECHO || p == P_MREV)
+        return proj.par[p] != 100;
     return p == P_ARPSKIP ? mel_arp() && proj.par[P_ARPSKIP] : p != P_ARPPAT || mel_arp();
 }
-static int sound_turn(int knob, int32_t e)      /* 1: it was a sound's */
+static int sound_amount(int p)                  /* a quantity, not a list: to its ends and no further, faster for a long turn */
+{
+    return p == P_ARPSKIP || (p >= P_KFX && p <= P_MREV && p != P_KFX && p != P_MFX);
+}
+static int sound_turn(int knob, int32_t e, int hold)   /* 1: it was a sound's */
 {
     int i;
     for (i = 0; i < NSOUND_KNOBS; i++)
-        if (SOUND_KNOB[i].view == ui.view && SOUND_KNOB[i].knob == knob) {
+        if (SOUND_KNOB[i].view == ui.view && SOUND_KNOB[i].knob == knob && SOUND_KNOB[i].hold == hold) {
             const int p = SOUND_KNOB[i].par, n = en_param_info(p)->hi + 1;
             char t[16];
-            if (p == P_ARPSKIP)                  /* a quantity, not a list: to its ends and no further, faster for a long turn */
+            if (sound_amount(p))
                 turn(EN_K1 + knob, p, e);
             else
                 knob_set(p, (proj.par[p] + (e > 0 ? 1 : -1) + n) % n);
@@ -357,10 +376,20 @@ static int sound_turn(int knob, int32_t e)      /* 1: it was a sound's */
                 keys_mode();
             say(SOUND_KNOB[i].say, t);
             ui.sel_layer = 1u;
-            ui.btn_used |= 1u << B_SEL;
+            ui.btn_used |= 1u << hold;           /* (its release does nothing now: no Degrees, no page) */
             return 1;
         }
     return 0;
+}
+static int knob_hold(uint32_t btn)              /* what a knob is being turned under: -1 nothing. FX and GLO only on Space, where they have this job */
+{
+    if (btn >> B_SEL & 1u)
+        return B_SEL;
+    if (ui.view == V_SPACE && btn >> B_FX & 1u)
+        return B_FX;
+    if (ui.view == V_SPACE && btn >> B_GLO & 1u)
+        return B_GLO;
+    return -1;
 }
 
 /* ------------------------------------------------------------- the pool --- */
@@ -761,7 +790,10 @@ static void input(void)
     }
     for (i = 0; i < 4; i++)
         if ((e = plat_enc(EN_K1 + (int)i)) != 0) {
-            if (!(btn >> B_SEL & 1u) || !sound_turn((int)i, e)) {
+            const int hold = knob_hold(btn);
+            if (hold == B_GLO && !sound_turn((int)i, e, hold)) {
+                ui.btn_used |= 1u << B_GLO;      /* (KNOB 2 and 4 have nothing under GLO: not the page's own value by accident, and no page on the release) */
+            } else if (hold != B_GLO && (hold < 0 || !sound_turn((int)i, e, hold))) {
                 turn(EN_K1 + (int)i, VIEW_KNOB[ui.view][i], e);
                 ui.touched = (int8_t)i;
                 ui.touch_until = plat_ms() + 1200u;
@@ -1147,6 +1179,25 @@ static void setup_read(char *c)
 static int page_sounds(int view, char *b, int leave, int tight)
 {
     int i, n = 0;
+    if (view == V_SPACE) {                       /* each layer's effect, if it has one, with its Motion: KChor50/MFilt70. What else there is, says itself when turned */
+        static const char *const FX_SHORT[EN_NFX] = {"", "Chor", "Pan", "Trem", "Filt"};
+        for (i = 0; i < 2; i++) {
+            const int fx = proj.par[i ? P_MFX : P_KFX];
+            const char *w = FX_SHORT[fx];
+            if (fx == EN_FX_OFF)
+                continue;
+            if (n)
+                b[n++] = '/';
+            b[n++] = i ? 'M' : 'K';
+            while (*w)
+                b[n++] = *w++;
+            itoa_u((uint32_t)proj.par[i ? P_MMOTION : P_KMOTION], b + n);
+            while (b[n])
+                n++;
+        }
+        b[n] = 0;
+        return n;
+    }
     for (i = 0; i < NSOUND_KNOBS; i++)
         if (SOUND_KNOB[i].view == view && sound_said(i) && SOUND_KNOB[i].par != leave) {
             char t[16];
@@ -1260,7 +1311,7 @@ static uint32_t header_sig(int sc)
     if (sc == SC_PAGE && ui.view == V_SETUP)
         h = hash(hash(h, scr.r_cpu | scr.r_max << 8), scr.r_x | scr.r_s << 16);
     else if (sc == SC_PAGE || sc == SC_HOLD)
-        h = hash(hash(h, chord_sig()), en_held | (uint32_t)proj.par[P_KEYSND] << 1 | (uint32_t)proj.par[P_PADSND] << 3 | (uint32_t)proj.par[P_BASSSND] << 5 | (uint32_t)proj.par[P_MELSND] << 7 | (uint32_t)proj.par[P_ARPPAT] << 10 | (uint32_t)proj.par[P_ARPSKIP] << 14 | (uint32_t)proj.par[P_MELMODE] << 21 | (uint32_t)proj.par[P_ARPLATCH] << 23);
+        h = hash(hash(h, chord_sig()), en_held | (uint32_t)proj.par[P_KEYSND] << 1 | (uint32_t)proj.par[P_PADSND] << 3 | (uint32_t)proj.par[P_BASSSND] << 5 | (uint32_t)proj.par[P_MELSND] << 7 | (uint32_t)proj.par[P_ARPPAT] << 10 | (uint32_t)proj.par[P_ARPSKIP] << 14 | (uint32_t)proj.par[P_MELMODE] << 21 | (uint32_t)proj.par[P_ARPLATCH] << 23), h = hash(h, (uint32_t)proj.par[P_KFX] | (uint32_t)proj.par[P_MFX] << 3 | (uint32_t)proj.par[P_KMOTION] << 6 | (uint32_t)proj.par[P_MMOTION] << 13);
     return h;
 }
 
@@ -1416,7 +1467,7 @@ static int help_lines(int b, const char *l[HELP_LINES])
     case B_ARP: L("THE MELODY: LEVEL, RATE, TONE, OCT"); L("IN KEYS, KEYS ARP THE KEYS PLAY IT"); L("SEL + ARP: ON OR OFF"); L("SEL + KNOB 1-4: SOUND, MODE,"); L(" PATTERN, SKIP. SEL + REC: LATCH"); break;
     case B_LFO: L("THE BASS"); L("LEVEL, MOVE, GLIDE, OCTAVE"); L("SEL + LFO: ON OR OFF"); L("SEL + KNOB 1: THE SOUND"); break;
     case B_SEQ: L("THE DRUMS"); L("LEVEL, BREAKS, HATS, KIT"); L("SEL + SEQ: KICK AND SNARE"); L(" ON OR OFF"); break;
-    case B_FX: L("THE SPACE"); L("ECHO, ECHO TIME, REVERB,"); L(" SIZE"); L("SEL + FX: HATS ON OR OFF"); break;
+    case B_FX: L("THE SPACE: ECHO, TIME, REVERB, SIZE"); L("SEL + FX: HATS ON OR OFF"); L("KNOBS 1-2 KEYS, 3-4 MELODY:"); L("SEL: EFFECT, MOTION. HOLD FX: ECHO,"); L(" REVERB. HOLD GLO: DEPTH (1, 3)"); break;
     case B_GLO: L("SETUP: ROOT, TUNE, MIDI OUT, LIGHTS"); L("CPU LOAD, M WORST BLOCK,"); L(" X MISSED, S SHED"); L("AGAIN: THE READING AFRESH"); break;
     case B_EDIT: L("THE NEXT SECTION,"); L(" ON THE NEXT BAR"); L("+ SELECT: A BREAK,"); L(" ON THE NEXT BAR"); break;
     case B_REC: L("HOLD: THE CHORD STAYS,"); L(" NO NEW SECTION"); L("THE REST PLAYS ON"); L("AGAIN: LET GO"); break;
@@ -2632,6 +2683,17 @@ static int ui_unfit(void)                             /* the host's "unfit": wha
             en_param_text(p, x, t);
             n += unfit_msg(SOUND_KNOB[i].say, t);
         }
+    }
+    {                                                 /* Space's header: both effects, at their longest Motion */
+        char c[24];
+        const project_t k = proj;
+        for (x = 0; x < EN_NFX * EN_NFX; x++) {
+            proj.par[P_KFX] = (int16_t)(x % EN_NFX), proj.par[P_MFX] = (int16_t)(x / EN_NFX);
+            proj.par[P_KMOTION] = proj.par[P_MMOTION] = 100;
+            if (page_sound(V_SPACE, c))
+                n += unfit_one(&FONT_XS, c, HEADER_SOUND_ROOM(V_SPACE), "the header's effects");
+        }
+        proj = k;
     }
     for (v = 0; v < NVIEWS; v++) {
         char c[24];

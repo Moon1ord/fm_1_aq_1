@@ -1,0 +1,329 @@
+# the screen: which scene when; no frame reads more than a band from the flash or sends more than a band; what is on the screen is always what a whole painting would give; nothing it does touches the keys, the knobs or a save
+# ---- the title, and it gives way by itself
+wait 50
+expect screen 0
+expect stale 0
+wait 3000
+expect screen 1
+expect stale 0
+expect wiping 0
+# by a touch too, and the touch is not eaten
+reboot
+wait 200
+expect screen 0
+tap ENV
+wait 60
+expect screen 2
+expect view 1
+wait 200
+expect stale 0
+tap HOME
+wait 200
+expect screen 1
+expect eye 0
+expect smile 0
+# ---- a picture goes on over five frames: at most a band a frame, and nothing else while it does
+drawreset
+tap LFO
+wait 18
+expect wiping >0
+wait 100
+expect wiping 0
+expect view 3
+expect drawrows <49
+expect drawpx <11521
+expect drawbytes <7000
+expect stale 0
+# each page has its own, and turning through them all at once ends on the last whole
+drawreset
+turn SELECT 3 10
+wait 150
+expect view 6
+expect screen 2
+expect wiping 0
+expect stale 0
+expect drawrows <49
+turn SELECT -6 10
+wait 150
+expect view 0
+expect wiping 0
+expect stale 0
+expect drawrows <49
+# ---- what stands still reads nothing, and a knob, the header, the meters read nothing either
+tap ENV
+wait 300
+wait 2000
+drawreset
+turn K1 3 40
+turn K2 -3 40
+wait 1300
+expect artbytes 0
+expect drawpx <11521
+expect stale 0
+expect par4 63
+# (the cell lit while it turns, and not a moment after: from 70 to 71 and lit too must be seen as a change)
+tap HOME
+wait 300
+turn K2 1 10
+wait 200
+expect stale 0
+wait 1300
+expect stale 0
+turn K2 -1 10
+wait 1400
+expect stale 0
+tap ENV
+wait 300
+tap GLO
+wait 200
+drawreset
+wait 3000
+expect artbytes 0
+expect stale 0
+tap HOME
+wait 300
+# ---- Home, on the keys and the pad: its eyes closed
+wait 3000
+expect eye 0
+expect mutedrums 1
+# ... and what moves on it is small: a feather, a star, a few beads
+drawreset
+wait 20000
+expect artbytes <400000
+expect drawrows <49
+expect stale 0
+expect screen 1
+# ---- the layers: the screen follows the switch, a smile at one coming in
+press SEL
+tap SEQ
+release SEL
+wait 60
+expect mutedrums 0
+expect smile 1
+expect screen 1
+wait 1600
+expect smile 0
+expect eye 2
+expect stale 0
+# Energy lower: a lighter beat, eyes half
+energy 40
+wait 3000
+expect level 2
+expect eye 1
+expect stale 0
+energy 70
+wait 3000
+expect eye 2
+# a blink now and then, on a bar line, not more
+wait 60000
+expect blinks >2
+expect blinks <10
+expect stale 0
+# ---- SEL held: the degrees. SEL + a button is not that, nor is SEL for a moment
+press SEL
+wait 100
+expect screen 1
+wait 200
+expect screen 8
+expect wiping >0
+wait 120
+expect stale 0
+tapkey w2
+wait 200
+expect screen 8
+expect stale 0
+tapkey w2
+release SEL
+wait 200
+expect screen 1
+press SEL
+wait 20
+tap ENV
+wait 400
+expect screen 1
+expect stale 0
+press SEL
+release SEL
+press SEL
+tap ENV
+release SEL
+wait 200
+expect mutekeys 0
+# ---- a break, called: its frame while it lasts, on any page; a knob turned has the page back. A reader is told
+listen
+press SEL
+tap EDIT
+release SEL
+wait 1500
+expect breakbars >0
+expect screen 3
+said BREAK 2 BARS
+expect stale 0
+drawreset
+turn K2 1 10
+wait 60
+expect screen 1
+wait 150
+expect stale 0
+wait 6000
+expect breakbars 0
+expect screen 1
+expect stale 0
+# ---- REC: the ice on Home; on a page the page, with the chord in ice
+tap REC
+wait 200
+expect held 1
+expect screen 7
+expect eye 0
+wait 120
+expect stale 0
+tap ENV
+wait 200
+expect screen 2
+expect stale 0
+tap HOME
+wait 200
+tap REC
+wait 200
+expect held 0
+expect screen 1
+# ---- a help card, and away
+press EDIT
+wait 1000
+expect help 5
+expect screen 9
+wait 120
+expect stale 0
+release EDIT
+wait 200
+expect help 0
+expect screen 1
+# ---- a piece: its card, and through it another without a new picture; a page's button ends it
+turn PRESET 1
+wait 60
+expect screen 4
+expect piece 1
+wait 150
+expect stale 0
+wait 500
+expect wipes >0
+drawreset
+turn PRESET 1
+wait 200
+expect screen 4
+expect piece 2
+expect stale 0
+expect drawrows <49
+wait 3000
+expect screen 1
+expect stale 0
+turn PRESET -1
+wait 100
+expect screen 4
+wait 100
+tap ENV
+wait 60
+expect screen 2
+expect view 1
+tap HOME
+wait 200
+# a knob turned ends it too
+turn PRESET -1
+wait 100
+expect screen 4
+expect piece 0
+turn K1 1 10
+wait 60
+expect screen 1
+turn K1 -1 10
+wait 200
+# ---- SAVE: the save's scene from the press to a moment past the write; the smile
+tap SAVE
+wait 20
+expect screen 5
+expect smile 1
+wait 120
+expect stale 0
+wait 3000
+expect saving 0
+expect dirty 0
+expect screen 1
+expect stale 0
+# a save that fails says so instead
+flash_fail 1
+tap SAVE
+wait 300
+expect saving 2
+expect screen 1
+expect stale 0
+wait 300
+expect screen 1
+expect stale 0
+flash_fail 0
+wait 3000
+# ---- PLAY: the rest. A knob has its cell back for a moment; an autosave goes unseen
+tap PLAY
+wait 200
+expect playing 0
+expect screen 6
+expect eye 0
+expect stale 0
+turn K2 1 10
+wait 100
+expect screen 6
+expect stale 0
+wait 1500
+expect stale 0
+wait 2530
+expect saving 1
+expect screen 6
+drawreset
+wait 2000
+expect dirty 0
+expect screen 6
+expect stale 0
+tap PLAY
+wait 200
+expect screen 1
+expect playing 1
+# ---- a message over a scene with no header, and gone
+tap PLAY
+wait 200
+tap EDIT
+wait 200
+expect screen 6
+expect stale 0
+wait 1500
+expect stale 0
+tap PLAY
+wait 200
+# ---- Setup's reading is there and moves
+tap GLO
+wait 200
+expect screen 2
+expect stale 0
+expect readsheds 0
+overload
+wait 400
+expect readsheds 2
+expect stale 0
+tap HOME
+wait 200
+# ---- all of it, quickly, in the middle of each other
+tap ENV
+tap ARP
+turn PRESET 1 10
+tap REC
+tap LFO
+press SEL
+tap SEQ
+release SEL
+tap SEQ
+tap REC
+tap HOME
+wait 30
+expect stale 0
+wait 500
+expect stale 0
+expect drawrows <49
+expect unfit 0

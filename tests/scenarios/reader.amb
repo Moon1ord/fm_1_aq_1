@@ -3,11 +3,11 @@
 wait 200
 listen
 wait 100
-said Home page: Tempo 170, Energy 70, Evolve 50, Style Liquid. Piece Load Screen, D Lydian, growing
+said Home page: Tempo 170, Energy 70, Evolve 50, Style Liquid. Piece Load Screen, D Lydian, playing
 # (the garden follows, queued: the chord, how far to the next, the scale from the root up)
 listen
 where
-said Scale D, E, F#, Ab and A, B, C#
+said Hands, style Liquid. Playing: keys
 # a page settles before it is said
 tap ENV
 wait 300
@@ -74,15 +74,15 @@ said HOLD OFF
 tap PLAY
 said RESTING
 wait 300
-unsaid GROWING
+unsaid PLAYING
 tap PLAY
-said GROWING
+said PLAYING
 wait 300
 unsaid RESTING
 tap OCT+
-said MOTIF OCTAVE +1
+said MELODY OCTAVE +1
 tap OCT-
-said MOTIF OCTAVE 0
+said MELODY OCTAVE 0
 tap EDIT
 said NEXT SECTION ON THE BAR
 # SEL + EDIT: a break, where there are drums; here none yet
@@ -90,6 +90,12 @@ press SEL
 tap EDIT
 release SEL
 said NO DRUMS NO BREAK
+# SEL held a moment: the degrees' view, in words
+press SEL
+wait 400
+said Degrees: chords on D E F# Ab A B C#
+release SEL
+wait 200
 # a help card: its button, then its lines
 press SAVE
 wait 1000

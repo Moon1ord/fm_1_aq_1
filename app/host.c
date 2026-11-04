@@ -4,14 +4,14 @@
  * "expect", its command, a reboot and the screen reader's dump.
  *
  * AMB-1's checks: playing held silent midionN keysdown bellson bassdown keyson breakbars barpos stepofbar bars chordhash view piece pool dirty sixteenths ext pad_level bass_level chordroot chordN loopnotes
- * parN battery section style level mask enmask keyslit help ringN mode arrange absent sysnotes sysnote ducked saving writepeak mutekeys mutemel mutebass mutedrums mutehats gainN meterN dimN litN (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
+ * parN battery section style level mask enmask keyslit help ringN mode arrange absent sysnotes sysnote ducked saving writepeak mutekeys mutemel mutebass mutedrums mutehats gainN meterN dimN litN screen eye smile blinks wipes wiping drawrows drawbytes drawpx artbytes stale (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
  * values, help lines and messages wider than their places. Its commands:
  * storeamb (what AMB-1 leaves in the store: its magic and format, nothing of ours); storeold (the project as it is, whole, but
  * for the format before this one); battery N (the battery read as N,
  * plat.h's plat_battery: -1..4; "battery off" the simulator's own, full); seed N (the musical seed, from the next choice on;
  * until told it is EN_HARM_SEED); melhear T (a statement in this timbre at the next chance: an audition); setpar P V (parameter P to V, as a knob would); style NAME; energy N; breaks N; trace FILE
  * (a line for each bar: step section level character break's bars; a line for each chord: "chord" step name bars character key tones bass, the last two above the key)
- * and trace off; panic and uiinit (what the platform does around an update); overload (blocks too heavy, twice). */
+ * and trace off; drawreset (the screen's counters); panic and uiinit (what the platform does around an update); overload (blocks too heavy, twice). */
 #include <stdio.h>
 #include <strings.h>
 static FILE *trace_f;
@@ -86,6 +86,30 @@ int app_expect(const char *what, int *got)
         g = (int)(dim_btn >> atoi(what + 3) & 1u);
     else if (!strncmp(what, "lit", 3))
         g = (int)(lit_btn >> atoi(what + 3) & 1u);
+    else if (!strcmp(what, "screen"))             /* the scene up (ui.c SC_*): 0 title 1 home 2 a page 3 break 4 card 5 save 6 rest 7 hold 8 degrees 9 help */
+        g = scr.scene;
+    else if (!strcmp(what, "eye"))                /* the face: 0 closed, 1 half, 2 open */
+        g = scr.eye;
+    else if (!strcmp(what, "smile"))
+        g = mouth_smiling(scr.scene, scr.now);
+    else if (!strcmp(what, "blinks"))             /* blinks so far */
+        g = (int)scr.blinks;
+    else if (!strcmp(what, "readsheds"))          /* Setup's reading as shown: its S */
+        g = (int)scr.r_s;
+    else if (!strcmp(what, "wipes"))              /* whole pictures so far */
+        g = (int)scr.wipes;
+    else if (!strcmp(what, "wiping"))             /* rows of a picture to go */
+        g = scr.wipe_left;
+    else if (!strcmp(what, "drawrows"))           /* since drawreset, the most in one frame: rows decoded from the flash, its bytes, pixels sent */
+        g = (int)scr.p_rows;
+    else if (!strcmp(what, "drawbytes"))
+        g = (int)scr.p_bytes;
+    else if (!strcmp(what, "drawpx"))
+        g = (int)scr.p_px;
+    else if (!strcmp(what, "artbytes"))           /* since drawreset, all the bytes of art read */
+        g = (int)scr.t_bytes;
+    else if (!strcmp(what, "stale"))              /* the screen against the same scene painted whole: the pixels that differ */
+        g = scr_stale();
     else if (!strcmp(what, "held"))
         g = en_held;
     else if (!strcmp(what, "silent"))             /* since a panic */
@@ -176,6 +200,10 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
     (void)c, (void)d;
     if (!strcmp(cmd, "battery")) {               /* battery N: plat_battery as N (-1..4), "battery off" its own */
         batt_host = (int8_t)(strcmp(a, "off") ? atoi(a) : -2);
+        return 1;
+    }
+    if (!strcmp(cmd, "drawreset")) {             /* the screen's counters afresh */
+        scr.p_rows = scr.p_bytes = scr.p_px = scr.t_bytes = 0u;
         return 1;
     }
     if (!strcmp(cmd, "panic")) {                 /* what the platform does before an update */

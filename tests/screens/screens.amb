@@ -1,0 +1,119 @@
+# every screen, for the owner to look at: app/build/screens/NN_name.png
+wait 400
+expect screen 0
+shot 00_title.png
+wait 2800
+expect screen 1
+shot 01_home_listening.png
+# the drums in: eyes half, a section's worth of life
+press SEL
+tap SEQ
+tap LFO
+tap ARP
+tap FX
+release SEL
+energy 40
+wait 3000
+expect eye 1
+shot 02_home_half.png
+energy 70
+wait 3000
+expect eye 2
+shot 03_home_open.png
+press SEL
+tap HOME
+release SEL
+breaks 0
+wait 1500
+shot 04_home_auto.png
+breaks 50
+press SEL
+tap HOME
+release SEL
+wait 1500
+# the card
+turn PRESET 4
+wait 200
+expect screen 4
+shot 05_card_aurora.png
+turn PRESET -4
+wait 3000
+tap ENV
+wait 1600
+expect screen 2
+shot 06_keys.png
+tap ARP
+wait 300
+shot 07_melody.png
+tap LFO
+wait 300
+shot 08_bass.png
+tap SEQ
+wait 300
+shot 09_drums.png
+tap FX
+wait 300
+shot 10_space.png
+tap GLO
+wait 1500
+shot 11_setup.png
+turn K2 2 40
+wait 100
+shot 12_setup_knob_turned.png
+turn K2 -2 40
+wait 1500
+tap HOME
+wait 300
+press SEL
+tap EDIT
+release SEL
+wait 1500
+expect screen 3
+shot 13_break.png
+wait 6000
+tap SAVE
+wait 400
+expect screen 5
+shot 14_save.png
+wait 3000
+tap PLAY
+wait 1600
+expect screen 6
+shot 15_rest.png
+tap PLAY
+wait 1500
+tap REC
+wait 1500
+expect screen 7
+shot 16_hold.png
+tap REC
+wait 300
+press SEL
+wait 600
+expect screen 8
+tapkey w2
+wait 200
+tapkey w4
+wait 1500
+shot 17_degrees.png
+tapkey w2
+wait 100
+tapkey w4
+wait 200
+release SEL
+wait 300
+press SEQ
+wait 1100
+expect help 10
+shot 18_help.png
+release SEQ
+wait 300
+# a message
+tapkey w1
+wait 100
+shot 19_message.png
+tapkey w1
+wait 1500
+# the feather and the star, caught
+wait 7000
+shot 20_home_later.png

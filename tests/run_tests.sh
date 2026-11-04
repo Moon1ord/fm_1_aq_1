@@ -46,6 +46,12 @@ run save sh -c "$CC -O2 -ffp-contract=off -std=c99 -D_DEFAULT_SOURCE -D_DARWIN_C
     -o $OUT/save_test tests/host/save_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/save_test"
 run ctl sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promotion -Werror -DEN_HOST -Iapp/dsp -Ibase/include \
     -o $OUT/ctl_test tests/host/ctl_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/ctl_test"
+run art sh -c "$CC -O2 -std=c99 -Wall -Wextra -Werror -Iapp -o $OUT/art_test tests/host/art_test.c && $OUT/art_test"
+if [ -f ../art/source/eyes.png ]; then
+    run art-fresh perl -e 'alarm shift; exec @ARGV' 300 "$PY" -I tools/gen_art.py --check   # the header is what the owner's pictures give, the chapters what was approved
+else
+    echo "  skip art-fresh (no ../art/source: app/art_data.h is kept in git)"
+fi
 run brk sh -c "$CC -O2 -ffp-contract=off -std=c99 -Wall -Wextra -Wdouble-promotion -Werror -Iapp/dsp -o $OUT/brk_test tests/host/brk_test.c app/dsp/brk.c -lm && $OUT/brk_test"
 if [ -f $B/aq1.fwsc ]; then
     run ota-entry sh -c "$CC -w -o $OUT/ota_test base/tests/ota_test.c && $OUT/ota_test $B/aq1.fwsc"
@@ -66,5 +72,7 @@ for s in tests/scenarios/*.amb; do
     mkdir -p "$B/scenarios/$n"
     run "scenario-$n" $B/host/aq1_host "$s" "$B/scenarios/$n"
 done
+mkdir -p $B/screens                                     # every screen, to be looked at: the plan's check
+run screens $B/host/aq1_host tests/screens/screens.amb $B/screens
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

@@ -14,3 +14,4 @@ tagline = "A quiet console with no disc in it"
 repo = ""
 licence = "MPL-2.0"
 credits = "Forked from AMB-1 by Charles Vestal. Built on fm1-base and felucca-bsp, from Felucca by Leo Kuroshita (Hügelton Instruments)."
+font_full = ["L"]              # the piece card writes its name in the large face

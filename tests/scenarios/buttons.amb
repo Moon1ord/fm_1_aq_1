@@ -35,7 +35,7 @@ expect keysdown >2
 expect midion1 >2
 expect midion4 >2
 tap PLAY
-said GROWING
+said PLAYING
 wait 100
 expect playing 1
 # EDIT: the next section, on the next bar

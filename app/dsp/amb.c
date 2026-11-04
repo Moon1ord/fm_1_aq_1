@@ -372,7 +372,7 @@ static const style_t STYLE[EN_NSTYLES] = {
     /* the phrases of:  intro hats light down full out       levels          full%  bass                        dens syn rate len ghost */
     /* Liquid */  {{2, 1, 6, 2, 5, 2},  {3, 2, 11, 4, 8, 3},  {LV_ALL},                                    100, {EN_BASS_LIGHT, EN_BASS_FULL}, {50, 20, 80, 50, 30}},
     /* Roller */  {{1, 1, 5, 2, 7, 2},  {2, 2, 9, 3, 12, 3},  {LV_ALL},                                    100, {EN_BASS_FULL, EN_BASS_ROLL},  {80, 30, 110, 50, 80}},
-    /* Jungle */  {{1, 1, 5, 2, 7, 2},  {2, 2, 9, 4, 11, 3},  {LV_ALL},                                    100, {EN_BASS_LIGHT, EN_BASS_FULL}, {54, 75, 140, 62, 50}},
+    /* Jungle */  {{1, 1, 5, 2, 7, 2},  {2, 2, 9, 4, 11, 3},  {LV_ALL},                                    100, {EN_BASS_LIGHT, EN_BASS_FULL}, {54, 75, 140, 65, 50}},
     /* Half */    {{2, 1, 6, 2, 5, 2},  {3, 2, 11, 4, 8, 3},  {LV_ALL},                                    100, {EN_BASS_LONG, EN_BASS_LIGHT}, {20, 20, 72, 20, 30}},
     /* Drift */   {{3, 3, 4, 6, 3, 2},  {4, 4, 6, 9, 4, 3},   {{0, 0}, {1, 1}, {1, 1}, {0, 1}, {4, 4}, {1, 0}}, 100, {EN_BASS_LONG, EN_BASS_LONG}, {10, 10, 32, 10, 0}},
     /* Loading */ {{2, 3, 8, 3, 5, 2},  {3, 4, 11, 4, 6, 3},  {{0, 0}, {1, 1}, {1, 2}, {1, 1}, {3, 3}, {1, 0}}, 15, {EN_BASS_LONG, EN_BASS_LIGHT}, {38, 20, 40, 20, 10}},

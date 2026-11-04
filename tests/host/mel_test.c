@@ -1111,7 +1111,7 @@ static void t_level(void)
 /* the styles' numbers: Jungle calmer than it was, no other touched, its chopped character kept */
 static void t_styles(void)
 {
-    static const brk_rhythm_t R[EN_NSTYLES] = {{50, 20, 80, 50, 30}, {80, 30, 110, 50, 80}, {54, 75, 140, 62, 50}, {20, 20, 72, 20, 30}, {10, 10, 32, 10, 0}, {38, 20, 40, 20, 10}};
+    static const brk_rhythm_t R[EN_NSTYLES] = {{50, 20, 80, 50, 30}, {80, 30, 110, 50, 80}, {54, 75, 140, 65, 50}, {20, 20, 72, 20, 30}, {10, 10, 32, 10, 0}, {38, 20, 40, 20, 10}};
     int st;
     for (st = 0; st < EN_NSTYLES; st++)
         CHECK(!memcmp(en_style_rhythm(st), &R[st], sizeof R[st]), "%s: its rhythm's numbers", EN_STYLE_NAME[st]);

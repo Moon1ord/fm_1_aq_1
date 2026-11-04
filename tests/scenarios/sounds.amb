@@ -120,7 +120,7 @@ expect view 3
 # ---- the melody: Auto, then the timbres
 tap ARP
 wait 300
-said Melody page: Level 60, Rate 50, Tone 50, Octave 0. Sound Auto, mode Phrases
+said Melody page: Level 60, Rate 50, Tone 50, Octave 0. Sound Auto, mode Keys
 press SEL
 spin K1 1
 expect par31 1
@@ -145,7 +145,7 @@ release SEL
 press ARP
 wait 1000
 expect help 9
-said SEL + KNOB 1: THE SOUND
+said SEL + KNOB 1-4: SOUND
 release ARP
 wait 100
 expect view 2

@@ -16,6 +16,8 @@ static void recipe(int i, slot_t *s)
     en_piece(i, s->par, &s->pool);
     s->mask = EN_MASK_ALL;
     s->arrange = EN_HANDS;
+    s->par[P_MELMODE] = EN_MEL_KEYS;             /* Hands: the melody is the player's. Auto's own is what the recipes have */
+    s->mel_other = EN_MEL_PHRASES;
 }
 
 static void take(const slot_t *s)                /* a piece's settings into play, the globals kept */
@@ -27,6 +29,7 @@ static void take(const slot_t *s)                /* a piece's settings into play
     proj.pool = s->pool;
     proj.mask = s->mask;
     proj.arrange = s->arrange;
+    proj.mel_other = s->mel_other;
 }
 
 static void keep(void)                           /* the piece playing, into its slot */
@@ -37,6 +40,7 @@ static void keep(void)                           /* the piece playing, into its 
     proj.slot[proj.piece].pool = proj.pool;
     proj.slot[proj.piece].mask = proj.mask;
     proj.slot[proj.piece].arrange = proj.arrange;
+    proj.slot[proj.piece].mel_other = proj.mel_other;
 }
 
 void project_defaults(void)
@@ -77,10 +81,10 @@ static int project_valid(void)                  /* another or a damaged save: th
     int i;
     if (proj.magic != PROJ_MAGIC || !pool_ok(proj.pool) || proj.mask >> 12 || !pars_ok(proj.par))
         return 0;
-    if (proj.format != PROJ_FORMAT || proj.piece >= NPIECES || proj.arrange > EN_HANDS)
+    if (proj.format != PROJ_FORMAT || proj.piece >= NPIECES || proj.arrange > EN_HANDS || proj.mel_other > EN_MEL_KEYS_ARP)
         return 0;
     for (i = 0; i < NPIECES; i++)
-        if (!pool_ok(proj.slot[i].pool) || proj.slot[i].mask >> 12 || !pars_ok(proj.slot[i].par) || proj.slot[i].arrange > EN_HANDS)
+        if (!pool_ok(proj.slot[i].pool) || proj.slot[i].mask >> 12 || !pars_ok(proj.slot[i].par) || proj.slot[i].arrange > EN_HANDS || proj.slot[i].mel_other > EN_MEL_KEYS_ARP)
             return 0;
     return 1;
 }

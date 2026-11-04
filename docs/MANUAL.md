@@ -2,7 +2,7 @@
 
 AQ-1 turns the M-VAVE FM-1 into a generative light drum & bass instrument, in the mood of console menus and loading
 screens from the 2000s: warm, calm and hopeful, as if something is about to begin. It composes chords, rhythms and
-melodies without end. You don't play the notes; you decide what plays, and when.
+melodies without end. You decide what plays, and when; and when you want to, you play the melody yourself, on the keys.
 
 ![A drawing of the FM-1 running AQ-1, each control labelled with what it does: the Controls section below says the same in words](img/fm1-panel.svg "The FM-1 (a drawing), running AQ-1, each control labelled")
 
@@ -57,13 +57,13 @@ AQ-1 starts playing as soon as it's on, with five rising notes and then only the
 with it:
 
 1. **Listen.** The first piece, Load Screen, is playing in D Lydian. Turn MASTER for the volume.
-2. **Bring in the melody.** Hold SELECT and press ARP. A phrase comes within a few bars. (Or an arpeggio, without pauses:
-   see "Arp".)
+2. **Play the melody.** Hold SELECT and press ARP: the melody's layer is on. Press ARP alone for its page, and play: there, the
+   keys are the melody's. It stays silent until you do. (Or let AQ-1 compose it, or arpeggiate: see "The melody's modes".)
 3. **Bring in the bass and the drums.** Hold SELECT and press LFO, then SEQ, then FX. The bass, the kick and snare,
    and the hats each come in on the next sixteenth, and go at once.
 4. **Set how much the drums play.** Press HOME and turn KNOB 2, Energy: half time at the bottom, a full beat at the top.
 5. **Call a break.** Hold SELECT and press EDIT. The break starts on the next bar.
-6. **Change the scale.** Press a key whose note is lit: it leaves the scale. Press it again to bring it back. Any key
+6. **Change the scale.** Back on any page but the Melody's, press a key whose note is lit: it leaves the scale. Press it again to bring it back. Any key
    that isn't lit adds its note.
 7. **Try another piece.** Turn PRESETS. The layers you have on stay on.
 8. **Rest.** Press PLAY: the drums, the bass and the melody stop, and the keys and the pad stay on the chord. PLAY again
@@ -81,7 +81,7 @@ The drawing at the top shows most of them; here they all are.
 
 | Control | What it does |
 |---|---|
-| Keys | The scale. Each key adds its note to the scale or takes it out, and the keys light up for the notes in it. Every octave of a note is the same key. The root stays, and the scale keeps at least three notes. |
+| Keys | The scale. Each key adds its note to the scale or takes it out, and the keys light up for the notes in it. Every octave of a note is the same key. The root stays, and the scale keeps at least three notes. On the Melody page, in the modes Keys and Keys Arp, they play the melody instead (see "Playing it yourself"). |
 | SELECT + a key | Whether chords may stand on that note (see "Degrees"). |
 | PLAY | Play / rest. Lit green while playing. It acts at once, even during a save. |
 | REC | **Hold**: no new chord and no new section, while everything else plays on over the chord. Press again to let go. Lit while held. |
@@ -97,10 +97,11 @@ The drawing at the top shows most of them; here they all are.
 | PRESETS | The piece, one of eight. It goes round. |
 | KNOB 1–4 | The page's four values, shown at the bottom of the screen. A few clicks are always single steps; on the wider ranges a quick turn speeds up, so half a turn sweeps the range. |
 | SELECT + KNOB 1 | On the Keys, Melody and Bass pages: the layer's sound (see "Sounds"). The knob's value doesn't move. |
-| SELECT + KNOB 2 | On the Keys page: the pad's sound. On the Melody page: Phrases or Arp (see "Arp"). |
-| SELECT + KNOB 3 | On the Melody page: Arp's pattern. |
-| SELECT + KNOB 4 | On the Melody page: Arp's skip, how many of its notes rest (see "Arp"). Octave doesn't move. |
-| OCT− / OCT+ | The melody's octave, two down to two up, from any page. |
+| SELECT + KNOB 2 | On the Keys page: the pad's sound. On the Melody page: the melody's mode, Phrases, Arp, Keys or Keys Arp (see "The melody's modes"). |
+| SELECT + KNOB 3 | On the Melody page: the arpeggio's pattern. |
+| SELECT + KNOB 4 | On the Melody page: the arpeggio's skip, how many of its notes rest (see "Arp"). Octave doesn't move. |
+| SELECT + REC | On the Melody page in Keys Arp: Latch (see "Playing it yourself"). Anywhere else, REC as ever. |
+| OCT− / OCT+ | The melody's octave, two down to two up, from any page. For what you play, it counts from the next key you press. |
 | MASTER | Volume. |
 | SAVE | Saves all eight pieces. Held for 1.5 s: puts the piece back to its recipe. |
 
@@ -111,7 +112,7 @@ key, a knob or another button puts the card away; letting go after it does nothi
 
 ### Degrees
 
-A key changes the scale. SELECT + a key changes something else: whether chords may stand on that note. The note stays
+A key changes the scale (on the Melody page, in Keys or Keys Arp, it plays). SELECT + a key, there too, changes something else: whether chords may stand on that note. The note stays
 in the scale, so the melody and the chords' other notes can still use it, but no chord is built on it and the bass
 doesn't sit on it as a root. The screen says `NO CHORDS ON F#`, or `CHORDS ON F#`, and the change takes effect from
 the next chord.
@@ -137,7 +138,7 @@ Energy and in every style:
 | Hold SELECT, press | Layer | When |
 |---|---|---|
 | ENV | Keys and pad | Over about a second |
-| ARP | Melody | Over about a second, with a phrase within a few bars |
+| ARP | Melody | Over about a second. In Keys, silent until you play; in Phrases, a phrase within a few bars |
 | LFO | Bass | Off at once; on at the next sixteenth, in the note it has or its next |
 | SEQ | Kick and snare, with the ghosts, rim and tom | Off at once; on at the next sixteenth, wherever the bar's rhythm is |
 | FX | Hats | Off at once; on at the next sixteenth, wherever the bar's rhythm is |
@@ -146,7 +147,7 @@ Energy and in every style:
 
 A layer that's off only stops being heard. Its level stays where it was, its echoes and reverb ring out, its MIDI goes
 on as at level 0, and everything goes on composing unheard, so it comes in at the right place in the song. With the
-drums off, the kick no longer pulls the keys down. The screen says `BASS ON` or `BASS OFF`, and so on. A layer that's
+drums off, the kick no longer pulls the keys down. What you play with the melody off goes out over MIDI all the same. The screen says `BASS ON` or `BASS OFF`, and so on. A layer that's
 off reads empty on its meter, and with Lights on, its button loses its glow unless it's the page you're on.
 
 The layers you have on stay on when you change piece, when a piece goes back to its recipe, and through rests. They
@@ -191,8 +192,9 @@ from where it stopped.
 
 SELECT + HOME switches the piece to **Auto** and back, and the screen says `AUTO` or `HANDS`. The piece keeps its choice
 when saved. In Auto the arranger leads the sections by itself, through Intro, Hats, Light, Breakdown, Full and Out, and
-all the layers are on: this is the piece playing itself. Auto and Hands each keep their own set of layers, so switching
-takes you to that mode's set, and on from the section you were in.
+all the layers are on: this is the piece playing itself. Auto and Hands each keep their own set of layers, and their own mode
+for the melody (Phrases in Auto and Keys in Hands, to begin with), so switching takes you to that mode's set, and on from the
+section you were in.
 
 In Auto:
 
@@ -212,11 +214,11 @@ In Auto:
 ## 6. The pieces
 
 PRESETS chooses one of eight pieces. Each is a recipe: key, mode, tempo, style and every knob. Each remembers how you
-left it, including its scale, its degrees, its sounds, the melody's Phrases or Arp with Arp's pattern and Skip, and Hands or Auto. A card shows the piece for a moment. Each new piece, and
+left it, including its scale, its degrees, its sounds, the melody's mode with its pattern, Skip and Latch, and Hands or Auto. A card shows the piece for a moment. Each new piece, and
 each power-on, starts composing from a new seed, so the settings are kept but the music is always new.
 
 Hold SAVE for 1.5 s to put the piece you're on back to its recipe. Tune, MIDI out and Lights are the same for all pieces.
-All eight start in Hands, with the first sound of each layer and the melody in Phrases.
+All eight start in Hands, with the first sound of each layer and the melody in Keys, its layer off.
 
 | Piece | Key and mode | Tempo | Style | Character |
 |---|---|---|---|---|
@@ -271,23 +273,68 @@ Seven pages, each on its own button, with four values on KNOB 1–4. SELECT step
 - **Level.**
 - **Rate:** how often a phrase comes. In Hands, from 61 up, the rests shrink whatever the section; at 100 the phrases come
   about back to back, even in the Intro and Out, with a silence of 4 bars at the most. Up to 60, and in Auto at any value, a calm
-  section keeps its long rests. In Arp, the division: up to 33 a quarter, up to 66 an eighth, above that a sixteenth; the knob
-  shows it.
+  section keeps its long rests. In Arp and Keys Arp, the division: up to 33 a quarter, up to 66 an eighth, above that a sixteenth;
+  the knob shows it. In Keys it does nothing.
 - **Tone:** the voices it chooses from, the softest to the brightest (flute, vocal, vibes, marimba, music box, glass). With a
   sound chosen (see "Sounds"), only how bright that voice is.
 - **Octave:** two down to two up (OCT− and OCT+ too).
 
+#### The melody's modes
+
+Hold SELECT and turn KNOB 2 for the mode, round and round; it's kept with the piece, one for Hands and one for Auto.
+
+| Mode | What it is | The keys, on this page |
+|---|---|---|
+| **Phrases** | AQ-1 composes, as above. Auto's to begin with, and to be had in Hands | The scale |
+| **Arp** | The notes of the chord sounding, one after another | The scale |
+| **Keys** | You play. Hands' to begin with, and to be had in Auto | The melody |
+| **Keys Arp** | The keys you hold, one after another | The melody |
+
+#### Playing it yourself
+
+In **Keys** and **Keys Arp**, on the Melody page, the keyboard plays the melody. On every other page the keys change the scale as
+ever, and SELECT + a key is the Degrees on every page, this one too. A key that went down playing plays until it comes up, whichever
+page you've gone to by then, and its release touches no scale; one that went down on another page is the scale's, and playing starts
+with the next press.
+
+**The notes** are as you press them, chromatic, with nothing moved to the scale. The keys show the scale, to play by: its notes at a
+middle level, the tonic bright, what you're playing bright too, the rest off, as far as the Lights setting (Setup) allows: with Lights
+off, nothing. The lowest key (F3 on the panel) sounds F4, so at Octave 0 the keys are in the melody's register, over the piano;
+OCT− and OCT+ or the Octave knob move them, from the next key you press.
+
+**The sound** is the melody's: its sound (SELECT + KNOB 1), Level, Tone, Octave and the room, echoes included. With the Auto sound,
+Tone chooses one voice, and it stays that voice while you play: from the softest at the bottom through Vibes, Marimba and Music box; Flute and Vocal
+are to be chosen, and they start slowly. The FM-1 plays at one gentle velocity (its keys can measure how hard they're struck, but AQ-1 doesn't use that). Up
+to four notes sound at once; a fifth takes the oldest, softly. A note ends with its key, in the sound's own release. A note you hold
+past what the sound lasts goes quiet, and stays down for MIDI until you let it go.
+
+**On the way to the ear** there is no grid: a note sounds within a few milliseconds of the press, playing or resting (in a rest you play
+over the keys and the pad, in the room). A break, a new section or a save doesn't touch it. SELECT + ARP off silences it, and it still goes out on MIDI channel 2, like anything
+the melody plays. A new piece, a piece put back to its recipe or a mode with no keys (a change to Auto can be one) lets go of everything; keys still down then do
+nothing more until they're pressed again.
+
+**Keys Arp** arpeggiates the keys you hold, the notes as held, on the grid, by the same patterns, Rate and Skip as Arp, softly, with the
+same short tails. A hold after silence begins at the next sixteenth; after that the notes keep to the division. Press another key and it
+joins the figure at its place; let one go and the figure goes on without it. The bar and the grid never move for it. Let all of them go
+and it stops. In a rest it doesn't strike, there being no grid, and it goes on when you wake it. **Played** (a pattern, the last) goes in the order you
+pressed them; the others go by pitch.
+
+**Latch:** in Keys Arp, hold SELECT and press REC. Now what you let go keeps playing. Press a key with none held and it starts a new set;
+press more while one is down and they join it. SELECT + REC again turns it off, and what no key holds goes. It's kept with the piece, and the
+notes aren't. A rest keeps the set, and it goes on when you wake it. SELECT + ARP off silences it and keeps the set. A panic, a new piece or another mode
+clears it.
+
 #### Arp
 
-The melody has two modes, kept with the piece. **Phrases** composes, as above. **Arp** plays the notes of the chord sounding,
-one after another, on the grid, through two octaves of the melody's register, and follows each new chord at once. Hold SELECT
-and turn KNOB 2 for the mode, KNOB 3 for the pattern:
+**Arp** plays the notes of the chord sounding, one after another, on the grid, through two octaves of the melody's register, and
+follows each new chord at once. Hold SELECT and turn KNOB 3 for the pattern:
 
 - **Up**, **Down**, **Up-Down**, **Random**.
 - **Converge** (`Conv`): from the outside in: the lowest, the highest, the next lowest, the next highest.
 - **Pedal top** (`PedT`): the top note every other note, the others in turn from the bottom up.
 - **Pedal root** (`PedR`): the lowest note every other note, the others in turn from the bottom up. "Root" is the lowest note
   of the two octaves, which isn't always the chord's root.
+- **Played:** Keys Arp's: the order you pressed them. On the chord, which has no such order, Up.
 
 KNOB 4, with SELECT held, is **Skip**, 0 to 100: the share of the division's steps that strike no note, no voice and no MIDI. At
 0 every step plays. At 100 Arp is silent, though the mode stays Arp. In between the grid doesn't shift:
@@ -298,13 +345,14 @@ the other beats tend to outlast the sixteenths between them. A bar has 4, 8 or 1
 those steps: at 1/4 only 25, 50 and 75 change anything.
 
 The top line says each for a moment (`MELODY MODE` `Arp`, `ARP PATTERN` `Up-Down`, `ARP SKIP` `25`) and then keeps them next to the
-page's name, `Auto/Arp/Up-Down/S25` (no `S` at Skip 0); a long sound's name gives way to them when there is no room.
+page's name, `Auto/Arp/Up-Down/S25` (no `S` at Skip 0; `/L` at the end when Latch is on, `Auto/Keys Arp/Up/L`); a long sound's name gives way to them when there is no room, and
+at the very longest, in Keys Arp, the words shorten: `KArp/UpDn/S100/L`.
 
 The four knobs stay what they are. Level and Octave as ever. Rate is the division. Tone, with the Auto sound, chooses one voice
 from what it allows, leaving out the two with a slow attack, and Auto changes it every 32 bars or so, never note by note; a sound
 you choose is that sound, and Tone how bright it is. Arp plays softly, under the mix; a long sound's tail is shortened to fit the
 division. It uses the melody's voices and MIDI channel 2. SELECT + ARP turns it on and off like any layer, and off it still sends
-its MIDI. Back in Phrases, a phrase comes at its next chance, and pattern and Skip wait for the next time in Arp.
+its MIDI. Back in Phrases, a phrase comes at its next chance, and pattern and Skip wait for the next arpeggio.
 
 ### LFO: Bass
 
@@ -393,7 +441,7 @@ The sound doesn't change what's composed, and MIDI out is the same whichever you
 The screen shows one of these, the first that applies, in this order: a help card; Degrees; the title at power-on; the
 save; a piece's card; a break; a page; then the rest, the hold or Home.
 
-**Top line:** on Home, the piece with its root and mode; on a page, the page's name, its sound (Keys: the keys' sound and the pad's, `Felt/Warm`; Melody: the sound, the mode and in Arp the pattern and any skip, `Auto/Arp/Up/S25`) and the chord (Setup: its reading
+**Top line:** on Home, the piece with its root and mode; on a page, the page's name, its sound (Keys: the keys' sound and the pad's, `Felt/Warm`; Melody: the sound, the mode and in an arpeggio the pattern, any skip and Latch, `Auto/Arp/Up/S25`) and the chord (Setup: its reading
 instead; if there is no room, the chord gives way). On the right, the tempo (EXT when it follows MIDI clock, with a mark while resting), a dot when there are
 unsaved changes, and the battery. Messages (`ADDED F#`, `BREAK ON THE BAR`) show here for a moment.
 
@@ -457,14 +505,14 @@ They don't go out over MIDI.
 
 MIDI comes in over USB and the TRS jack, and goes out over USB.
 
-- **In, channel 1:** a note adds or removes its note from the scale, like a key.
+- **In, channel 1:** a note adds or removes its note from the scale, like a key off the Melody page, on any page.
 - **In, clock:** the beat follows MIDI clock, and start, stop and continue move the grid. The screen shows EXT for the tempo.
 - **Out** (on by default):
 
   | Channel | Layer | Notes |
   |---|---|---|
   | 1 | Keys | |
-  | 2 | Melody | |
+  | 2 | Melody | What you play too, note on and note off with the key |
   | 3 | Bass | |
   | 4 | Pad | No glides |
   | 10 | Drums | Kick 36, snare 38, ghosts and soft snares 38 lower, rim 37, tom 45, closed hat 42, open hat 46 |
@@ -486,8 +534,8 @@ The FM-1 says nothing until the page connects, so a DAW on the same cable never 
 
 ## 11. Saving
 
-AQ-1 keeps all eight pieces in the FM-1's memory, each as you left it: the knobs, the scale, the degrees, the sounds, Hands or Auto,
-and the piece you're on, plus Tune, MIDI out and Lights. The music isn't saved, and neither are the layers you switched:
+AQ-1 keeps all eight pieces in the FM-1's memory, each as you left it: the knobs, the scale, the degrees, the sounds, the melody's mode and Latch, Hands or Auto,
+and the piece you're on, plus Tune, MIDI out and Lights. The music isn't saved, nor the notes you're playing or have latched, and neither are the layers you switched:
 power-on starts anew, with the keys and the pad.
 
 Writing to the memory stops everything for a moment, so every write goes through a dip in the volume: down in 150 ms, the
@@ -586,9 +634,10 @@ The defaults are Load Screen's; each piece has its own.
 | Keys, SELECT + KNOB 1 | Keys' sound | Electric, Clear, Organ, Felt | Electric |
 | Keys, SELECT + KNOB 2 | Pad's sound | Warm, Airy, Choral, Deep | Warm |
 | Melody, SELECT + KNOB 1 | Melody's sound | Auto, Flute, Vocal, Vibes, Marimba, Music box, Glass | Auto |
-| Melody, SELECT + KNOB 2 | Melody's mode | Phrases, Arp | Phrases |
-| Melody, SELECT + KNOB 3 | Arp's pattern | Up, Down, Up-Down, Random, Conv, PedT, PedR | Up |
-| Melody, SELECT + KNOB 4 | Arp's skip | 0–100 | 0 |
+| Melody, SELECT + KNOB 2 | Melody's mode | Phrases, Arp, Keys, Keys Arp | Keys (Auto: Phrases) |
+| Melody, SELECT + KNOB 3 | The arpeggio's pattern | Up, Down, Up-Down, Random, Conv, PedT, PedR, Played | Up |
+| Melody, SELECT + KNOB 4 | The arpeggio's skip | 0–100 | 0 |
+| Melody, in Keys Arp, SELECT + REC | Latch | Off, On | Off |
 | Bass, SELECT + KNOB 1 | Bass's sound | Warm, Sub, Hollow, Round | Warm |
 
 ---

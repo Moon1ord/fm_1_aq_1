@@ -892,15 +892,15 @@ static void t_queue(void)
     uint32_t i;
     printf("  a piece: %d commands, the queue %u\n", P_NPARAMS + 6, EN_ROOM_MAX);
     CHECK(P_NPARAMS + 6 <= (int)EN_ROOM_MAX, "a piece no longer fits");
-    CHECK(P_NPARAMS + 6 == 41, "a piece's commands: %d", P_NPARAMS + 6);
+    CHECK(P_NPARAMS + 6 == 42, "a piece's commands: %d", P_NPARAMS + 6);
     CHECK(EN_ROOM_MAX == 56u, "the queue as it was");
     en_init();
     run(256u, 256u);
     CHECK(en_room() == EN_ROOM_MAX, "room %u", en_room());
-    for (i = 0u; i < 41u; i++)
+    for (i = 0u; i < 42u; i++)
         en_set(P_MELMODE, (int)(i & 1u));
-    CHECK(!en_dropped(), "forty-one dropped");
-    CHECK(en_room() == EN_ROOM_MAX - 41u, "room %u", en_room());
+    CHECK(!en_dropped(), "forty-two dropped");
+    CHECK(en_room() == EN_ROOM_MAX - 42u, "room %u", en_room());
     for (i = 0u; i < EN_ROOM_MAX; i++)
         en_set(P_ARPPAT, (int)(i & 7u) % EN_ARP_NPATTERNS);
     CHECK(en_dropped() && !en_dropped(), "a flood: it says so, once");
@@ -911,18 +911,18 @@ static void t_queue(void)
     en_set(P_ARPPAT, 9);
     en_set(P_ARPSKIP, 101);
     run(256u, 256u);
-    CHECK(en_test_par(P_MELMODE) == EN_MEL_ARP && en_test_par(P_ARPPAT) == EN_ARP_PEDROOT && en_test_par(P_ARPSKIP) == 100, "out of range: %d %d %d", en_test_par(P_MELMODE), en_test_par(P_ARPPAT), en_test_par(P_ARPSKIP));
+    CHECK(en_test_par(P_MELMODE) == EN_MEL_KEYS_ARP && en_test_par(P_ARPPAT) == EN_ARP_PLAYED && en_test_par(P_ARPSKIP) == 100, "out of range: %d %d %d", en_test_par(P_MELMODE), en_test_par(P_ARPPAT), en_test_par(P_ARPSKIP));
     en_set(P_MELMODE, -1);
     en_set(P_ARPPAT, -1);
     en_set(P_ARPSKIP, -1);
     run(256u, 256u);
     CHECK(en_test_par(P_MELMODE) == EN_MEL_PHRASES && en_test_par(P_ARPPAT) == EN_ARP_UP && en_test_par(P_ARPSKIP) == 0, "out of range: %d %d %d", en_test_par(P_MELMODE), en_test_par(P_ARPPAT), en_test_par(P_ARPSKIP));
     CHECK(en_param_info(P_ARPSKIP)->lo == 0 && en_param_info(P_ARPSKIP)->hi == 100 && en_param_info(P_ARPSKIP)->def == 0, "Skip's range");
-    CHECK(en_param_info(P_ARPPAT)->hi == 6, "the patterns: %d", en_param_info(P_ARPPAT)->hi + 1);
-    CHECK(EN_ARP_UP == 0 && EN_ARP_DOWN == 1 && EN_ARP_UPDOWN == 2 && EN_ARP_RANDOM == 3 && EN_ARP_CONVERGE == 4 && EN_ARP_PEDTOP == 5 && EN_ARP_PEDROOT == 6, "a stored pattern keeps its meaning");
+    CHECK(en_param_info(P_ARPPAT)->hi == 7, "the patterns: %d", en_param_info(P_ARPPAT)->hi + 1);
+    CHECK(EN_ARP_UP == 0 && EN_ARP_DOWN == 1 && EN_ARP_UPDOWN == 2 && EN_ARP_RANDOM == 3 && EN_ARP_CONVERGE == 4 && EN_ARP_PEDTOP == 5 && EN_ARP_PEDROOT == 6 && EN_ARP_PLAYED == 7, "a stored pattern keeps its meaning");
     /* the words */
     {
-        static const char *const W[EN_ARP_NPATTERNS] = {"Up", "Down", "Up-Down", "Random", "Conv", "PedT", "PedR"};
+        static const char *const W[EN_ARP_NPATTERNS] = {"Up", "Down", "Up-Down", "Random", "Conv", "PedT", "PedR", "Played"};
         char t[16];
         int p;
         en_param_text(P_MELMODE, EN_MEL_PHRASES, t);
@@ -1005,7 +1005,7 @@ static void t_modes(void)
     /* a chord that changes under it: never the same note twice, always one of the chord's, the pedal still every other note */
     {
         int p;
-        for (p = EN_ARP_CONVERGE; p < EN_ARP_NPATTERNS; p++) {
+        for (p = EN_ARP_CONVERGE; p <= EN_ARP_PEDROOT; p++) {
             int last = 0, was_pedal = -1;
             uint32_t h = 2166136261u;
             en_arp_start(&a);

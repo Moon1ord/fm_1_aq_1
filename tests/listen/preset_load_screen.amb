@@ -1,5 +1,7 @@
 # Three minutes of Load Screen, played as a player would, from power-on with a fixed seed: the keys and the pad, then the layers brought in by hand, a section, a break, some taken away. Chords, rhythms and melody composed, as ever. Not one of the tests.
 #   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/preset_load_screen.amb app/build/listen
+# (the melody in Phrases, set here: a recipe's Hands has it in Keys, and this shows the piece as it composes)
+setpar 32 0
 wait 100
 tap SAVE
 wait 800

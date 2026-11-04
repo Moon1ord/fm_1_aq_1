@@ -20,7 +20,7 @@
 enum { OBJ_PROJ, OBJ_PANEL, OBJ_NOBJ };
 #define APP_STORE_MAP {0xFC000u, 0xDC000u}
 #define PROJ_MAGIC 0x31555141u           /* "AQU1" */
-#define PROJ_FORMAT 9u                   /* 9: Arp's skip, by piece (a longer slot). 8: the melody's mode and Arp's pattern, by piece (a longer slot). 7: the sounds, by piece (a longer slot). 6: Hands is the recipes', and means the player's (an old save's Auto or Hands meant another thing: the recipes). 5: Auto or Hands, by piece. 4: the seven pages' knobs, the degrees (AMB-1's and older saves are not read: the recipes) */
+#define PROJ_FORMAT 10u                  /* 10: the melody's keys: its modes Keys and Keys Arp, by piece, and Hands' and Auto's each its own (mel_other); Latch, by piece (a longer slot). 9: Arp's skip, by piece (a longer slot). 8: the melody's mode and Arp's pattern, by piece (a longer slot). 7: the sounds, by piece (a longer slot). 6: Hands is the recipes', and means the player's (an old save's Auto or Hands meant another thing: the recipes). 5: Auto or Hands, by piece. 4: the seven pages' knobs, the degrees (AMB-1's and older saves are not read: the recipes) */
 #define NPIECES EN_NPIECES
 
 typedef struct {
@@ -28,7 +28,7 @@ typedef struct {
     uint16_t pool;
     uint16_t mask;                       /* the notes chords may stand on, relative to the root */
     uint8_t arrange;                     /* EN_AUTO, EN_HANDS */
-    uint8_t rsv;
+    uint8_t mel_other;                   /* the melody's mode in the other arrangement: SELECT + HOME takes it up */
 } slot_t;
 
 typedef struct {
@@ -39,7 +39,7 @@ typedef struct {
     uint8_t leds;                        /* lights: 0 off, 1 keys and the buttons' glow, 2 keys only */
     uint8_t piece;                       /* which piece */
     uint8_t arrange;                     /* its arrangement: EN_AUTO, EN_HANDS (SELECT + HOME) */
-    uint8_t rsv0;
+    uint8_t mel_other;                   /* its melody's mode in the other arrangement */
     slot_t slot[NPIECES];                /* every piece as it was left (Tune and MIDI out are global) */
     uint8_t rsv[16];                     /* room to grow */
 } project_t;

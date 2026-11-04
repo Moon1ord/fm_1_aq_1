@@ -19,4 +19,30 @@ for (let i = 0; i < 400; i++) {
   for (const v of l) peak = Math.max(peak, Math.abs(v));
 }
 console.log("peak", peak.toFixed(3), "blits", ex.web_blits());
-process.exit(peak > 0.05 && peak < 1 ? 0 : 1);
+// The keys, played, on the Melody page in Keys: what the page's mouse and computer keys do (web_keys, index.html's syncKeys), a Shift-click's key down until clicked again the same: the note goes out, comes up with it, and the scale stays
+let bad = peak > 0.05 && peak < 1 ? 0 : 1;
+const B_ARP = 8;
+const blocks = (n) => { for (let i = 0; i < n; i++) ex.web_render(128); };
+const notes = () => {
+  const p = new Uint32Array(mem.buffer, ex.web_out_pkts(), ex.web_out_n()), r = [];
+  for (const x of p) { const st = (x >> 8) & 255; if ((st & 0xEF) === 0x81) r.push([st, (x >> 16) & 255]); }
+  return r;
+};
+ex.web_keys(0); blocks(40);
+ex.web_buttons(1 << B_ARP); blocks(20); ex.web_buttons(0); blocks(40);
+const lit0 = ex.web_lit_keys(), dim0 = ex.web_dim_keys();
+if (!lit0 || !dim0 || (lit0 & dim0)) { console.log("Melody page: lit", lit0, "at the middle level", dim0); bad = 1; }
+ex.web_out_clear();
+ex.web_keys(1 << 2); blocks(20);
+let n = notes();
+if (n.length !== 1 || n[0][0] !== 0x91 || n[0][1] !== 67) { console.log("a key down:", JSON.stringify(n)); bad = 1; }
+if (!(ex.web_lit_keys() & 1 << 2)) { console.log("a key down: not lit"); bad = 1; }
+ex.web_out_clear();
+ex.web_keys(1 << 2 | 1 << 5); blocks(20);                 // a second, the first kept down: a chord with a mouse
+ex.web_keys(1 << 5); blocks(20);
+n = notes();
+if (n.length !== 2 || n[0][0] !== 0x91 || n[0][1] !== 70 || n[1][0] !== 0x81 || n[1][1] !== 67) { console.log("two keys:", JSON.stringify(n)); bad = 1; }
+ex.web_keys(0); blocks(20);
+if (ex.web_lit_keys() !== lit0 || ex.web_dim_keys() !== dim0) { console.log("the scale moved"); bad = 1; }
+console.log("the keys on the Melody page:", bad ? "FAILED" : "ok");
+process.exit(bad);

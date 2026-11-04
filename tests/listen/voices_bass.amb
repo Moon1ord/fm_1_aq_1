@@ -1,5 +1,7 @@
 # The bass's sounds, in context: its level up, the keys and the pad, the drums and the hats low, no melody. Each sound about 30 s in turn, from the first; the time each starts: the report of this change, and "sound" lines in the log. Not one of the tests.
 #   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/voices_bass.amb app/build/listen
+# (the melody in Phrases, set here: a recipe's Hands has it in Keys, and this shows the piece as it composes)
+setpar 32 0
 wait 300
 master 2430
 seed 11

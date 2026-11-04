@@ -40,7 +40,8 @@ enum {
     P_ROOT, P_TUNE, P_MIDI,                           /* Setup (its fourth knob, the lights, is the panel's: not the engine's) */
     P_MODE,                                           /* the ALGORITHM encoder */
     P_KEYSND, P_PADSND, P_BASSSND, P_MELSND,          /* the sounds: SEL + a knob (the first of each is the sound the owner approved; the melody's first is Auto, then each timbre + 1) */
-    P_MELMODE, P_ARPPAT, P_ARPSKIP,                   /* the melody: Phrases or Arp, Arp's pattern, Arp's skip: SEL + KNOB 2, 3, 4 on its page */
+    P_MELMODE, P_ARPPAT, P_ARPSKIP,                   /* the melody: Phrases, Arp, Keys or Keys Arp; the arpeggios' pattern and skip: SEL + KNOB 2, 3, 4 on its page */
+    P_ARPLATCH,                                       /* Keys Arp's latch: what is let go plays on until the next hold: SEL + REC on its page */
     P_NPARAMS
 };
 typedef struct {
@@ -81,6 +82,13 @@ extern volatile uint8_t en_layers_absent;      /* Auto: bits of EN_L_*: the next
  * Each mode keeps its own set of layers: Auto starts all on, Hands with keys and pad. Back to Auto it goes on from where it is. en_init: Auto; the app says which */
 enum { EN_AUTO, EN_HANDS };
 void en_arrange(int mode);
+/* The keys, played: Keys and Keys Arp, the melody's modes. The whole of the hand's keys in one word, as en_duck's is: no queue, so nothing can be dropped, and what comes up comes up at the next block whatever else is going on: a key's note-off is the word having no such bit. en_keys: the keys played now, bit k key k (F3 on the panel, F4 here: en_keys_note), up to the next block to take. en_keys_seen: the word's keys as the render last took them: a press that has not been seen yet is held on by the panel until it has (a tap shorter than a block still sounds). en_keys_clear: Latch's set gone, at the next block, whatever is held (a new piece; part of the same word).
+ * Off a keys mode the word is not heard, to the bit. en_hand_set: what they are playing, for the lights (Keys: the keys; Keys Arp: the set, latched ones too) */
+#define EN_KEYS_N 27
+void en_keys(uint32_t held);
+void en_keys_clear(void);
+uint32_t en_keys_seen(void);
+extern volatile uint32_t en_hand_set;
 /* The volume's duck, for a flash write: the whole output, after everything, down to nothing in 150 ms or back in 300 ms. Nothing under it knows: it plays on.
  * en_ducked: at zero, and has been for a whole DMA ring of samples, so a write now cuts nothing (a panic ends a duck; silence is at zero already) */
 void en_duck(int on);
@@ -294,8 +302,8 @@ int en_bass_ch(const en_hchord_t *ch, const en_hchord_t *nx, uint32_t pool, uint
  * en_arp_rest: Skip. Whether this step, on the grid of div sixteenths, strikes nothing at this setting, 0..100: that share of the bar's steps, always the same ones in the bar for this seed, a higher setting's being a lower one's and more;
  * the downbeat only at 100. The figure goes on through a rest (en_arp_next is called for it), so what sounds is what would have sounded.
  * en_arp_timbre: what Auto has it sound in: of what Tone allows, those that speak at a sixteenth, by a hash that moves slowly. */
-enum { EN_MEL_PHRASES, EN_MEL_ARP };
-enum { EN_ARP_UP, EN_ARP_DOWN, EN_ARP_UPDOWN, EN_ARP_RANDOM, EN_ARP_CONVERGE, EN_ARP_PEDTOP, EN_ARP_PEDROOT, EN_ARP_NPATTERNS };   /* kept with a piece: new ones at the end */
+enum { EN_MEL_PHRASES, EN_MEL_ARP, EN_MEL_KEYS, EN_MEL_KEYS_ARP };   /* kept with a piece: new ones at the end */
+enum { EN_ARP_UP, EN_ARP_DOWN, EN_ARP_UPDOWN, EN_ARP_RANDOM, EN_ARP_CONVERGE, EN_ARP_PEDTOP, EN_ARP_PEDROOT, EN_ARP_PLAYED, EN_ARP_NPATTERNS };   /* kept with a piece: new ones at the end. Played: Keys Arp's, the order they went down in; on the chord, in Arp, which has no such order: Up */
 typedef struct {
     uint8_t last;                              /* the last note, 0 none yet */
     int8_t dir;                                /* up-down: the way it is going */
@@ -307,6 +315,10 @@ void en_arp_start(en_arp_t *a);
 int en_arp_next(en_arp_t *a, uint32_t tones, int key, int pattern, uint32_t h);
 int en_arp_rest(uint32_t seed, uint32_t step, int div, int skip);
 int en_arp_timbre(int tone, uint32_t h);
+/* Keys and Keys Arp, the pure parts. en_keys_note: the note a key plays, at this Octave: F4 for the bottom key, a semitone a key, so that the keys at Octave 0 are in the melody's register. en_keys_timbre: what Auto has the keys sound in: one voice for a Tone, the middle of its window of those that speak at once. en_held_next: Keys Arp's next key, from where it is, of these keys in the order they went down: a state like Arp's and the same patterns, by pitch but for Played; h only for Random */
+int en_keys_note(int key, int octave);
+int en_keys_timbre(int tone);
+int en_held_next(en_arp_t *a, const uint8_t *order, int n, int pattern, uint32_t h);
 int en_mel_fold(int n);                        /* a note MIDI has: over 127, down by octaves, so it stays in tune */
 enum { EN_TB_FLUTE, EN_TB_VOCAL, EN_TB_VIBES, EN_TB_MARIMBA, EN_TB_BOX, EN_TB_GLASS, EN_NTIMBRES };   /* softest to brightest */
 extern const char *const EN_TIMBRE_NAME[EN_NTIMBRES];

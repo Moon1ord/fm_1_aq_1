@@ -1,0 +1,420 @@
+# The melody played by hand, on Load Screen: a line by script as a hand would have it (off the grid, as a hand is), then Keys Arp at each division and in the patterns, Skip, a key added, Played, then Latch. Fixed seed. Times are from the start of the wav, in the comments. Not one of the tests.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/keys_melody.amb app/build/listen
+wait 100
+tap SAVE
+wait 800
+reboot
+seed 3001
+master 2430
+trace app/build/listen/keys_melody.trace
+wav keys_melody.wav
+# 0.0 s: the keys, the pad, the bass, the drums, the hats; the melody on, on its page, in Keys, and nothing yet: silent until you play
+press SEL
+tap LFO
+tap SEQ
+tap FX
+tap ARP
+release SEL
+tap ARP
+wait 5647
+# 5.6 s: Keys, a line by hand, Auto (Tone 50: Marimba)
+key 9 down
+wait 311
+key 9 up
+wait 42
+key 11 down
+wait 311
+key 11 up
+wait 42
+key 13 down
+wait 621
+key 13 up
+wait 85
+key 16 down
+wait 310
+key 16 up
+wait 43
+key 13 down
+wait 155
+key 13 up
+wait 21
+key 11 down
+wait 156
+key 11 up
+wait 21
+key 9 down
+wait 621
+key 9 up
+wait 85
+key 8 down
+wait 310
+key 8 up
+wait 43
+key 9 down
+wait 155
+key 9 up
+wait 21
+key 11 down
+wait 155
+key 11 up
+wait 21
+key 13 down
+wait 311
+key 13 up
+wait 42
+key 15 down
+wait 311
+key 15 up
+wait 42
+key 16 down
+wait 932
+key 16 up
+wait 127
+wait 353
+key 16 down
+wait 311
+key 16 up
+wait 42
+key 18 down
+wait 311
+key 18 up
+wait 42
+key 20 down
+wait 621
+key 20 up
+wait 85
+key 18 down
+wait 310
+key 18 up
+wait 43
+key 16 down
+wait 155
+key 16 up
+wait 21
+key 13 down
+wait 156
+key 13 up
+wait 21
+key 11 down
+wait 621
+key 11 up
+wait 85
+key 13 down
+wait 310
+key 13 up
+wait 43
+key 11 down
+wait 155
+key 11 up
+wait 21
+key 9 down
+wait 155
+key 9 up
+wait 22
+key 8 down
+wait 310
+key 8 up
+wait 42
+key 9 down
+wait 311
+key 9 up
+wait 42
+key 9 down
+wait 932
+key 9 up
+wait 127
+wait 353
+# 16.9 s: the same in Vibes (SEL + KNOB 1), two notes at the end of each line
+press SEL
+spin K1 3
+release SEL
+key 9 down
+wait 311
+key 9 up
+wait 42
+key 11 down
+wait 311
+key 11 up
+wait 42
+key 13 down
+wait 621
+key 13 up
+wait 85
+key 16 down
+wait 311
+key 16 up
+wait 42
+key 13 down
+wait 155
+key 13 up
+wait 21
+key 11 down
+wait 156
+key 11 up
+wait 21
+key 9 down
+wait 621
+key 9 up
+wait 85
+key 8 down
+wait 310
+key 8 up
+wait 43
+key 9 down
+wait 155
+key 9 up
+wait 21
+key 11 down
+wait 155
+key 11 up
+wait 22
+key 13 down
+wait 310
+key 13 up
+wait 43
+key 15 down
+wait 310
+key 15 up
+wait 42
+key 16 down
+wait 932
+key 16 up
+wait 127
+key 9 down
+key 16 down
+wait 621
+key 16 up
+wait 85
+key 9 up
+wait 353
+key 16 down
+wait 311
+key 16 up
+wait 42
+key 18 down
+wait 311
+key 18 up
+wait 42
+key 20 down
+wait 621
+key 20 up
+wait 85
+key 18 down
+wait 310
+key 18 up
+wait 43
+key 16 down
+wait 155
+key 16 up
+wait 21
+key 13 down
+wait 156
+key 13 up
+wait 21
+key 11 down
+wait 621
+key 11 up
+wait 85
+key 13 down
+wait 310
+key 13 up
+wait 43
+key 11 down
+wait 155
+key 11 up
+wait 21
+key 9 down
+wait 155
+key 9 up
+wait 22
+key 8 down
+wait 310
+key 8 up
+wait 42
+key 9 down
+wait 311
+key 9 up
+wait 42
+key 9 down
+wait 932
+key 9 up
+wait 127
+key 13 down
+key 9 down
+wait 621
+key 9 up
+wait 85
+key 13 up
+wait 353
+# 29.6 s: OCT- : an octave down, the first line again; then back
+tap OCT-
+key 9 down
+wait 311
+key 9 up
+wait 42
+key 11 down
+wait 311
+key 11 up
+wait 42
+key 13 down
+wait 621
+key 13 up
+wait 85
+key 16 down
+wait 310
+key 16 up
+wait 43
+key 13 down
+wait 155
+key 13 up
+wait 21
+key 11 down
+wait 156
+key 11 up
+wait 21
+key 9 down
+wait 621
+key 9 up
+wait 85
+key 8 down
+wait 310
+key 8 up
+wait 43
+key 9 down
+wait 155
+key 9 up
+wait 21
+key 11 down
+wait 155
+key 11 up
+wait 21
+key 13 down
+wait 311
+key 13 up
+wait 42
+key 15 down
+wait 311
+key 15 up
+wait 42
+key 16 down
+wait 932
+key 16 up
+wait 127
+wait 353
+tap OCT+
+# 35.3 s: Keys Arp (SEL + KNOB 2), a hold of D F# A C#; 1/4, Up
+press SEL
+spin K2 1
+release SEL
+setpar 9 10
+key 9 down
+key 13 down
+key 16 down
+key 20 down
+wait 5647
+# 40.9 s: 1/8
+setpar 9 50
+wait 5647
+# 46.6 s: 1/16
+setpar 9 90
+wait 5647
+# 52.2 s: Down, 1/16
+setpar 33 1
+wait 4236
+# 56.5 s: Up-Down, 1/16
+setpar 33 2
+wait 4235
+# 60.7 s: Random, 1/16
+setpar 33 3
+wait 4235
+# 64.9 s: Conv, 1/16
+setpar 33 4
+wait 4235
+# 69.2 s: PedT, 1/16
+setpar 33 5
+wait 4236
+# 73.4 s: PedR, 1/16
+setpar 33 6
+wait 4235
+# 77.6 s: Skip 40, Up, 1/16
+setpar 33 0
+setpar 34 40
+wait 5647
+# 83.3 s: Skip 0; a key added (E), and one let go (D), the grid not moved
+setpar 34 0
+key 11 down
+wait 2824
+key 9 up
+wait 2823
+key 13 up
+key 16 up
+key 20 up
+key 11 up
+# 88.9 s: all let go: it stops
+wait 1412
+# 90.4 s: Played, 1/8: the same notes pressed high to low
+setpar 33 7
+setpar 9 50
+key 20 down
+wait 40
+key 16 down
+wait 40
+key 13 down
+wait 40
+key 9 down
+wait 40
+wait 4235
+key 20 up
+key 16 up
+key 13 up
+key 9 up
+wait 706
+setpar 33 0
+# 95.5 s: Latch on (SEL + REC): a hold, let go, and it plays on at 1/8
+press SEL
+tap REC
+release SEL
+key 9 down
+key 13 down
+key 16 down
+wait 706
+key 9 up
+key 13 up
+key 16 up
+wait 5647
+# 101.8 s: a new hold replaces it: E G# B, let go
+key 11 down
+key 15 down
+key 18 down
+wait 706
+key 11 up
+key 15 up
+key 18 up
+wait 5647
+# 108.2 s: a third, at 1/16
+setpar 9 90
+key 8 down
+key 11 down
+key 16 down
+key 23 down
+wait 353
+key 8 up
+key 11 up
+key 16 up
+key 23 up
+wait 5647
+# 114.2 s: a rest and back, latched: it stops and goes on
+tap PLAY
+wait 2824
+tap PLAY
+wait 2823
+# 119.8 s: Latch off: gone
+press SEL
+tap REC
+release SEL
+wait 2824
+# 122.6 s: the end
+wavstop
+trace off
+expect midion2 0
+expect bellson 0

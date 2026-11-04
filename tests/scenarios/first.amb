@@ -1,5 +1,7 @@
 # a first look and listen: it grows from power-on; the pages; a minute of the garden
 wav first.wav
+# (the melody in Phrases, as it composes: the recipes' Hands has it in Keys)
+setpar 32 0
 wait 200
 expect playing 1
 expect pool 0xAD5

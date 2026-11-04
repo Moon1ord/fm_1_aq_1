@@ -3,7 +3,7 @@
 AQ-1 turns the M-VAVE FM-1 into a generative light drum & bass instrument, in the mood of console menus and
 loading screens from the 2000s: warm, calm and hopeful, as if something is about to begin. It composes chords,
 rhythms and melodies without end, and you decide what plays. It powers on with only the keys and the pad; you
-bring in the melody, the bass, the drums and the hats by hand, shape them with the knobs and call breaks. If
+bring in the melody, the bass, the drums and the hats by hand, play the melody on the keys or let it compose, shape them with the knobs and call breaks. If
 you'd rather have the piece play itself, switch it to Auto.
 
 ![AQ-1's Home screen: the face, the ring of notes, the chord, the layers and four knobs](docs/img/screen-home.png) ![The Melody page](docs/img/screen-melody.png) ![Degrees: the notes chords may stand on](docs/img/screen-degrees.png)
@@ -49,7 +49,7 @@ If it no longer starts at all, see "Recovering an FM-1 that won't start" in the 
 
 | | |
 |---|---|
-| Keys | The scale: each key adds its note or takes it out |
+| Keys | The scale: each key adds its note or takes it out. On the Melody page, in Keys and Keys Arp: they play the melody |
 | SELECT + a key | Whether chords may stand on that note |
 | SELECT + ENV · ARP · LFO · SEQ · FX | Keys and pad · melody · bass · kick and snare · hats, on or off |
 | SELECT + HOME | Hands (you lead) or Auto (the arranger leads) |

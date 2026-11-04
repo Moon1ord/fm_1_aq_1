@@ -1,0 +1,799 @@
+# the melody played by hand, as a hand has it. Which key does what on which page, what the lights say, what is kept; nothing left down whatever comes between. What it plays: keys_test
+# (Load Screen, D Lydian. Key k is pitch class (5 + k) % 12: key 9 and key 21 are its tonic. The note it plays: 65 + k, 0x41 for key 0)
+wait 300
+expect unfit 0
+expect enagree 0
+expect par32 2
+expect melother 0
+expect par35 0
+expect arrange 1
+expect pool 0xAD5
+expect mutemel 1
+# ---- Home, and every page but the Melody's: a key is the scale, as ever
+listen
+tapkey 0
+said ADDED F
+expect midion2 0
+expect pool 0xADD
+tapkey 0
+said REMOVED F
+expect pool 0xAD5
+expect keyslit 45460314
+expect keysmid 0
+tap ENV
+wait 100
+tapkey 0
+said ADDED F
+tapkey 0
+said REMOVED F
+tap LFO
+wait 100
+tapkey 0
+said ADDED F
+tapkey 0
+said REMOVED F
+expect pool 0xAD5
+expect keyslit 45460314
+# ---- the Melody page in Keys: a key plays, chromatic, no snapping (F is out of the scale); the scale does not move, nothing to save
+tap SAVE
+wait 800
+expect dirty 0
+tap ARP
+wait 300
+said Melody page: Level 60, Rate 50, Tone 50, Octave 0. Sound Auto, mode Keys
+expect soundis=Auto/Keys 1
+wait 1700
+shot keys_page.png
+expect keyslit 2097664
+expect keysmid 43362650
+out
+key 0 down
+wait 12
+expect_out USB 91 41 3C
+expect midion2 1
+expect kplay 1
+expect handset 1
+expect keyslit 2097665
+expect keysmid 43362650
+out
+key 0 up
+wait 12
+expect_out USB 81 41 00
+expect midion2 0
+expect kplay 0
+expect handset 0
+expect pool 0xAD5
+expect dirty 0
+expect keyslit 2097664
+out
+# each key its note; two together; the keys of the scale light up over their middle level
+key 1 down
+key 26 down
+wait 12
+expect_out USB 91 42 3C
+expect_out USB 91 5B 3C
+expect midion2 2
+expect keyslit 69206530
+expect keysmid 43362648
+key 1 up
+key 26 up
+wait 12
+expect midion2 0
+out
+# the shortest tap: shorter than a block, and it sounds, and comes up
+key 5 down
+wait 1
+key 5 up
+wait 20
+expect_out USB 91 46 3C
+expect_out USB 81 46 00
+expect midion2 0
+expect kplay 0
+out
+# ---- SEL + a key: degrees, still, here too: no note
+press SEL
+wait 10
+tapkey 9
+said NO CHORDS ON
+wait 12
+expect midion2 0
+expect_no_out USB 91 4A 3C
+expect mask 0xFFE
+tapkey 11
+wait 12
+expect_no_out USB 91 4C 3C
+expect mask 0xFFA
+tapkey 9
+tapkey 11
+release SEL
+wait 20
+expect mask 0xFFF
+expect midion2 0
+out
+# (SEL held: the lights are the Degrees', as on every page)
+press SEL
+wait 10
+expect keysmid 0
+release SEL
+wait 10
+# ---- leaving the page with a key down: it comes up when it comes up, and its release touches no scale
+out
+key 2 down
+wait 12
+expect midion2 1
+tap ENV
+wait 50
+expect midion2 1
+expect view 1
+key 2 up
+wait 12
+expect midion2 0
+expect pool 0xAD5
+expect_out USB 81 43 00
+listen
+wait 100
+unsaid REMOVED
+unsaid ADDED
+out
+# one that went down on another page: that was the scale's, and its release on this one plays nothing
+key 0 down
+wait 12
+expect pool 0xADD
+expect midion2 0
+tap ARP
+wait 50
+expect kplay 0
+key 0 up
+wait 20
+expect midion2 0
+expect_no_out USB 91 41 3C
+expect pool 0xADD
+out
+tap ENV
+wait 50
+tapkey 0
+expect pool 0xAD5
+tap ARP
+wait 200
+# ---- OCT- and OCT+, and the Octave knob: one Octave. At the press: what is down stays what it was
+tap OCT+
+wait 20
+expect par11 1
+key 0 down
+wait 12
+expect_out USB 91 4D 3C
+tap OCT-
+wait 20
+expect par11 0
+key 1 down
+wait 12
+expect_out USB 91 42 3C
+key 0 up
+key 1 up
+wait 12
+expect_out USB 81 4D 00
+expect_out USB 81 42 00
+expect midion2 0
+out
+spin K4 -1
+expect par11 -1
+key 0 down
+wait 12
+expect_out USB 91 35 3C
+key 0 up
+wait 12
+spin K4 1
+expect par11 0
+out
+# ---- the melody off: unheard, its MIDI goes on; on: heard
+expect mutemel 1
+key 3 down
+wait 500
+expect meter1 0
+expect_out USB 91 44 3C
+key 3 up
+wait 12
+expect midion2 0
+press SEL
+tap ARP
+release SEL
+wait 1500
+expect mutemel 0
+expect gain1 100
+key 3 down
+wait 200
+expect meter1 >0
+key 3 up
+wait 12
+out
+# ---- resting: it sounds, in the room
+tap PLAY
+wait 200
+expect playing 0
+key 4 down
+wait 200
+expect_out USB 91 45 3C
+expect meter1 >0
+key 4 up
+wait 12
+expect midion2 0
+tap PLAY
+wait 50
+expect playing 1
+out
+# ---- a save, with a key down: the note goes on under the duck; up in it, up all the same
+key 6 down
+wait 12
+expect midion2 1
+tap SAVE
+wait 60
+key 6 up
+wait 60
+expect midion2 0
+wait 800
+expect saving 0
+expect ducked 0
+out
+# ---- a flood of the queue, with a key down
+key 7 down
+wait 12
+flood 200
+key 7 up
+wait 7
+expect midion2 0
+wait 100
+expect enagree 0
+out
+# ---- a mode change, a key down: to Keys Arp it goes on; out of the keys' modes it goes, and its release is nothing
+key 8 down
+wait 12
+press SEL
+spin K2 1
+said MELODY MODE Keys Arp
+expect par32 3
+release SEL
+wait 20
+expect kplay 256
+expect handset 256
+press SEL
+spin K2 1
+said MELODY MODE Phrases
+expect par32 0
+release SEL
+wait 20
+expect kplay 0
+expect handset 0
+expect midion2 <2
+key 8 up
+wait 500
+expect pool 0xAD5
+expect midion2 <2
+out
+# ---- the Melody page in Phrases and in Arp: a key is the scale, the lights the scale, as they were
+listen
+wait 300
+expect par32 0
+expect keyslit 45460314
+expect keysmid 0
+tapkey 0
+said ADDED F
+tapkey 0
+said REMOVED F
+press SEL
+spin K2 1
+expect par32 1
+release SEL
+wait 100
+expect keyslit 45460314
+expect keysmid 0
+tapkey 0
+said ADDED F
+tapkey 0
+said REMOVED F
+press SEL
+spin K2 1
+expect par32 2
+spin K2 1
+expect par32 3
+release SEL
+wait 300
+# ---- Keys Arp: the Rate says its division, the lights the same, the keys their set; the pattern and the skip as Arp's
+expect soundis=Auto/Keys Arp/Up 1
+expect keyslit 2097664
+expect keysmid 43362650
+tap ENV
+wait 100
+listen
+tap ARP
+wait 300
+said Melody page: Level 60, Rate 1/8, Tone 50, Octave 0. Sound Auto, mode Keys Arp, pattern Up
+shot keys_arp_page.png
+out
+key 0 down
+key 4 down
+wait 600
+expect handset 17
+expect keyslit 2097681
+expect midion2 <2
+key 0 up
+key 4 up
+wait 100
+expect handset 0
+expect midion2 0
+wait 300
+expect midion2 0
+press SEL
+spin K3 -1
+said ARP PATTERN Played
+expect par33 7
+spin K3 1
+expect par33 0
+release SEL
+expect unfit 0
+# ---- Latch: SEL + REC, here. REC does not hold for it. The header says it; so does the reader
+expect held 0
+press SEL
+tap REC
+release SEL
+said ARP LATCH ON
+expect par35 1
+expect held 0
+expect dirty 1
+wait 300
+expect soundis=Auto/Keys Arp/Up/L 1
+expect enagree 0
+wait 1400
+shot keys_arp_latch.png
+tap ENV
+wait 100
+listen
+tap ARP
+wait 300
+said mode Keys Arp, pattern Up, latch on
+# the header at its longest: no overflow, whatever the setting
+setpar 33 2
+setpar 34 100
+wait 300
+expect soundis=KArp/UpDn/S100/L 1
+expect stale 0
+wait 1400
+shot keys_arp_longest.png
+setpar 33 3
+wait 300
+expect soundis=KArp/Rand/S100/L 1
+setpar 33 0
+setpar 34 0
+wait 300
+key 0 down
+key 4 down
+wait 100
+expect handset 17
+key 0 up
+key 4 up
+wait 400
+expect handset 17
+expect keyslit 2097681
+expect midion2 <2
+# a page away it plays on; a key there is the scale's and does not touch the set
+tap ENV
+wait 50
+tapkey 0
+expect handset 17
+expect pool 0xADD
+tapkey 0
+expect pool 0xAD5
+tap ARP
+wait 100
+# a press, none down: a new set; one more while it is down: added
+key 7 down
+wait 12
+expect handset 128
+key 9 down
+wait 12
+expect handset 640
+key 7 up
+key 9 up
+wait 100
+expect handset 640
+# the melody off: the set stays, no sound; a rest: the set stays, no note; back
+press SEL
+tap ARP
+release SEL
+wait 1500
+expect handset 640
+expect meter1 0
+press SEL
+tap ARP
+release SEL
+wait 1500
+tap PLAY
+wait 300
+expect playing 0
+expect handset 640
+expect midion2 0
+wait 400
+expect midion2 0
+tap PLAY
+wait 400
+expect playing 1
+expect handset 640
+# SEL + REC again: off, and what no key holds goes
+press SEL
+tap REC
+release SEL
+said ARP LATCH OFF
+wait 50
+expect par35 0
+expect handset 0
+expect midion2 0
+expect held 0
+# ---- elsewhere, SEL + REC is REC: on another page; on this one in the other modes
+tap ENV
+wait 100
+press SEL
+tap REC
+release SEL
+wait 50
+expect held 1
+expect par35 0
+tap REC
+wait 50
+expect held 0
+tap ARP
+wait 100
+press SEL
+spin K2 -1
+expect par32 2
+release SEL
+wait 50
+press SEL
+tap REC
+release SEL
+wait 50
+expect held 1
+expect par35 0
+tap REC
+wait 50
+expect held 0
+press SEL
+spin K2 1
+release SEL
+expect par32 3
+wait 50
+# ---- Latch and a new piece: the set gone, and the keys down at the time are nothing
+press SEL
+tap REC
+release SEL
+expect par35 1
+key 3 down
+wait 12
+key 3 up
+wait 50
+expect handset 8
+key 2 down
+wait 12
+turn PRESET 1 1
+wait 30
+expect piece 1
+expect handset 0
+expect kplay 0
+expect midion2 0
+expect par32 2
+expect par35 0
+expect enagree 0
+key 2 up
+wait 50
+expect midion2 0
+out
+turn PRESET -1 1
+wait 30
+expect piece 0
+expect par32 3
+expect par35 1
+expect handset 0
+wait 100
+expect midion2 0
+expect enagree 0
+# ---- the latch and the mode are kept, through the power going off; the set is not
+key 3 down
+wait 12
+key 3 up
+wait 12
+expect handset 8
+tap SAVE
+wait 800
+reboot
+wait 300
+expect par32 3
+expect par35 1
+expect handset 0
+expect midion2 0
+expect enagree 0
+wait 500
+expect midion2 0
+# ---- a panic: nothing left, and the way back has none of it
+tap ARP
+wait 100
+key 3 down
+wait 200
+panic
+wait 100
+expect silent 1
+expect midion2 0
+expect handset 0
+expect kplay 0
+key 3 up
+wait 50
+uiinit
+wait 3000
+expect silent 0
+expect handset 0
+expect midion2 0
+# ---- SAVE held, the recipe: Keys; no latch; a key down at the time is nothing
+tap ARP
+wait 100
+key 3 down
+wait 200
+press SAVE
+wait 1600
+release SAVE
+wait 50
+expect par32 2
+expect melother 0
+expect par35 0
+expect kplay 0
+expect handset 0
+expect midion2 0
+key 3 up
+wait 50
+expect midion2 0
+expect enagree 0
+wait 800
+# ---- Auto and Hands: each its own mode. To Auto, Phrases, the recipe's; a key on the Melody page is the scale there; back, Keys
+expect par32 2
+press SEL
+tap HOME
+release SEL
+said AUTO
+wait 100
+expect arrange 0
+expect par32 0
+expect melother 2
+expect enagree 0
+tap ARP
+wait 200
+expect keyslit 45460314
+listen
+tapkey 0
+said ADDED F
+tapkey 0
+said REMOVED F
+# a key down, on the way to Auto: gone, and nothing of it after
+press SEL
+tap HOME
+release SEL
+wait 100
+expect arrange 1
+expect par32 2
+expect melother 0
+key 1 down
+wait 12
+expect midion2 1
+press SEL
+tap HOME
+release SEL
+wait 12
+expect arrange 0
+expect par32 0
+expect kplay 0
+expect handset 0
+key 1 up
+wait 50
+expect pool 0xAD5
+# Keys is to be had in Auto too, and is kept as Auto's
+press SEL
+spin K2 -1
+spin K2 -1
+release SEL
+expect par32 2
+out
+key 1 down
+wait 12
+expect_out USB 91 42 3C
+key 1 up
+wait 12
+press SEL
+tap HOME
+release SEL
+wait 50
+expect arrange 1
+expect par32 2
+expect melother 2
+press SEL
+spin K2 1
+spin K2 1
+release SEL
+expect par32 0
+press SEL
+tap HOME
+release SEL
+wait 50
+expect arrange 0
+expect par32 2
+expect melother 0
+press SEL
+spin K2 1
+spin K2 1
+release SEL
+expect par32 0
+press SEL
+tap HOME
+release SEL
+wait 50
+expect arrange 1
+expect par32 0
+press SEL
+spin K2 1
+spin K2 1
+release SEL
+wait 100
+expect par32 2
+expect enagree 0
+# ---- the Lights: Keys, the same on the keys; Off, nothing, even what is played, and it plays
+tap GLO
+wait 100
+spin K4 1
+expect keyslit 45460314
+tap ARP
+wait 100
+expect keyslit 2097664
+expect keysmid 43362650
+key 0 down
+wait 50
+expect keyslit 2097665
+key 0 up
+wait 50
+tap GLO
+wait 100
+spin K4 -2
+expect keyslit 0
+tap ARP
+wait 100
+expect keyslit 0
+expect keysmid 0
+out
+key 0 down
+wait 12
+expect keyslit 0
+expect keysmid 0
+expect_out USB 91 41 3C
+key 0 up
+wait 12
+tap GLO
+wait 100
+spin K4 1
+expect keyslit 45460314
+# ---- the recipes: all of them in Hands in Keys, Phrases kept for Auto, no latch
+tap ARP
+wait 100
+turn PRESET 1 1
+wait 30
+expect par32 2
+expect melother 0
+expect par35 0
+expect arrange 1
+turn PRESET 1 1
+wait 30
+expect par32 2
+turn PRESET 1 1
+wait 30
+expect par32 2
+turn PRESET 1 1
+wait 30
+expect par32 2
+turn PRESET 1 1
+wait 30
+expect par32 2
+turn PRESET 1 1
+wait 30
+expect par32 2
+turn PRESET 1 1
+wait 30
+expect par32 2
+expect melother 0
+turn PRESET 1 1
+wait 30
+expect piece 0
+expect enagree 0
+# ---- the help card
+press ARP
+wait 1000
+said SEL + REC: LATCH
+shot keys_help.png
+release ARP
+wait 100
+expect view 2
+# ---- a save of another format: the recipes. 9 had no latch and no mode of Hands' own
+press SEL
+spin K2 1
+release SEL
+expect par32 3
+tap SAVE
+wait 800
+reboot
+wait 300
+expect par32 3
+storeold
+reboot
+wait 300
+expect par32 2
+expect par35 0
+tap ARP
+wait 100
+press SEL
+spin K2 1
+release SEL
+tap SAVE
+wait 800
+storeshort
+reboot
+wait 300
+expect par32 2
+# ---- out of range, in a save of this format: the recipes
+tap ARP
+wait 100
+press SEL
+spin K2 1
+release SEL
+tap SAVE
+wait 800
+storebad -1 32 4
+reboot
+wait 300
+expect par32 2
+tap ARP
+wait 100
+press SEL
+spin K2 1
+release SEL
+tap SAVE
+wait 800
+storebad 3 35 2
+reboot
+wait 300
+expect par32 2
+expect par35 0
+tap ARP
+wait 100
+press SEL
+spin K2 1
+release SEL
+tap SAVE
+wait 800
+storebad -1 35 -1
+reboot
+wait 300
+expect par32 2
+tap ARP
+wait 100
+press SEL
+spin K2 1
+release SEL
+tap SAVE
+wait 800
+storebadother -1 4
+reboot
+wait 300
+expect par32 2
+tap ARP
+wait 100
+press SEL
+spin K2 1
+release SEL
+tap SAVE
+wait 800
+storebadother 5 200
+reboot
+wait 300
+expect par32 2
+expect unfit 0

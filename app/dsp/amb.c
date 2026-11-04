@@ -32,7 +32,8 @@ static const en_param_t PARAMS[P_NPARAMS] = {
     {"Root", 0, 11, 2},       {"Tune", -50, 50, 0},    {"MIDI out", 0, 1, 1},
     {"Mode", 0, EN_NMODES - 1, 3},
     {"Keys sound", 0, 3, 0},  {"Pad sound", 0, 3, 0},  {"Bass sound", 0, 3, 0}, {"Mel sound", 0, EN_NTIMBRES, 0},
-    {"Mel mode", EN_MEL_PHRASES, EN_MEL_ARP, EN_MEL_PHRASES}, {"Arp pattern", EN_ARP_UP, EN_ARP_NPATTERNS - 1, EN_ARP_UP}, {"Arp skip", 0, 100, 0},
+    {"Mel mode", EN_MEL_PHRASES, EN_MEL_KEYS_ARP, EN_MEL_PHRASES}, {"Arp pattern", EN_ARP_UP, EN_ARP_NPATTERNS - 1, EN_ARP_UP}, {"Arp skip", 0, 100, 0},
+    {"Arp latch", 0, 1, 0},
 };
 const en_param_t *en_param_info(int i) { return (i >= 0 && i < P_NPARAMS) ? &PARAMS[i] : &PARAMS[0]; }
 
@@ -40,19 +41,19 @@ const en_param_t *en_param_info(int i) { return (i >= 0 && i < P_NPARAMS) ? &PAR
  * the sound by ear: Breaks at or under the style's own (50) and Jungle's lower still, the hats no louder to speak of, Move at or under the style's own so that
  * the bass stays long, lone notes down and bloom up for chords that flow. Tune and MIDI out are taken from here by neither: they belong to the player, not
  * the piece */
-/*                       Tem  En Evo St            Key Blo Bri No  Mot Rat Ton Oc  Bas Mov Gli BO  Drm Brk Hat Ki  Ech ET Rev Siz  Rt Tun MI  Md               the sounds: keys, pad, bass, melody; the melody's mode, Arp's pattern, Arp's skip */
+/*                       Tem  En Evo St            Key Blo Bri No  Mot Rat Ton Oc  Bas Mov Gli BO  Drm Brk Hat Ki  Ech ET Rev Siz  Rt Tun MI  Md               the sounds: keys, pad, bass, melody; the melody's mode, the arpeggios' pattern, skip and latch. (Phrases here is Auto's; a piece's recipe is in Hands, and the project makes its mode Keys, with Phrases kept for Auto: project.c) */
 static const struct {
     const char *name;
     int16_t v[P_NPARAMS];
 } PIECES[EN_NPIECES] = {
-    {"Load Screen", {170, 70, 50, EN_ST_LIQUID,   60, 50, 50, 3,  60, 50, 50, 0,  50, 50, 10, 0,  45, 50, 50, 0,  40, 3, 65, 80,  2, 0, 1,  MODE_LYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0}},
-    {"Aqua",        {172, 70, 55, EN_ST_LIQUID,   58, 40, 72, 3,  66, 60, 72, 0,  46, 50, 10, 0,  45, 40, 55, 0,  46, 3, 58, 70,  9, 0, 1,  MODE_IONIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0}},
-    {"Skyline",     {180, 70, 55, EN_ST_ROLLER,   50, 45, 62, 2,  62, 55, 60, 0,  48, 25, 10, 0,  46, 20, 50, 0,  35, 1, 55, 88,  7, 0, 1,  MODE_MIXOLYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0}},
-    {"Rainfall",    {160, 50, 40, EN_ST_DRIFT,    64, 65, 44, 2,  48, 35, 38, 0,  42, 50, 15, 0,  36, 20, 40, 1,  50, 2, 78, 88,  0, 0, 1,  MODE_DORIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0}},
-    {"Aurora",      {164, 55, 40, EN_ST_LOADING,  72, 85, 35, 1,  46, 40, 30, 0,  42, 40, 15, 0,  36, 25, 38, 1,  48, 4, 92, 98,  4, 0, 1,  MODE_LYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0}},
-    {"Lagoon",      {168, 70, 45, EN_ST_ROLLER,   56, 60, 25, 2,  52, 45, 25, 0,  68, 30, 22, 0,  36, 30, 28, 1,  30, 3, 55, 70,  8, 0, 1,  MODE_IONIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0}},
-    {"Save Point",  {152, 25, 30, EN_ST_DRIFT,    50, 80, 30, 1,  38, 25, 25, 0,  34, 50, 20, 0,  22,  0, 30, 1,  38, 3, 62, 78, 10, 0, 1,  MODE_PENT_MAJ,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0}},
-    {"Afterglow",   {166, 68, 50, EN_ST_JUNGLE,   62, 55, 42, 2,  58, 50, 45, 0,  50, 40, 14, 0,  42, 30, 42, 1,  44, 2, 68, 84,  5, 0, 1,  MODE_AEOLIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0}},
+    {"Load Screen", {170, 70, 50, EN_ST_LIQUID,   60, 50, 50, 3,  60, 50, 50, 0,  50, 50, 10, 0,  45, 50, 50, 0,  40, 3, 65, 80,  2, 0, 1,  MODE_LYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0}},
+    {"Aqua",        {172, 70, 55, EN_ST_LIQUID,   58, 40, 72, 3,  66, 60, 72, 0,  46, 50, 10, 0,  45, 40, 55, 0,  46, 3, 58, 70,  9, 0, 1,  MODE_IONIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0}},
+    {"Skyline",     {180, 70, 55, EN_ST_ROLLER,   50, 45, 62, 2,  62, 55, 60, 0,  48, 25, 10, 0,  46, 20, 50, 0,  35, 1, 55, 88,  7, 0, 1,  MODE_MIXOLYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0}},
+    {"Rainfall",    {160, 50, 40, EN_ST_DRIFT,    64, 65, 44, 2,  48, 35, 38, 0,  42, 50, 15, 0,  36, 20, 40, 1,  50, 2, 78, 88,  0, 0, 1,  MODE_DORIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0}},
+    {"Aurora",      {164, 55, 40, EN_ST_LOADING,  72, 85, 35, 1,  46, 40, 30, 0,  42, 40, 15, 0,  36, 25, 38, 1,  48, 4, 92, 98,  4, 0, 1,  MODE_LYDIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0}},
+    {"Lagoon",      {168, 70, 45, EN_ST_ROLLER,   56, 60, 25, 2,  52, 45, 25, 0,  68, 30, 22, 0,  36, 30, 28, 1,  30, 3, 55, 70,  8, 0, 1,  MODE_IONIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0}},
+    {"Save Point",  {152, 25, 30, EN_ST_DRIFT,    50, 80, 30, 1,  38, 25, 25, 0,  34, 50, 20, 0,  22,  0, 30, 1,  38, 3, 62, 78, 10, 0, 1,  MODE_PENT_MAJ,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0}},
+    {"Afterglow",   {166, 68, 50, EN_ST_JUNGLE,   62, 55, 42, 2,  58, 50, 45, 0,  50, 40, 14, 0,  42, 30, 42, 1,  44, 2, 68, 84,  5, 0, 1,  MODE_AEOLIAN,  0, 0, 0, 0,  EN_MEL_PHRASES, EN_ARP_UP, 0, 0}},
 };
 
 const char *en_piece_name(int i) { return PIECES[(unsigned)i < EN_NPIECES ? i : 0].name; }
@@ -72,8 +73,8 @@ static const float ETIME_BEATS[6] = {4.0f, 2.0f, 3.0f, 1.5f, 8.0f, 16.0f};
 static const char *const KEYS_SOUND_NAME[4] = {"Electric", "Clear", "Organ", "Felt"};
 static const char *const PAD_SOUND_NAME[4] = {"Warm", "Airy", "Choral", "Deep"};
 static const char *const BASS_SOUND_NAME[4] = {"Warm", "Sub", "Hollow", "Round"};
-static const char *const MEL_MODE_NAME[2] = {"Phrases", "Arp"};
-static const char *const ARP_PAT_NAME[EN_ARP_NPATTERNS] = {"Up", "Down", "Up-Down", "Random", "Conv", "PedT", "PedR"};
+static const char *const MEL_MODE_NAME[4] = {"Phrases", "Arp", "Keys", "Keys Arp"};
+static const char *const ARP_PAT_NAME[EN_ARP_NPATTERNS] = {"Up", "Down", "Up-Down", "Random", "Conv", "PedT", "PedR", "Played"};
 
 static char *itoa_s(int v, char *b)
 {
@@ -99,7 +100,7 @@ void en_param_text(int i, int v, char *b)
     const char *s = 0;
     if (i == P_ETIME)
         s = ETIME_NAME[(unsigned)v < 6u ? v : 0];
-    else if (i == P_MIDI)
+    else if (i == P_MIDI || i == P_ARPLATCH)
         s = ONOFF[v ? 1 : 0];
     else if (i == P_KIT)
         s = v ? "Moss" : "Glass";
@@ -118,7 +119,7 @@ void en_param_text(int i, int v, char *b)
     else if (i == P_MELSND)
         s = v > 0 && v <= EN_NTIMBRES ? EN_TIMBRE_NAME[v - 1] : "Auto";
     else if (i == P_MELMODE)
-        s = MEL_MODE_NAME[v ? 1 : 0];
+        s = MEL_MODE_NAME[(unsigned)v < 4u ? v : 0];
     else if (i == P_ARPPAT)
         s = ARP_PAT_NAME[(unsigned)v < EN_ARP_NPATTERNS ? v : 0];
     if (s) {
@@ -252,7 +253,7 @@ static float knob_curve(int v, int mid, float lo, float base, float hi)
 
 /* ------------------------------------------------------------ commands --- */
 enum { C_SET, C_POOL, C_MASK, C_PLAY, C_NEXT, C_BREAK, C_HOLD, C_SEED, C_PANIC, C_RESTORE, C_CLOCK, C_REGROW, C_LAYER, C_SEEK, C_ARRANGE, C_SYS, C_HEAR };
-/* The main loop runs between blocks, and a whole piece is 38 of these, so the queue can fill. What is lost of the two kinds costs differently:
+/* The main loop runs between blocks, and a whole piece is 42 of these, so the queue can fill. The keys played are not among them: en_keys is one word. What is lost of the two kinds costs differently:
  *   post: values the project can say again (en_dropped: the app says them all once there is room), and what does not matter once its moment has gone (a clock, a blip);
  *   post_hand: what a hand or the platform asked for only once (PLAY, a break, a layer, the panic and the way back). The last EN_ROOM_KEPT places are theirs.
  * The volume's duck is not here at all: it is one word (en_duck) */
@@ -326,6 +327,13 @@ int en_layer_press(int layer)                   /* (a hand's: from the main loop
 /* one word, written whole by the main loop and read whole by the render: a count of the calls and the last one's wish in its low bit. It cannot be dropped, however full the queue */
 static volatile uint32_t duck_word;
 void en_duck(int on) { duck_word = ((duck_word >> 1) + 1u) << 1 | (uint32_t)(on != 0); }
+/* The keys played: the keys below, a count of Latch's clearings above. One word and one writer each way, so nothing is queued, nothing can be dropped, and no flood of the queue can leave a note down: a note-off is this word without its bit (keys_take) */
+#define KEYS_MASK ((1u << EN_KEYS_N) - 1u)
+static volatile uint32_t keys_word, keys_seen;
+void en_keys(uint32_t held) { keys_word = (keys_word & ~KEYS_MASK) | (held & KEYS_MASK); }
+void en_keys_clear(void) { keys_word = keys_word + (1u << EN_KEYS_N); }
+uint32_t en_keys_seen(void) { return keys_seen & KEYS_MASK; }
+volatile uint32_t en_hand_set;
 void en_sys(int kind) { post(C_SYS, kind, 0); }
 void en_mel_hear(void) { post_hand(C_HEAR, 0, 0); }
 
@@ -1920,11 +1928,11 @@ static uint32_t ep_lone;                         /* this chord's so far */
 static uint8_t keys_back;                        /* after silence: the hand comes back on the next step */
 static uint8_t fresh;                            /* a note a key just added to the pool, + 1: it speaks on the next eighth */
 
-/* while a phrase is out, or Arp is playing, its register is its own: a lone note that would land there sounds an octave down */
-static uint8_t mel_on;
+/* while a phrase is out, or Arp is playing, or the player is, its register is its own: a lone note that would land there sounds an octave down */
+static uint8_t mel_on, hand_busy;
 static int keys_room(int n)
 {
-    return (mel_on || par[P_MELMODE]) && n >= EN_MEL_LO(par[P_ROOT]) ? n - 12 : n;
+    return (mel_on || par[P_MELMODE] == EN_MEL_ARP || hand_busy) && n >= EN_MEL_LO(par[P_ROOT]) ? n - 12 : n;
 }
 
 static void ep_inner(const inner_t *g)
@@ -2775,7 +2783,7 @@ int en_arp_next(en_arp_t *a, uint32_t tones, int key, int pattern, uint32_t h)
         a->pat = (uint8_t)pattern;
         a->at = 0u;
     }
-    if (pattern >= EN_ARP_CONVERGE) {
+    if (pattern >= EN_ARP_CONVERGE && pattern != EN_ARP_PLAYED) {
         m = arp_figure(a, tones, lo, hi, pattern);
         a->last = (uint8_t)m;
         return m;
@@ -2861,6 +2869,118 @@ int en_arp_timbre(int tone, uint32_t h)
     return w_lo + (int)((h >> 8) % (uint32_t)(w_hi - w_lo + 1));
 }
 
+/* ---- Keys and Keys Arp: pure */
+#define KEYS_BOTTOM 65                           /* the panel's F3 sounds F4: in the melody's register, over the piano's hand. OCT- is there for the rest */
+int en_keys_note(int key, int octave) { return en_mel_fold(KEYS_BOTTOM + key + 12 * octave); }
+
+/* the same window as Arp's, the middle of it, and no hash: a voice for a Tone and it stays */
+int en_keys_timbre(int tone)
+{
+    int w_lo = tone > 50 ? (tone - 50) * 3 / 50 : 0;
+    const int w_hi = tone < 50 ? 2 + tone * 3 / 50 : EN_NTIMBRES - 1;
+    if (w_lo < EN_TB_VIBES)
+        w_lo = EN_TB_VIBES;
+    return (w_lo + w_hi) / 2;
+}
+
+/* The next of the keys held. a->last: the key + 1, 0 none. Up, Down and Up-Down go by the key, from where they are, so one that comes or goes changes only what is still ahead; Converge, the pedals and Played by place, as Arp's do. With two or more, never the same twice running */
+int en_held_next(en_arp_t *a, const uint8_t *order, int n, int pattern, uint32_t h)
+{
+    uint8_t o[EN_KEYS_N];
+    uint32_t mask = 0u;
+    int c = 0, i, m = -1;
+    const int last = a->last;
+    for (i = 0; i < n; i++)
+        mask |= 1u << (order[i] & 31u);
+    for (i = 0; i < EN_KEYS_N; i++)
+        if (mask >> i & 1u)
+            o[c++] = (uint8_t)i;
+    if (!c)
+        return -1;
+    if (a->pat != pattern) {
+        a->pat = (uint8_t)pattern;
+        a->at = 0u;
+    }
+    if (c == 1) {
+        a->last = (uint8_t)(o[0] + 1);
+        return o[0];
+    }
+    switch (pattern) {
+    case EN_ARP_DOWN:
+        for (i = c - 1; i >= 0 && m < 0; i--)
+            if (!last || o[i] + 1 < last)
+                m = o[i];
+        if (m < 0)
+            m = o[c - 1];
+        break;
+    case EN_ARP_UPDOWN:
+        if (!last) {
+            a->dir = 1;
+            m = o[0];
+            break;
+        }
+        for (i = 0; i < 2 && m < 0; i++) {       /* its end: back, the end not twice */
+            int j;
+            if (a->dir > 0) {
+                for (j = 0; j < c && m < 0; j++)
+                    if (o[j] + 1 > last)
+                        m = o[j];
+            } else {
+                for (j = c - 1; j >= 0 && m < 0; j--)
+                    if (o[j] + 1 < last)
+                        m = o[j];
+            }
+            if (m < 0)
+                a->dir = (int8_t)-a->dir;
+        }
+        if (m < 0)
+            m = o[0];
+        break;
+    case EN_ARP_RANDOM: {
+        int in = 0, k;
+        for (i = 0; i < c; i++)
+            in += o[i] + 1 == last;
+        k = (int)((h >> 8) % (uint32_t)(c - in));
+        for (i = 0; i < c; i++)
+            if (o[i] + 1 != last && !k--) {
+                m = o[i];
+                break;
+            }
+        break;
+    }
+    case EN_ARP_CONVERGE: case EN_ARP_PEDTOP: case EN_ARP_PEDROOT: {
+        const uint32_t len = pattern == EN_ARP_CONVERGE ? (uint32_t)c : 2u * ((uint32_t)c - 1u);
+        uint32_t at = a->at % len;
+        m = arp_place(o, c, pattern, at);
+        if (m + 1 == last) {
+            at = (at + 1u) % len;
+            m = arp_place(o, c, pattern, at);
+        }
+        a->at = (uint8_t)((at + 1u) % len);
+        break;
+    }
+    case EN_ARP_PLAYED: {
+        uint32_t at = a->at % (uint32_t)n;
+        m = order[at];
+        if (m + 1 == last) {
+            at = (at + 1u) % (uint32_t)n;
+            m = order[at];
+        }
+        a->at = (uint8_t)((at + 1u) % (uint32_t)n);
+        break;
+    }
+    default:
+        for (i = 0; i < c && m < 0; i++)
+            if (o[i] + 1 > last)
+                m = o[i];
+        if (m < 0)
+            m = o[0];
+        break;
+    }
+    a->last = (uint8_t)(m + 1);
+    return m;
+}
+
 /* the voices */
 #define NBELL 4
 typedef struct {
@@ -2868,6 +2988,8 @@ typedef struct {
     float sh, shd;                               /* a chosen timbre: what the phrase's own would be at, the moment MIDI hears of its dying away. 0: it is the phrase's own */
     int32_t wait, left;                          /* left: samples until its key lets go */
     uint8_t on, down, note;                      /* down: MIDI has been told it is */
+    uint8_t hand;                                /* Keys: the key + 1 that holds it down: it goes up with the key, and no sooner, whatever the voice has done meanwhile. 0: the grid's */
+    uint32_t age;                                /* Keys: when it went down */
 } bell_t;
 static bell_t bell[NBELL];
 static float bell_vol;
@@ -2932,6 +3054,7 @@ static void bell_set(bell_t *v, int timbre, int n, float vel, int echo, int32_t 
     en_mel_voice(timbre, par[P_MTONE], &tv);
     v->on = 1u;
     v->sh = 0.0f;
+    v->hand = 0u;
     v->note = (uint8_t)n;
     v->cph = v->mph = 0.0f;
     v->cinc = mtof((float)n) * (1.0f / EN_SR);
@@ -3374,7 +3497,7 @@ static int32_t mel_hear_left;                    /* samples until it plays, 0 no
 static void mel_heard(void)
 {
     int i;
-    if (((mel_on || par[P_MELMODE]) && en_playing) || en_mute_mel || !par[P_MELSND] || silent)
+    if (((mel_on || par[P_MELMODE] == EN_MEL_ARP || hand_busy) && en_playing) || en_mute_mel || !par[P_MELSND] || silent)
         return;
     for (i = 0; i < NBELL; i++)
         if (!bell[i].on && !bell[i].down) {
@@ -3461,11 +3584,224 @@ static void arp_step(uint32_t s)
     }
 }
 
+/* ------- Keys and Keys Arp: the player's hand, on the melody's voices. All of it runs at a block's start, from one word (keys_take), so a press is heard in the block it is seen in, and a release too; the grid only strikes Keys Arp.
+ * Keys: each key its voice from its press to its release, at the Octave of its press. The fifth takes the oldest down: its key goes up on MIDI, and what the voice was saying is let down over a few ms (bell_gone), so no click; the key, when it comes up, has nothing more to say.
+ * MIDI goes by the key: a voice that has died away with its key down stays down for MIDI, at no cost, until the key comes up.
+ * Keys Arp: the keys held are a set; a note a division of it, as Arp's, with its tails and its Skip, the grid never moved. A hold after silence strikes on the next sixteenth; a key added waits for its place. Latch: what is let go stays in the set until a press with nothing held, which starts another. */
+#define KEYS_VEL 0.50f
+static float bell_gone[3];                       /* left, right, the room: what a voice taken was saying */
+static uint32_t hand_held, hand_clock;           /* the keys as last taken */
+static uint8_t hand_mode, hand_epoch;
+static en_arp_t ka;
+static uint8_t ka_order[EN_KEYS_N], ka_n, ka_first;
+
+static void bell_steal(bell_t *v)                /* what it says now goes on, falling, in bell_gone. Its key has gone up */
+{
+    if (v->on && v->wait <= 0) {
+        const float m = sine(v->mph) * (v->idx + v->ifl), x = sine(v->cph + m + 4.0f) * v->amp * v->att * bell_vol * BELL_GAIN * mg[EN_L_MEL];
+        bell_gone[0] += x * v->gl;
+        bell_gone[1] += x * v->gr;
+        bell_gone[2] += x * 0.30f;
+    }
+}
+
+static int hand_voice(void)                      /* a free one; or the quietest that no key holds; or the oldest key */
+{
+    uint32_t most = 0u;
+    float lo = 9.0f;
+    int i, best = -1;
+    for (i = 0; i < NBELL; i++)
+        if (!bell[i].on && !bell[i].down)
+            return i;
+    for (i = 0; i < NBELL; i++)
+        if (!bell[i].hand) {
+            const float a = bell[i].on ? bell[i].amp * bell[i].att : -1.0f;
+            if (a < lo) {
+                lo = a;
+                best = i;
+            }
+        }
+    if (best >= 0)
+        return best;
+    for (i = 0; i < NBELL; i++)
+        if (hand_clock - bell[i].age >= most) {
+            most = hand_clock - bell[i].age;
+            best = i;
+        }
+    return best;
+}
+
+static void hand_on(int k)
+{
+    const int note = en_keys_note(k, par[P_MOCT]), timbre = par[P_MELSND] ? par[P_MELSND] - 1 : en_keys_timbre(par[P_MTONE]);
+    int i;
+    bell_t *v;
+    for (i = 0; i < NBELL; i++)                  /* (one note from two keys, by way of the Octave: the one before it lets go) */
+        if (bell[i].down && bell[i].note == note) {
+            bell_up(&bell[i]);
+            bell[i].hand = 0u;
+        }
+    v = &bell[hand_voice()];
+    bell_steal(v);
+    if (v->down)
+        bell_up(v);
+    bell_set(v, timbre, note, KEYS_VEL, 1, 0, k & 1 ? 0.10f : -0.10f, 0);
+    v->hand = (uint8_t)(k + 1);
+    v->age = hand_clock++;
+    v->down = 1u;
+    midi(0x91, (uint32_t)note, (uint32_t)(KEYS_VEL * 120.0f));
+    en_loop_glow[k & 1] = 1.0f;
+#if defined EN_HOST || defined PLAT_HOST
+    en_test_bell_struck = timbre;
+#endif
+}
+
+static void hand_off(int k)
+{
+    int i;
+    for (i = 0; i < NBELL; i++)
+        if (bell[i].hand == k + 1) {
+            bell_up(&bell[i]);
+            bell[i].hand = 0u;
+        }
+}
+
+static void ka_up(void)                          /* the arpeggio's key, now: the set has gone */
+{
+    int i;
+    for (i = 0; i < NBELL; i++)
+        if (bell[i].down || bell[i].left > 0)
+            bell_up(&bell[i]);
+}
+
+static void hand_clear(void)                     /* the hand's, all of it: no note down of it, and no set */
+{
+    int i;
+    for (i = 0; i < NBELL; i++)
+        if (bell[i].hand) {
+            bell_up(&bell[i]);
+            bell[i].hand = 0u;
+        }
+    hand_held = 0u;
+    ka_n = 0u;
+    ka_first = 0u;
+    hand_busy = 0u;
+    en_hand_set = 0u;
+}
+
+static void keys_take(void)                      /* a block's start, after the queue. Nothing here touches what is not a keys mode */
+{
+    const uint32_t w = keys_word;
+    const int mode = par[P_MELMODE];
+    const uint8_t epoch = (uint8_t)(w >> EN_KEYS_N);
+    uint32_t want = w & KEYS_MASK;
+    keys_seen = w;
+    if (mode != hand_mode) {
+        if (hand_mode == EN_MEL_KEYS_ARP && ka_n)
+            ka_up();
+        if (hand_mode >= EN_MEL_KEYS || mode >= EN_MEL_KEYS)
+            hand_clear();
+        hand_mode = (uint8_t)mode;
+    }
+    if (mode < EN_MEL_KEYS) {
+        hand_epoch = epoch;
+        return;
+    }
+    if (silent)
+        want = 0u;
+    if (epoch != hand_epoch) {
+        hand_epoch = epoch;
+        if (ka_n)
+            ka_up();
+        ka_n = 0u;
+    }
+    if (mode == EN_MEL_KEYS) {
+        uint32_t ch = want ^ hand_held;
+        int k;
+        for (k = 0; ch; k++, ch >>= 1)
+            if (ch & 1u) {
+                if (want >> k & 1u)
+                    hand_on(k);
+                else
+                    hand_off(k);
+            }
+        hand_held = want;
+        en_hand_set = want;
+    } else {
+        const uint32_t pressed = want & ~hand_held;
+        const int latch = par[P_ARPLATCH], had = ka_n;
+        uint32_t set = 0u;
+        int i, k;
+        if (pressed) {
+            if (latch && !hand_held)             /* a new hold: a new set */
+                ka_n = 0u;
+            if (!ka_n)
+                en_arp_start(&ka);
+            if (!had)                            /* after silence: the next sixteenth. Replacing what plays: its place on the grid */
+                ka_first = 1u;
+            for (i = 0; i < ka_n; i++)
+                set |= 1u << ka_order[i];
+            for (k = 0; k < EN_KEYS_N; k++)
+                if ((pressed & ~set) >> k & 1u)
+                    ka_order[ka_n++] = (uint8_t)k;
+        }
+        if (!latch) {                            /* what no key holds goes, wherever it was in the order */
+            int j = 0;
+            for (i = 0; i < ka_n; i++)
+                if (want >> ka_order[i] & 1u)
+                    ka_order[j++] = ka_order[i];
+            ka_n = (uint8_t)j;
+        }
+        if (!ka_n)
+            ka_first = 0u;
+        if (had && !ka_n)
+            ka_up();
+        hand_held = want;
+        set = 0u;
+        for (i = 0; i < ka_n; i++)
+            set |= 1u << ka_order[i];
+        en_hand_set = set;
+    }
+    hand_busy = (uint8_t)(hand_held || ka_n);
+}
+
+static void keys_step(uint32_t s)
+{
+    if (!arp_now) {                              /* (as Arp's: what was left of the phrase) */
+        arp_now = 1u;
+        mel_on = 0u;
+        en_arp_start(&arp);
+    }
+    if (par[P_MELMODE] == EN_MEL_KEYS_ARP && ka_n) {
+        const uint32_t div = (uint32_t)en_arp_steps(par[P_MRATE]);
+        const int on_grid = !(s % div);
+        if (on_grid || ka_first) {
+            const int k = en_held_next(&ka, ka_order, ka_n, par[P_ARPPAT], hhash(song_seed, s, 47u));
+            const uint32_t vary = hhash(song_seed, s, 49u) >> 8;
+            const float len = (float)div * step_len;
+            const int timbre = par[P_MELSND] ? par[P_MELSND] - 1 : en_keys_timbre(par[P_MTONE]);
+            float vel = div == 1u ? 0.40f : div == 2u ? 0.44f : 0.48f;
+            bell_t *v;
+            ka_first = 0u;
+            if (on_grid ? en_arp_rest(song_seed, s, (int)div, par[P_ARPSKIP]) : par[P_ARPSKIP] >= 100)
+                return;                          /* (the figure has moved on, as Arp's does) */
+            vel += (float)(vary % 7u) * 0.01f - 0.03f + (s & 15u ? 0.0f : 0.03f);
+            v = bell_strike(timbre, timbre, en_keys_note(k, par[P_MOCT]), vel, 0, (int32_t)(len * 0.85f), (s / div) & 1u ? 0.10f : -0.10f, (int32_t)(vary % 120u));
+            v->rdec = fm_minf(v->rdec, fm_expf(-6.9f / (ARP_RELEASE_DIVS * len)));
+            en_loop_glow[0] = 0.75f;
+        }
+    }
+}
+
 static void mel_step(uint32_t s)
 {
     const uint32_t bar = s / 16u;
-    if (par[P_MELMODE]) {
+    if (par[P_MELMODE] == EN_MEL_ARP) {
         arp_step(s);
+        return;
+    }
+    if (par[P_MELMODE] >= EN_MEL_KEYS) {
+        keys_step(s);
         return;
     }
     if (arp_now) {                               /* back to Phrases: the next at its first chance, none of Arp's going on */
@@ -4351,7 +4687,9 @@ static void quiet(void)
     int i;
     notes_off();
     for (i = 0; i < NBELL; i++)
-        bell[i].on = bell[i].down = 0u;
+        bell[i].on = bell[i].down = bell[i].hand = 0u;
+    hand_clear();
+    bell_gone[0] = bell_gone[1] = bell_gone[2] = 0.0f;
     for (i = 0; i < NKEYS; i++)
         ep[i].on = 0;
     ep_gone[0] = ep_gone[1] = 0.0f;
@@ -4462,7 +4800,12 @@ void en_init(void)
     for (i = 0; i < NKEYS; i++)
         ep[i].on = 0;
     for (i = 0; i < NBELL; i++)
-        bell[i].on = bell[i].down = 0u;
+        bell[i].on = bell[i].down = bell[i].hand = 0u;
+    hand_clear();
+    bell_gone[0] = bell_gone[1] = bell_gone[2] = 0.0f;
+    keys_word = keys_seen = 0u;
+    hand_mode = EN_MEL_PHRASES;
+    hand_epoch = 0u;
     for (i = 0; i < EN_NPAD; i++)
         pad_sent[i] = 0u;
     for (i = 0; i < NDRUMNOTES; i++)
@@ -4744,6 +5087,7 @@ static void drain(void)
             break;
         }
     }
+    keys_take();
     if (harm_due) {
         harm_due = 0u;
         harmony();
@@ -5072,7 +5416,7 @@ static void render_bells(uint32_t n)
         float mv;
         uint32_t j = 0;
         if (!v->on) {
-            if (v->down)                         /* a chosen timbre that has died away before the phrase's own would have: its MIDI goes on as that one would */
+            if (v->down && !v->hand)             /* a chosen timbre that has died away before the phrase's own would have: its MIDI goes on as that one would */
                 bell_own(v, n);
             continue;
         }
@@ -5131,7 +5475,8 @@ static void render_bells(uint32_t n)
                 bell_up(v);
         }
         if (amp < 0.0006f) {
-            if (v->down && v->sh > 0.0f) {       /* its key is still down for MIDI, till the phrase's own would be gone */
+            if (v->hand) {                       /* its key is down, for as long as it is */
+            } else if (v->down && v->sh > 0.0f) {   /* its key is still down for MIDI, till the phrase's own would be gone */
 #if defined EN_HOST || defined PLAT_HOST
                 bell_case[0]++;
 #endif
@@ -5140,6 +5485,21 @@ static void render_bells(uint32_t n)
             }
             v->on = 0u;
         }
+    }
+    if (bell_gone[0] != 0.0f || bell_gone[1] != 0.0f) {   /* a voice taken from under a key: what it was saying, let down quickly: no click */
+        float l = bell_gone[0], r = bell_gone[1], w = bell_gone[2];
+        uint32_t j;
+        for (j = 0; j < n; j++) {
+            mixl[j] += l;
+            mixr[j] += r;
+            rsend[j] += w;
+            l *= 0.993f;
+            r *= 0.993f;
+            w *= 0.993f;
+        }
+        bell_gone[0] = fm_flush(l);
+        bell_gone[1] = fm_flush(r);
+        bell_gone[2] = fm_flush(w);
     }
 }
 

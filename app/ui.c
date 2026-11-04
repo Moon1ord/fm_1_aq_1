@@ -3,7 +3,7 @@
 /* AQ-1 UI: the panel and the screen. Part of the unity build (after gfx.c and project.c); the host
  * simulator includes it too.
  *
- *   keys           the scale: each key adds or removes its note from the pool (the root stays)
+ *   keys           the scale: each key adds or removes its note from the pool (the root stays). On the Melody page in Keys or Keys Arp: they play it (keys_play, keys_lit)
  *   SEL + a key    whether chords may stand on that note; it stays in the scale either way (two roots stay, besides the tonic)
  *   SEL + ENV ARP LFO SEQ FX   keys and pad, melody, bass, kick and snare, hats: switches (kept through the pieces; power-on: keys and pad; levels untouched)
  *   SEL + HOME     the arrangement: Hands (the switches and Energy are yours, no section or break comes by itself), or Auto (the arranger leads), kept with the piece
@@ -13,8 +13,9 @@
  *   OCT- / OCT+    the melody's octave
  *   HOME + SELECT  tempo   ALGORITHM mode (loads a pool)   PRESETS the piece (Root is on the Setup page)
  *   SEL + KNOB 1   on Keys, Melody and Bass: the layer's sound (Keys: SEL + KNOB 2, the pad's). The four knobs are as ever otherwise; SEL + a knob on the other pages too
- *   SEL + KNOB 2, SEL + KNOB 3   on Melody: Phrases or Arp, and Arp's pattern. In Arp, Rate is its division
- *   SEL + KNOB 4   on Melody: Arp's skip, 0-100 (as a knob, not round and round)
+ *   SEL + KNOB 2, SEL + KNOB 3   on Melody: Phrases, Arp, Keys or Keys Arp, and the arpeggios' pattern. In either arpeggio, Rate is its division
+ *   SEL + KNOB 4   on Melody: the arpeggios' skip, 0-100 (as a knob, not round and round)
+ *   SEL + REC      on Melody in Keys Arp: Latch (elsewhere REC, as ever)
  *   HOME ENV ARP LFO SEQ FX GLO   the pages: Home, Keys, Melody, Bass, Drums, Space, Setup (the SELECT encoder steps through them)
  *   KNOB 1-4       the page's four values
  *   SAVE           saves (it also saves by itself a few seconds after a change, while resting);
@@ -56,6 +57,7 @@ static struct {
     uint8_t view;
     uint8_t sel_layer;                 /* SEL is down and has gone with a page's button: no degrees this hold */
     uint32_t btn, keys, btn_used;
+    uint32_t kplay, kout;              /* the keys that went down playing, and are not up yet; the word the engine has been given (en_keys) */
     uint32_t enc_t[NE];
     uint8_t enc_run[NE];               /* detents in the current quick run, per knob (accel) */
     uint32_t down_t[NB];               /* when each button went down */
@@ -197,6 +199,8 @@ static const char *mode_name(void)
 }
 
 /* ------------------------------------------------------------ values --- */
+static int mel_arp(void) { return proj.par[P_MELMODE] == EN_MEL_ARP || proj.par[P_MELMODE] == EN_MEL_KEYS_ARP; }
+static int mel_keys(void) { return proj.par[P_MELMODE] >= EN_MEL_KEYS; }
 static int knob_get(int k)
 {
     if (k < P_NPARAMS)
@@ -226,7 +230,7 @@ static const char *knob_name(int k)
 static void knob_text(int k, char *b)
 {
     int v = knob_get(k);
-    if (k == P_MRATE && proj.par[P_MELMODE]) {   /* in Arp, Rate is its division */
+    if (k == P_MRATE && mel_arp()) {             /* in an arpeggio, Rate is its division */
         const int d = en_arp_steps(v);
         const char *n = d == 4 ? "1/4" : d == 2 ? "1/8" : "1/16";
         while ((*b++ = *n++))
@@ -297,6 +301,31 @@ static void turn(int role, int k, int32_t e)
 }
 
 /* ------------------------------------------------------------ the sounds --- */
+/* ---- the keys, played: which of them are is the panel's, decided when each goes down; the engine has one word (en_keys), so a note-off cannot be lost. A key that went down playing plays until it comes up, whatever page or knob comes between; one that went down as a scale's stays that, and its release does nothing, wherever it comes. A press the render has not seen yet stays in the word until it has, so the shortest tap sounds */
+typedef char keys_all_in_a_word[EN_KEYS_N == NKEYS ? 1 : -1];
+static void keys_post(void)
+{
+    const uint32_t out = ui.kplay | (ui.kout & ~en_keys_seen());
+    if (out != ui.kout) {
+        ui.kout = out;
+        en_keys(out);
+    }
+}
+static void keys_let_go(void)                   /* a new piece, a recipe, a panic: what was played is gone, Latch's too. The keys still down are nothing now */
+{
+    ui.kplay = ui.kout = 0u;
+    en_keys(0u);
+    en_keys_clear();
+}
+static void keys_mode(void)                     /* the mode has moved: between the two of them the keys play on, the engine takes them to the other; out of them, they are gone */
+{
+    if (!mel_keys()) {
+        ui.kplay = ui.kout = 0u;
+        en_keys(0u);
+    }
+}
+static int keys_play(void) { return ui.view == V_MOTIFS && mel_keys(); }
+
 /* SEL + a knob on a layer's page. Each detent is the next, round and round, as ALGORITHM's and PRESETS' are. SEL's other jobs: SEL + a button is on the press, so no turn is in it; SEL alone is the Degrees view,
  * and as with SEL + a layer's button, a turn says this hold is not that (ui.sel_layer) */
 static const struct {
@@ -305,10 +334,10 @@ static const struct {
 } SOUND_KNOB[] = {{V_KEYS, 0, P_KEYSND, "KEYS SOUND", ". Sound "}, {V_KEYS, 1, P_PADSND, "PAD SOUND", ", pad sound "}, {V_MOTIFS, 0, P_MELSND, "MELODY SOUND", ". Sound "},
                   {V_MOTIFS, 1, P_MELMODE, "MELODY MODE", ", mode "}, {V_MOTIFS, 2, P_ARPPAT, "ARP PATTERN", ", pattern "}, {V_MOTIFS, 3, P_ARPSKIP, "ARP SKIP", ", skip "}, {V_BASS, 0, P_BASSSND, "BASS SOUND", ". Sound "}};
 #define NSOUND_KNOBS ((int)(sizeof SOUND_KNOB / sizeof SOUND_KNOB[0]))
-static int sound_said(int i)                    /* (the page has no use for a pattern or a skip in Phrases, or a skip of 0: their knobs still set them) */
+static int sound_said(int i)                    /* (the page has no use for a pattern or a skip outside an arpeggio, or a skip of 0: their knobs still set them) */
 {
     const int p = SOUND_KNOB[i].par;
-    return p == P_ARPSKIP ? proj.par[P_MELMODE] && proj.par[P_ARPSKIP] : p != P_ARPPAT || proj.par[P_MELMODE];
+    return p == P_ARPSKIP ? mel_arp() && proj.par[P_ARPSKIP] : p != P_ARPPAT || mel_arp();
 }
 static int sound_turn(int knob, int32_t e)      /* 1: it was a sound's */
 {
@@ -324,6 +353,8 @@ static int sound_turn(int knob, int32_t e)      /* 1: it was a sound's */
             en_param_text(p, proj.par[p], t);
             if (p == P_MELSND)
                 en_mel_hear();
+            if (p == P_MELMODE)
+                keys_mode();
             say(SOUND_KNOB[i].say, t);
             ui.sel_layer = 1u;
             ui.btn_used |= 1u << B_SEL;
@@ -430,6 +461,7 @@ static void owed_tick(void)
 
 static void set_piece(int i)                    /* the piece playing kept as it is; piece i as it was left */
 {
+    keys_let_go();
     project_piece(i);
 #if defined PLAT_HOST && !defined PLAT_WEB
     host_pieces++;
@@ -488,7 +520,19 @@ static int sel_button(int b)                     /* 1: it was a page's */
                 say(LAYER_BTN[i].name, on ? "ON" : "OFF");
             return 1;
         }
+    if (b == B_REC) {                            /* Latch, where it means something; REC is REC elsewhere */
+        if (ui.view != V_MOTIFS || proj.par[P_MELMODE] != EN_MEL_KEYS_ARP)
+            return 0;
+        knob_set(P_ARPLATCH, !proj.par[P_ARPLATCH]);
+        say("ARP LATCH", proj.par[P_ARPLATCH] ? "ON" : "OFF");
+        return 1;
+    }
     if (b == B_HOME) {
+        const int16_t mode = (int16_t)proj.mel_other;   /* each arrangement its melody's mode, as its set of layers */
+        proj.mel_other = (uint8_t)proj.par[P_MELMODE];
+        proj.par[P_MELMODE] = mode;
+        en_set(P_MELMODE, mode);
+        keys_mode();
         proj.arrange = proj.arrange == EN_AUTO ? EN_HANDS : EN_AUTO;
         en_arrange(proj.arrange);
         say(proj.arrange == EN_HANDS ? "HANDS" : "AUTO", 0);
@@ -666,10 +710,14 @@ static void input(void)
             if (btn >> B_SEL & 1u) {
                 toggle_degree((int)((5u + i) % 12u));
                 ui.btn_used |= 1u << B_SEL;
+            } else if (keys_play()) {
+                ui.kplay |= 1u << i;
             } else {
                 toggle_note((int)((5u + i) % 12u));
             }
         }
+    ui.kplay &= keys;                            /* (one that comes up, wherever it went down and whatever page this is) */
+    keys_post();
     if (btn || keys || ch)
         ui.act_t = plat_ms();
     midi_in();
@@ -704,6 +752,7 @@ static void input(void)
         ui.reset_done = 1;                     /* held: the piece back to its recipe (not saved) */
         ui.btn_used |= 1u << B_SAVE;
         ui.help = 0;
+        keys_let_go();
         project_piece_reset();
         owed |= OWE_APPLY | OWE_REGROW;
         owed_tick();
@@ -1095,7 +1144,7 @@ static void setup_read(char *c)
 }
 /* what the header says of a page's sounds: Keys has two, the keys' and the pad's. 0: none */
 #define HEADER_SOUND_ROOM(view) (231 - BATT_W - 6 - 9 - 22 - 6 - 10 - (9 + text_w(&FONT_B, VIEW_NAME[view]) + 5))   /* with the tempo, a dot, the battery and a rest's mark on its right */
-static int page_sounds(int view, char *b, int leave)
+static int page_sounds(int view, char *b, int leave, int tight)
 {
     int i, n = 0;
     for (i = 0; i < NSOUND_KNOBS; i++)
@@ -1103,6 +1152,13 @@ static int page_sounds(int view, char *b, int leave)
             char t[16];
             int k = 0;
             en_param_text(SOUND_KNOB[i].par, proj.par[SOUND_KNOB[i].par], t);
+            if (tight && SOUND_KNOB[i].par == P_MELMODE && proj.par[P_MELMODE] == EN_MEL_KEYS_ARP) {
+                t[0] = 'K', t[1] = 'A', t[2] = 'r', t[3] = 'p', t[4] = 0;
+            } else if (tight && SOUND_KNOB[i].par == P_ARPPAT && proj.par[P_ARPPAT] == EN_ARP_UPDOWN) {
+                t[0] = 'U', t[1] = 'p', t[2] = 'D', t[3] = 'n', t[4] = 0;
+            } else if (tight && SOUND_KNOB[i].par == P_ARPPAT && proj.par[P_ARPPAT] == EN_ARP_RANDOM) {
+                t[4] = 0;                        /* Rand */
+            }
             if (n)
                 b[n++] = '/';
             if (SOUND_KNOB[i].par == P_ARPSKIP)
@@ -1110,14 +1166,20 @@ static int page_sounds(int view, char *b, int leave)
             while (t[k])
                 b[n++] = t[k++];
         }
+    if (view == V_MOTIFS && proj.par[P_MELMODE] == EN_MEL_KEYS_ARP && proj.par[P_ARPLATCH]) {
+        b[n++] = '/';
+        b[n++] = 'L';
+    }
     b[n] = 0;
     return n;
 }
-static int page_sound(int view, char *b)         /* in Arp the mode and the pattern are what the page can not say otherwise: a sound's long name gives way to them (it says itself when turned) */
+static int page_sound(int view, char *b)         /* in an arpeggio the mode and the pattern are what the page can not say otherwise: a sound's long name gives way to them (it says itself when turned), then in Keys Arp the longest words to shorter ones */
 {
-    int n = page_sounds(view, b, -1);
+    int n = page_sounds(view, b, -1, 0);
     if (n && text_w(&FONT_XS, b) > HEADER_SOUND_ROOM(view))
-        n = page_sounds(view, b, P_MELSND);
+        n = page_sounds(view, b, P_MELSND, 0);
+    if (n && text_w(&FONT_XS, b) > HEADER_SOUND_ROOM(view))
+        n = page_sounds(view, b, P_MELSND, 1);
     return n;
 }
 static const char *header_word(int sc)
@@ -1198,7 +1260,7 @@ static uint32_t header_sig(int sc)
     if (sc == SC_PAGE && ui.view == V_SETUP)
         h = hash(hash(h, scr.r_cpu | scr.r_max << 8), scr.r_x | scr.r_s << 16);
     else if (sc == SC_PAGE || sc == SC_HOLD)
-        h = hash(hash(h, chord_sig()), en_held | (uint32_t)proj.par[P_KEYSND] << 1 | (uint32_t)proj.par[P_PADSND] << 3 | (uint32_t)proj.par[P_BASSSND] << 5 | (uint32_t)proj.par[P_MELSND] << 7 | (uint32_t)proj.par[P_MELMODE] << 10 | (uint32_t)proj.par[P_ARPPAT] << 11 | (uint32_t)proj.par[P_ARPSKIP] << 14);
+        h = hash(hash(h, chord_sig()), en_held | (uint32_t)proj.par[P_KEYSND] << 1 | (uint32_t)proj.par[P_PADSND] << 3 | (uint32_t)proj.par[P_BASSSND] << 5 | (uint32_t)proj.par[P_MELSND] << 7 | (uint32_t)proj.par[P_ARPPAT] << 10 | (uint32_t)proj.par[P_ARPSKIP] << 14 | (uint32_t)proj.par[P_MELMODE] << 21 | (uint32_t)proj.par[P_ARPLATCH] << 23);
     return h;
 }
 
@@ -1341,7 +1403,7 @@ static uint32_t meters_sig(void)
 }
 
 /* a button's card (help_tick): its name, then what it does. A line starting with a space goes on from the one before (a screen reader joins them: sp_line) */
-#define HELP_LINES 4
+#define HELP_LINES 5
 static const char *const BTN_LABEL[NB] = {"FX", "SEL", "ENV", "LFO", "EDIT", "GLO", "HOME", "SAVE", "ARP", "SEQ",
                                           "PLAY", "REC", "OCT-", "OCT+"};
 static int help_lines(int b, const char *l[HELP_LINES])
@@ -1351,7 +1413,7 @@ static int help_lines(int b, const char *l[HELP_LINES])
     switch (b) {
     case B_HOME: L("TEMPO, ENERGY, EVOLVE, STYLE"); L("HOLD + TURN SELECT: TEMPO"); L("SEL + KEY: CHORDS ON IT, OR NOT"); L("SEL + HOME: HANDS OR AUTO"); break;
     case B_ENV: L("THE KEYS AND THE PAD"); L("LEVEL, BLOOM, BRIGHT, NOTES"); L("SEL + ENV: ON OR OFF"); L("SEL + KNOB 1, KNOB 2: THE SOUNDS"); break;
-    case B_ARP: L("THE MELODY: LEVEL, RATE, TONE, OCT"); L("SEL + ARP: ON OR OFF"); L("SEL + KNOB 1: THE SOUND"); L("SEL + KNOB 2-4: ARP, PATTERN, SKIP"); break;
+    case B_ARP: L("THE MELODY: LEVEL, RATE, TONE, OCT"); L("IN KEYS, KEYS ARP THE KEYS PLAY IT"); L("SEL + ARP: ON OR OFF"); L("SEL + KNOB 1-4: SOUND, MODE,"); L(" PATTERN, SKIP. SEL + REC: LATCH"); break;
     case B_LFO: L("THE BASS"); L("LEVEL, MOVE, GLIDE, OCTAVE"); L("SEL + LFO: ON OR OFF"); L("SEL + KNOB 1: THE SOUND"); break;
     case B_SEQ: L("THE DRUMS"); L("LEVEL, BREAKS, HATS, KIT"); L("SEL + SEQ: KICK AND SNARE"); L(" ON OR OFF"); break;
     case B_FX: L("THE SPACE"); L("ECHO, ECHO TIME, REVERB,"); L(" SIZE"); L("SEL + FX: HATS ON OR OFF"); break;
@@ -1375,7 +1437,7 @@ static void draw_help(void)
     text_c(120, 47, &FONT_B, BTN_LABEL[ui.help - 1], K_INK);
     rect(26, 66, 188, 1, K_SOFT);
     for (k = 0; k < n; k++)
-        text_c(120, 72 + k * 20, &FONT_XS, l[k] + (l[k][0] == ' '), K_INK);
+        text_c(120, 72 + k * (n > 4 ? 17 : 20), &FONT_XS, l[k] + (l[k][0] == ' '), K_INK);
 }
 
 /* the knobs: a cell each on the pane: its name, a ring, the value. The one being turned is lit. A cell redrawn alone reads nothing from the flash */
@@ -1409,7 +1471,7 @@ static void draw_knobs(void)
 }
 static uint32_t knob_sig(int i)
 {
-    return (uint32_t)(knob_get(VIEW_KNOB[ui.view][i]) + 1024) << 2 | (uint32_t)proj.par[P_MELMODE] << 1 | (uint32_t)(scr.now < ui.touch_until && ui.touched == i);
+    return (uint32_t)(knob_get(VIEW_KNOB[ui.view][i]) + 1024) << 2 | (uint32_t)mel_arp() << 1 | (uint32_t)(scr.now < ui.touch_until && ui.touched == i);
 }
 
 /* ---- the face: the closed cell, and patches of the others around the eyes and the mouth. Eyes closed while it listens (no drums), half open with drums, open on a
@@ -2012,12 +2074,29 @@ static int scr_stale(void)
 }
 #endif
 
-/* the keys' lights: the scale; with SEL held, those of it that chords may stand on */
+/* the keys' lights: the scale; with SEL held, those of it that chords may stand on. Where they play the melody, SEL not held: the scale at the middle level, the tonic and what is being played lit (a note out of the scale, too, while it is), the rest off */
+static int keys_lit_playing(void) { return keys_play() && !(ui.btn >> B_SEL & 1u); }
+static uint32_t keys_mid(void)
+{
+    const uint32_t ap = pool_abs();
+    uint32_t k = 0, i;
+    if (proj.leds && keys_lit_playing())
+        for (i = 0; i < NKEYS; i++)
+            if (ap >> ((5u + i) % 12u) & 1u)
+                k |= 1u << i;
+    return k;
+}
 static uint32_t keys_lit(void)
 {
     const uint32_t ap = pool_abs();
     const int sel = (int)(ui.btn >> B_SEL & 1u);
     uint32_t k = 0, i;
+    if (proj.leds && keys_lit_playing()) {
+        for (i = 0; i < NKEYS; i++)
+            if ((5u + i) % 12u == (uint32_t)proj.par[P_ROOT])
+                k |= 1u << i;
+        return k | ui.kplay | en_hand_set;
+    }
     if (proj.leds)
         for (i = 0; i < NKEYS; i++) {
             const int pc = (int)((5u + i) % 12u);
@@ -2053,6 +2132,7 @@ static void leds(void)
         const uint32_t play = 1u << B_PLAY, dim = ((1u << NB) - 1u) & ~b & ~dark;
         plat_lights((b & ~play) | (b & play ? LED_PLAY_GREEN : 0u), k, (dim & ~play) | (dim & play ? LED_PLAY_GREEN : 0u), 0, 2);
     }
+    plat_lights_mid(0u, keys_mid());             /* (none: nothing at that level) */
 }
 
 static int autosave_due(uint32_t now)
@@ -2120,6 +2200,7 @@ void ui_panic(void)                    /* the engine ends the duck itself: here,
 {
     memset(&sv, 0, sizeof sv);
     sv.hushed = 1u;
+    keys_let_go();
 }
 
 /* ------------------------------------------------------ screen reader --- */
@@ -2217,6 +2298,8 @@ static void sp_page(int all)
             sp_cat(SOUND_KNOB[i].spoken);
             sp_value(SOUND_KNOB[i].par);
         }
+    if (ui.view == V_MOTIFS && proj.par[P_MELMODE] == EN_MEL_KEYS_ARP && proj.par[P_ARPLATCH])
+        sp_cat(", latch on");
     if (!all)
         return;
     sp_cat(". Piece ");
@@ -2553,14 +2636,15 @@ static int ui_unfit(void)                             /* the host's "unfit": wha
     for (v = 0; v < NVIEWS; v++) {
         char c[24];
         const project_t k = proj;
-        for (x = 0; x < 7 * 2 * EN_ARP_NPATTERNS * 3; x++) {
-            int16_t *q[7] = {&proj.par[P_KEYSND], &proj.par[P_PADSND], &proj.par[P_BASSSND], &proj.par[P_MELSND], &proj.par[P_MELMODE], &proj.par[P_ARPPAT], &proj.par[P_ARPSKIP]};
-            *q[0] = (int16_t)(x % 4), *q[1] = (int16_t)(x / 4 % 4), *q[2] = (int16_t)(x % 4), *q[3] = (int16_t)(x % 7), *q[4] = (int16_t)(x / 7 % 2), *q[5] = (int16_t)(x / 14 % EN_ARP_NPATTERNS), *q[6] = (int16_t)(x / (14 * EN_ARP_NPATTERNS) * 50);
+        for (x = 0; x < 7 * 4 * EN_ARP_NPATTERNS * 3 * 2; x++) {
+            int16_t *q[8] = {&proj.par[P_KEYSND], &proj.par[P_PADSND], &proj.par[P_BASSSND], &proj.par[P_MELSND], &proj.par[P_MELMODE], &proj.par[P_ARPPAT], &proj.par[P_ARPSKIP], &proj.par[P_ARPLATCH]};
+            *q[0] = (int16_t)(x % 4), *q[1] = (int16_t)(x / 4 % 4), *q[2] = (int16_t)(x % 4), *q[3] = (int16_t)(x % 7), *q[4] = (int16_t)(x / 7 % 4), *q[5] = (int16_t)(x / 28 % EN_ARP_NPATTERNS), *q[6] = (int16_t)(x / (28 * EN_ARP_NPATTERNS) % 3 * 50), *q[7] = (int16_t)(x / (84 * EN_ARP_NPATTERNS));
             if (page_sound(v, c))
                 n += unfit_one(&FONT_XS, c, HEADER_SOUND_ROOM(v), "the header's sound");
         }
         proj = k;
     }
+    n += unfit_msg("ARP LATCH", "OFF");
     n += unfit_msg("THE ROOT STAYS", "(SETUP)");
     n += unfit_msg("3 NOTES", "AT LEAST");
     n += unfit_msg("2 DEGREES", "AT LEAST");
@@ -2581,7 +2665,7 @@ static void speak_dump(void)
                                          {"NEXT SECTION", "ON THE BAR"}, {"NEXT SECTION", "WHEN IT PLAYS"}, {"BREAK", "ON THE BAR"},
                                          {"RESTING", 0}, {"PLAYING", 0}, {"HOLD", "ON"}, {"HOLD", "OFF"}, {"SAVED", 0},
                                          {"KEYS", "ON"}, {"KEYS", "OFF"}, {"MELODY", "ON"}, {"MELODY", "OFF"}, {"BASS", "ON"}, {"BASS", "OFF"},
-                                         {"DRUMS", "ON"}, {"DRUMS", "OFF"}, {"HATS", "ON"}, {"HATS", "OFF"}, {"HANDS", 0}, {"AUTO", 0}};
+                                         {"DRUMS", "ON"}, {"DRUMS", "OFF"}, {"HATS", "ON"}, {"HATS", "OFF"}, {"HANDS", 0}, {"AUTO", 0}, {"ARP LATCH", "ON"}, {"ARP LATCH", "OFF"}};
     static const char *const WARN[][2] = {{"THE ROOT STAYS", "(SETUP)"}, {"3 NOTES", "AT LEAST"},
                                           {"NOT SAVED", "FLASH ERROR"}, {"2 DEGREES", "AT LEAST"}, {"NOT IN", "THE SCALE"},
                                           {"NO DRUMS", "NO BREAK"}};
@@ -2633,6 +2717,14 @@ static void speak_dump(void)
         proj.par[P_ROOT] = (int16_t)(x * 5 % 12);
         sp_page(1);
         sp_print("WHERE", sp_buf);
+        if (ui.view == V_MOTIFS) {               /* Latch, as the page says it */
+            proj.par[P_MELMODE] = EN_MEL_KEYS_ARP;
+            proj.par[P_ARPLATCH] = 1;
+            sp_page(0);
+            sp_print("SCREEN", sp_buf);
+            proj.par[P_MELMODE] = keep.par[P_MELMODE];
+            proj.par[P_ARPLATCH] = keep.par[P_ARPLATCH];
+        }
         sp_garden();
         sp_print("WHERE", sp_buf);
         sp_arrange();

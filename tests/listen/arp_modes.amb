@@ -1,5 +1,7 @@
 # Arp's new patterns and Skip on Load Screen, played by hand: the keys, the pad, the bass, hats and drums on, the melody in Arp. At 1/8 and then at 1/16, 15 s each: Converge, Pedal top, Pedal root; Up at Skip 25, 50, 75; Pedal root at Skip 25, 50, 75. The times are in the file, each with its echo.
 #   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/arp_modes.amb app/build/listen
+# (the melody in Phrases, set here: a recipe's Hands has it in Keys, and this shows the piece as it composes)
+setpar 32 0
 wait 100
 tap SAVE
 wait 800

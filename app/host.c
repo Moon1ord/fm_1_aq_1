@@ -4,11 +4,11 @@
  * "expect", its command, a reboot and the screen reader's dump.
  *
  * AMB-1's checks: playing held silent midionN keysdown bellson bassdown keyson breakbars barpos stepofbar bars chordhash view piece pool dirty sixteenths ext pad_level bass_level chordroot chordN loopnotes
- * parN battery section style level mask enmask keyslit help ringN mode arrange enagree brkshown brkquiet brkwrong absent sysnotes sysnote ducked saving writepeak mutekeys mutemel mutebass mutedrums mutehats gainN meterN dimN litN screen eye smile blinks wipes wiping drawrows drawbytes drawpx artbytes stale (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
+ * parN battery section style level mask enmask keyslit keysmid handset kplay melother help ringN mode arrange enagree brkshown brkquiet brkwrong absent sysnotes sysnote ducked saving writepeak mutekeys mutemel mutebass mutedrums mutehats gainN meterN dimN litN screen eye smile blinks wipes wiping drawrows drawbytes drawpx artbytes stale (fm1-base's own: store_writes clocks_out midi_out peak_db_max peak_db_min); unfit: the labels,
  * values, help lines and messages wider than their places. Its commands:
  * storeamb (what AMB-1 leaves in the store: its magic and format, nothing of ours); storeold (the project as it is, whole, but
  * for the format before this one); storeshort (a save as the format before this one was laid out: its magic, its format, its length, a parameter less to a piece); storebad N P V (the project as it is, whole,
- * in this format, but piece N's parameter P is V; N -1: the piece playing's); battery N (the battery read as N,
+ * in this format, but piece N's parameter P is V; N -1: the piece playing's); storebadother N V (likewise, its melody's mode in the other arrangement); battery N (the battery read as N,
  * plat.h's plat_battery: -1..4; "battery off" the simulator's own, full); seed N (the musical seed, from the next choice on;
  * until told it is EN_HARM_SEED); melhear T (a statement in this timbre at the next chance: an audition); setpar P V (parameter P to V, as a knob would); style NAME; energy N; breaks N; keysgain G (the keys alone down, against the pad: a listening file's, the panel has no such thing); trace FILE
  * (a line for each bar: step section level character break's bars; a line for each chord: "chord" step name bars character key tones bass, the last two above the key)
@@ -193,6 +193,14 @@ int app_expect(const char *what, int *got)
         g = (int)en_test_degrees();
     } else if (!strcmp(what, "keyslit")) {        /* the keys' lights */
         g = (int)keys_lit();
+    } else if (!strcmp(what, "keysmid")) {        /* those at the middle level */
+        g = (int)(keys_mid() & ~keys_lit());
+    } else if (!strcmp(what, "handset")) {        /* the keys the engine is playing */
+        g = (int)en_hand_set;
+    } else if (!strcmp(what, "kplay")) {          /* those the panel has as played */
+        g = (int)ui.kplay;
+    } else if (!strcmp(what, "melother")) {       /* the melody's mode in the other arrangement */
+        g = proj.mel_other;
     } else if (!strcmp(what, "help")) {           /* a help card is up: its button + 1 */
         g = ui.help;
     } else if (!strncmp(what, "ring", 4)) {       /* pitch class N on the ring: 0 out of the scale, 1 in it, 2 in it and no chords on it */
@@ -305,6 +313,18 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
         old = proj;
         old.format = PROJ_FORMAT - 1u;
         plat_store_save(OBJ_PROJ, &old, sizeof old - (size_t)(1 + NPIECES) * sizeof(int16_t));
+        return 1;
+    }
+    if (!strcmp(cmd, "storebadother")) {          /* storebadother N V: piece N's melody's mode in the other arrangement is V; N -1: the piece playing's */
+        static project_t bad;
+        const int n = atoi(a);
+        project_save();
+        bad = proj;
+        if (n < 0)
+            bad.mel_other = (uint8_t)atoi(b);
+        else
+            bad.slot[n].mel_other = (uint8_t)atoi(b);
+        plat_store_save(OBJ_PROJ, &bad, sizeof bad);
         return 1;
     }
     if (!strcmp(cmd, "storebad")) {

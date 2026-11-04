@@ -2,6 +2,8 @@
 #   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/preset_save_point.amb app/build/listen
 wait 100
 turn PRESET 6
+# (the melody in Phrases, set here: a recipe's Hands has it in Keys, and this shows the piece as it composes)
+setpar 32 0
 tap SAVE
 wait 800
 reboot

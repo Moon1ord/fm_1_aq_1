@@ -4051,6 +4051,8 @@ static void keys_take(void)                      /* a block's start, after the q
             ka_up();
         if (hand_mode >= EN_MEL_KEYS || mode >= EN_MEL_KEYS)
             hand_clear();
+        if (mode >= EN_MEL_KEYS)                 /* what was left of a phrase goes now, not at the next step: the song's chord comes first there (song_step), and would let go of what a key holds */
+            mel_on = 0u;
         hand_mode = (uint8_t)mode;
     }
     if (mode < EN_MEL_KEYS) {

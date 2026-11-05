@@ -1301,6 +1301,75 @@ static void t_queue(void)
     CHECK(en_test_par(P_ARPLATCH) == 0, "out of range: %d", en_test_par(P_ARPLATCH));
 }
 
+/* ---- a key held is the key's. A phrase left under way when the song rests, REC's hold on, the mode to Keys: the song comes back on the chord's round, and what was left of that phrase must not let go of a note under a finger, however far off the chord. Through the engine */
+static uint32_t st_phrase_at, st_phrase_end, st_phrase_on;
+static void st_trace(uint32_t step, const en_phrase_t *p)
+{
+    st_phrase_at = step;
+    st_phrase_end = p->end;
+    st_phrase_on = 1u;
+}
+static void t_stale_phrase(void)
+{
+    uint32_t seed;
+    int runs = 0;
+    for (seed = 1u; seed <= 40u; seed++) {
+        uint32_t i;
+        int k, found = 0;
+        start(seed, EN_HANDS, EN_MEL_PHRASES);
+        en_set(P_MRATE, 100);
+        en_play(1);
+        st_phrase_on = 0u;
+        en_trace_mel = st_trace;
+        for (i = 0u; i < 200000u && !found; i++) {   /* a phrase under way, on the step before the chord's round */
+            block();
+            found = st_phrase_on && en_test_song() >= st_phrase_at && en_test_song() + 2u < st_phrase_at + st_phrase_end && en_test_chord_left() == 0u;
+        }
+        en_trace_mel = 0;
+        if (!found)
+            continue;
+        en_hold(1);
+        en_play(0);
+        for (i = 0u; i < 5u; i++)
+            block();
+        en_set(P_MELMODE, EN_MEL_KEYS);
+        for (i = 0u; i < 5u; i++)
+            block();
+        for (k = 0; k < EN_KEYS_N; k++) {            /* a key whose note the chord does not have */
+            const int pc = en_keys_note(k, 0) % 12;
+            int c, in = pc == (int)en_chord_root % 12;
+            for (c = 0; c < EN_NPAD; c++)
+                in |= pc == en_chord[c] % 12;
+            if (!in)
+                break;
+        }
+        CHECK(k < EN_KEYS_N, "seed %u: no key off the chord", seed);
+        if (k >= EN_KEYS_N)
+            continue;
+        runs++;
+        en_keys(KEY(k));
+        block();
+        {
+            const int note = en_keys_note(k, en_test_par(P_MOCT));
+            CHECK(down[note] == 1, "seed %u: the key %d's note %d: %d", seed, k, note, down[note]);
+            en_play(1);
+            for (i = 0u; i < 60u; i++) {
+                block();
+                CHECK(down[note] == 1, "seed %u: the key %d's note %d was let go by what was left of a phrase, at step %u, block %u", seed, k, note, en_test_song(), i);
+                if (down[note] != 1)
+                    break;
+            }
+            CHECK(en_hand_set == KEY(k), "seed %u: the engine's hand: %x", seed, en_hand_set);
+            en_keys(0u);
+            block();
+            block();
+            CHECK(down[note] == 0, "seed %u: the key up: %d", seed, down[note]);
+        }
+    }
+    CHECK(runs >= 10, "only %d runs came to the moment", runs);
+    printf("  a stale phrase under a held key: %d runs\n", runs);
+}
+
 int main(void)
 {
     t_pure();
@@ -1313,6 +1382,7 @@ int main(void)
     t_skip();
     t_changes();
     t_latch();
+    t_stale_phrase();
     t_others();
     t_queue();
     t_random();

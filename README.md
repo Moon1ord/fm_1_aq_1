@@ -13,8 +13,9 @@ you'd rather have the piece play itself, switch it to Auto.
 
 ## Install
 
-There's no published AQ-1 release yet, so you need a package file, `aq1.fwsc`. Build it as described in
-[BUILDING.md](BUILDING.md) (`app/build/aq1.fwsc`), or use a file you got from someone who did.
+The easiest way is [the install page](https://moon1ord.github.io/fm_1_aq_1/install/), from Chrome or Edge, or [try it in the browser](https://moon1ord.github.io/fm_1_aq_1/emu/) first.
+
+From a terminal, with the package from [the site](https://moon1ord.github.io/fm_1_aq_1/), or `app/build/aq1.fwsc` if you built it ([BUILDING.md](BUILDING.md)):
 
 Installing other firmware is at your own risk. Before you start, read how to get back, below.
 
@@ -77,8 +78,8 @@ plays by itself, with the scale on the keys), its echoes and its reverb. The rev
 on [fm1-base](https://github.com/charlesvestal/fm1-base) and [felucca-bsp](https://github.com/hugelton/felucca-bsp),
 from [Felucca](https://github.com/hugelton/Felucca) by Leo Kuroshita (Hügelton Instruments).
 
-The code is under MPL-2.0. The licence of the screen's art has not been decided and the MPL doesn't cover it; see
-[LICENSING.md](LICENSING.md).
+The code is under MPL-2.0. The screen's art is not: its owner keeps all rights, and you may install, use and share
+unchanged packages; see [LICENSING.md](LICENSING.md).
 
 M-VAVE and FM-1 are trademarks of their owners. AQ-1 isn't affiliated with M-VAVE, Charles Vestal or Hügelton
 Instruments.

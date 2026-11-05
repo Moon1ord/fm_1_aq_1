@@ -29,10 +29,10 @@ melodies without end. You decide what plays, and when; and when you want to, you
 
 ## 1. Install
 
-There's no published AQ-1 release yet, so you need a package file, `aq1.fwsc`. Build it from the source
-(`BUILDING.md`), or use a file you got from someone who did.
+The easiest way is [the install page](../install/), from Chrome or Edge, with the FM-1 connected by USB. Nothing to install on the computer.
 
-Install Python 3 and `pip3 install mido python-rtmidi`, connect the FM-1 with a USB data cable, and run this from the
+From a terminal, with the package from [the site's front page](../), or one you built from the source (`BUILDING.md`):
+install Python 3 and `pip3 install mido python-rtmidi`, connect the FM-1 with a USB data cable, and run this from the
 source tree:
 
 ```
@@ -777,8 +777,8 @@ The defaults are Load Screen's; each piece has its own.
 
 ## 14. Credits
 
-AQ-1's code is free software under the Mozilla Public License 2.0. The licence of the screen's art has not been decided and
-the MPL doesn't cover it; see `LICENSING.md`.
+AQ-1's code is free software under the Mozilla Public License 2.0. The screen's art is not under the MPL: its owner keeps all
+rights, and you may install, use and share unchanged packages; see `LICENSING.md`.
 
 - AQ-1 is a fork of [AMB-1](https://github.com/charlesvestal/fm1-amb) by Charles Vestal. This manual grew from AMB-1's, and
   the echoes come from AMB-1, which took them from the chain of Brian Eno's *Discreet Music*.

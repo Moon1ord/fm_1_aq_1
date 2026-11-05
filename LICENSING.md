@@ -3,9 +3,7 @@
 AQ-1's code is free software under the **Mozilla Public License 2.0** (`MPL-2.0`, full text in `LICENSE`), file by
 file. If you change one of its files and share the result, share that file's source under the MPL.
 
-**The art is the exception.** The licence of the screen's art has not been decided. The art is not covered by the
-MPL until its owner states a licence here. Until then, no licence to copy or reuse it is granted. See
-[The art](#the-art).
+**The art is the exception.** It is not under the MPL; its owner keeps all rights. See [The art](#the-art).
 
 ## Where the code comes from
 
@@ -35,10 +33,10 @@ The drums are AQ-1's own. Their sounds are synthesised by `tools/gen_breaks.c` w
 title), made by `tools/gen_art.py` from the owner's source pictures, which are not in this repository. The screenshots
 `docs/img/screen-*.png` show the same art.
 
-**The licence of the art is undecided. It is not covered by the MPL until stated here.**
+**The screen's art is © 2026 Moon1ord, all rights reserved. You may install and use AQ-1's firmware with the art in it, build it from this source for your own use, and share unchanged packages of it. No other licence to copy or reuse the art is granted.**
 
 The MPL does cover `tools/gen_art.py`, the code that generates the header, and `app/art.h`, the code that reads it. The
-built firmware contains the art, so sharing a built package also depends on this decision.
+built firmware contains the art, so sharing a built package is covered by the terms above.
 
 ## Third-party material
 

@@ -113,12 +113,13 @@ stops the release), then signs build provenance for `aq1-X.Y.fwsc` and `aq1-X.Y-
    and the signatures, then publishes the draft. A tag with a suffix (`v1.4-beta`) is a prerelease. A published
    release is never rebuilt: a new build needs a new tag.
 
-The site tooling is fm1-base's: `base/tools/make_site.py` builds a site (the landing page, the emulator, the web
-installer, the manual, the words files and the firmware) from `app/` and a release package. AQ-1 has no
-`app/site/landing.md` yet, and `repo` in `app/fm1.toml` is empty, so that has to be filled in first.
+The site is at https://moon1ord.github.io/fm_1_aq_1/. `tools/make_pages.py` builds it (the landing page, `app/site/landing.md`; the emulator, the web
+installer, the manual, the words files and the firmware) with fm1-base's `base/tools/make_site.py`, from `app/` and a
+release package, and the result goes on the `gh-pages` branch:
 
-Before publishing, also settle these:
+```
+./build.sh --release X.Y && ./build.sh --web --release X.Y
+python3 tools/make_pages.py app/build/aq1-X.Y.fwsc X.Y app/build/pages
+```
 
-- the art's licence ([LICENSING.md](LICENSING.md));
-- the `url:` line in `app/words.tsv`, which still points at AMB-1's site. The URL goes into the firmware, so changing
-  it changes the build.
+The `url:` line in `app/words.tsv` goes into the firmware, so changing it changes the build.

@@ -3337,6 +3337,7 @@ static uint32_t bell_case[2];
 static uint8_t mu_moved;                         /* the melody's set is no longer the sound it came from */
 static uint8_t fx_note;                          /* the melody's last note, and how many: for the effects, which follow it */
 static uint32_t fx_notes;
+static uint32_t fx_phrases;                      /* the melody's phrases so far: its Autopan turns with each */
 
 static void bell_up(bell_t *v)                   /* its key lets go: it rings out */
 {
@@ -3817,6 +3818,7 @@ static void mel_plan(uint32_t s)
     phr_chords = (uint8_t)in.nchords;
     phr_at = s;
     phr_i = 0u;
+    fx_phrases += phr.n > 0u;
     phr_pool = h_pool;
     phr_root = h_root;
     mel_on = phr.n > 0u;
@@ -4800,6 +4802,7 @@ static void fx_init(void)
     }
     fx_note = 0u;
     fx_notes = 0u;
+    fx_phrases = 0u;
     fx_stirred = 0u;
 }
 
@@ -6062,7 +6065,7 @@ static void fx_plan(fx_t *f, int l, int snap)
     in.section = part_now.section;
     in.chord_bars = ch_now.bars;
     in.mel_on = mel_on || hand_busy || par[P_MELMODE] == EN_MEL_ARP;
-    in.mel_count = phr_at;
+    in.mel_count = fx_phrases;
     en_fx_compose(&in, &p);
     f->cycles = p.cycles;
     f->depth_to = p.depth * (float)p.dir;

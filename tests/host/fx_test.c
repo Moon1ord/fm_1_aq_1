@@ -1373,6 +1373,104 @@ static void t_extremes(void)
     }
 }
 
+/* ---- Autopan on the melody changes direction with each new phrase, through the whole of the render, and in what comes out: en_fx_compose alone would not know what the engine told it. Off the melody's own phrases nothing turns: the keys', and Motion 0 */
+static uint32_t ap_phrases;
+static void ap_trace(uint32_t step, const en_phrase_t *p)
+{
+    (void)step, (void)p;
+    ap_phrases++;
+}
+static void autopan_run(uint32_t seed, int layer, int motion, uint32_t bars, int *agree, int *differ, int *turns, int *sound_with, int *sound_against)
+{
+    en_fx_plan_t base;
+    uint32_t b, was = 0xFFFFFFFFu, at_bar = 0u;
+    int last = 0;
+    double corr = 0.0, power = 0.0;
+    start(seed, EN_HANDS, 0);
+    layers(0, 1, 0, 0, 0);
+    en_set(P_MRATE, 100);
+    en_set(layer == EN_L_MEL ? P_MECHO : P_KECHO, 0);
+    en_set(layer == EN_L_MEL ? P_MREV : P_KREV, 0);
+    fx_set(layer, EN_FX_AUTOPAN, motion, 100);
+    en_test_pad_off = 1;
+    en_play(1);
+    ap_phrases = 0u;
+    en_trace_mel = ap_trace;
+    *agree = *differ = *turns = *sound_with = *sound_against = 0;
+    render(4u);
+    for (b = 0u; b < bars * 200u && en_test_song() / 16u < bars; b++) {
+        const uint32_t s = en_test_song(), bar = s ? (s - 1u) / 16u : 0u;
+        uint32_t j;
+        float phase, depth;
+        if (bar != was) {                        /* a new bar's last blocks told what it came to: judge the bar now over */
+            if (was != 0xFFFFFFFFu && was > 0u) {
+                const int dir = (at_bar & 1u) && layer == EN_L_MEL && motion > 0 ? -base.dir : base.dir;
+                const float d = en_test_fx_q(layer, EN_FXQ_DEPTH);
+                const int side = d > 0.0f ? 1 : d < 0.0f ? -1 : 0;
+                if (side == dir)
+                    ++*agree;
+                else
+                    ++*differ;
+                if (last && side != last)
+                    ++*turns;
+                last = side;
+                if (power > 0.0) {               /* in the sound: which way the left and the right follow the wave, against which way it should go */
+                    if ((corr > 0.0) == (dir > 0))
+                        ++*sound_with;
+                    else
+                        ++*sound_against;
+                }
+            }
+            was = bar;
+            at_bar = ap_phrases;
+            compose_at(EN_FX_AUTOPAN, layer, motion, 100, seed, s ? s - 1u : 0u, EN_SEC_LIGHT, 2, 1, 0u, &base);
+            corr = power = 0.0;
+        }
+        phase = en_test_fx_q(layer, EN_FXQ_PHASE);
+        depth = fabsf(en_test_fx_q(layer, EN_FXQ_DEPTH));
+        en_render(blk, BLOCK, GAIN);
+        mblock++;
+        if (depth > 0.3f) {                      /* (not while it is going by way of the middle) */
+            double lr = 0.0;
+            for (j = 0u; j < BLOCK; j++) {
+                const double l = (double)blk[2u * j] * (1.0 / 8300000.0), r = (double)blk[2u * j + 1u] * (1.0 / 8300000.0);
+                lr += r * r - l * l;
+                power += l * l + r * r;
+            }
+            corr += lr * sin(2.0 * 3.14159265358979 * (double)phase);
+        }
+    }
+    en_trace_mel = 0;
+}
+static void t_autopan_phrases(void)
+{
+    static const uint32_t SEEDS[3] = {11u, 202u, 3003u};
+    int s;
+    for (s = 0; s < 3; s++) {
+        int agree, differ, turns, with, against;
+        /* Motion above 0: each phrase turns it. Motion 1: the phrase line's own choice of direction hardly comes in: the turns are the phrases' */
+        autopan_run(SEEDS[s], EN_L_MEL, 1, 96u, &agree, &differ, &turns, &with, &against);
+        CHECK(ap_phrases >= 6u, "seed %u: %u phrases: too few to say", SEEDS[s], ap_phrases);
+        CHECK(differ == 0, "seed %u: the direction went against the phrases' count in %d bars of %d", SEEDS[s], differ, agree + differ);
+        CHECK(turns >= 3, "seed %u: the direction turned %d times in %u phrases", SEEDS[s], turns, ap_phrases);
+        CHECK(with + against > 20 && (with * 5 >= (with + against) * 4 || against * 5 >= (with + against) * 4), "seed %u: heard: %d bars one way, %d the other: the sound does not follow it", SEEDS[s], with, against);
+        printf("  autopan by phrases, seed %u: %u phrases, %d turns; heard %d/%d\n", SEEDS[s], ap_phrases, turns, with, against);
+        autopan_run(SEEDS[s], EN_L_MEL, 100, 96u, &agree, &differ, &turns, &with, &against);
+        CHECK(differ == 0, "seed %u, Motion 100: the direction went against the phrases' count in %d bars of %d", SEEDS[s], differ, agree + differ);
+        CHECK(turns >= 3, "seed %u, Motion 100: it turned %d times", SEEDS[s], turns);
+        /* Motion 0: never */
+        autopan_run(SEEDS[s], EN_L_MEL, 0, 64u, &agree, &differ, &turns, &with, &against);
+        CHECK(ap_phrases >= 4u, "seed %u: %u phrases", SEEDS[s], ap_phrases);
+        CHECK(differ == 0 && turns == 0, "seed %u, Motion 0: it moved: %d against, %d turns", SEEDS[s], differ, turns);
+    }
+    /* a phrase is no more than the melody's business: the keys' at the same Motion does not turn with it */
+    {
+        int agree, differ, turns, with, against;
+        autopan_run(SEEDS[0], EN_L_KEYS, 1, 64u, &agree, &differ, &turns, &with, &against);
+        CHECK(differ == 0, "the keys' follows the phrases: %d against", differ);
+    }
+}
+
 int main(void)
 {
     cap = malloc(CAP_MAX * sizeof *cap);
@@ -1395,6 +1493,7 @@ int main(void)
     t_engine_still();
     t_engine_moves();
     t_grid_locked();
+    t_autopan_phrases();
     t_filter_moves();
     t_filter_follows();
     t_levels();

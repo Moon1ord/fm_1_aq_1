@@ -129,3 +129,26 @@ wait 300
 shot 91_edit_keys.png
 tap ENV
 wait 300
+# the sound editor as it stays, its name in the top line: the manual's picture
+tap ENV
+wait 300
+press SEL
+tap GLO
+wait 100
+release SEL
+wait 1500
+shot 92_edit_keys_header.png
+tap ENV
+wait 1500
+# Space, an effect on each: the manual's picture
+tap FX
+wait 300
+setpar 36 1
+setpar 41 4
+setpar 42 70
+wait 300
+shot 93_space_effects.png
+setpar 36 0
+setpar 41 0
+setpar 42 50
+wait 300

@@ -73,11 +73,15 @@ sh base/tests/run_tests.sh        # fm1-base's own
 AQ-1's tests are:
 
 - the engine, in `tests/host/*_test.c`: harmony, the arranger, rhythm, the melody, the knobs, Hands, the pieces,
-  saving, the controls and MIDI;
+  saving, the controls and MIDI, the arpeggios, the keys played by hand, the sounds, the effects, the sounds you build,
+  and `den_test`, that no state the render keeps sits among the denormals;
 - the update path against `app/build/aq1.fwsc`, skipped until you've run `./build.sh`;
 - the browser build in Node, skipped without Emscripten;
 - the whole app in the simulator (`tests/scenarios/*.amb`), with audio and screenshots in `app/build/scenarios/`,
-  and every screen in `app/build/screens/`.
+  and every screen in `app/build/screens/`;
+- the same scenarios and screens again in a simulator built with AddressSanitizer and UBSan (`tests/host/san-cc.sh`,
+  about a minute more, with results in `app/build/scenarios_san/`). `tests/host/san-run.sh` fails on any report but one, a
+  left shift in fm1-base's `base/include/fastmath.h:58`. It's skipped if `cc` can't build with the sanitizers.
 
 `app/build/host/aq1_host SCRIPT OUTDIR` runs one script. The commands are listed at the top of
 `base/host/plat_host.c`, and AQ-1's own checks and commands at the top of `app/host.c`.

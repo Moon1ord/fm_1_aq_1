@@ -54,6 +54,8 @@ If it no longer starts at all, see "Recovering an FM-1 that won't start" in the 
 | SELECT + ENV · ARP · LFO · SEQ · FX | Keys and pad · melody · bass · kick and snare · hats, on or off |
 | SELECT + HOME | Hands (you lead) or Auto (the arranger leads) |
 | SELECT + KNOB 1 | On Keys, Melody and Bass: the layer's sound (on Keys, KNOB 2: the pad's) |
+| SELECT + KNOB 2 · 3 · 4 | On Melody: its mode · the arpeggio's pattern · its Skip |
+| SELECT + REC | On Melody in Keys Arp: Latch |
 | SELECT + GLO | On Keys, Melody and Bass: build a sound of your own: Ratio, Depth, Attack, Decay on the knobs (Keys: again, the pad's); the page's button to leave |
 | SELECT, FX or GLO + KNOB 1–4 | On Space: the keys' and the melody's effect, Motion, sends and Depth |
 | PLAY · REC | Play / rest · hold the chord |
@@ -64,7 +66,8 @@ If it no longer starts at all, see "Recovering an FM-1 that won't start" in the 
 | OCT− / OCT+ | The melody's octave |
 | SAVE | Saves; held for 1.5 s, puts the piece back to its recipe |
 
-Hold a button for a second and a card says what it does (not PLAY or SELECT).
+Hold a button for a second and a card says what it does (not PLAY or SELECT). Every combination, page by page, is in the
+manual, under "Every hold, by page".
 
 ## Credits
 

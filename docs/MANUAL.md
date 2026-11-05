@@ -77,7 +77,7 @@ Not sure what a button does? Hold it for a second and a card says. Let go and no
 
 ## 3. Controls
 
-The drawing at the top shows most of them; here they all are.
+The drawing at the top shows most of them; here they all are. "Every hold, by page", below, has the combinations in one place.
 
 | Control | What it does |
 |---|---|
@@ -111,6 +111,54 @@ The drawing at the top shows most of them; here they all are.
 key, a knob or another button puts the card away; letting go after it does nothing else.
 
 ![SEQ's card: the Drums page, its four knobs, and SEL + SEQ for the kick and snare](img/screen-help.png "A help card")
+
+### Every hold, by page
+
+What a held button does, in one place. Anything not listed does what it does anyway.
+
+**Anywhere**
+
+| Hold | And | What it does |
+|---|---|---|
+| SELECT | a key | Whether chords may stand on that note (Degrees). This goes for every page, the Melody page in Keys and Keys Arp too |
+| SELECT | ENV · ARP · LFO · SEQ · FX | Keys and pad · melody · bass · kick and snare · hats, on or off. The page stays |
+| SELECT | HOME | Hands or Auto, each with its set of layers and its melody's mode |
+| SELECT | EDIT | A break on the next bar |
+| SELECT | nothing, a moment | The Degrees screen, until you let go. Not in the sound editor, and not once SELECT has gone with something else in this hold |
+| HOME | turn SELECT | The tempo |
+| any button but PLAY and SELECT | nothing, about a second | Its help card. Letting go then does nothing else |
+| SAVE | nothing, 1.5 s | The piece back to its recipe. It isn't saved until the next save |
+| OCT− and OCT+ | nothing, 5 s | Update mode, with a countdown; let go to cancel |
+| OCT− and OCT+ | switching on | Calibration |
+
+**On one page.** With a knob not listed here, SELECT changes nothing: the knob is the page's value.
+
+| Page | Hold | And | What it does |
+|---|---|---|---|
+| Keys | SELECT | KNOB 1 · KNOB 2 | The keys' sound · the pad's sound |
+| Keys | SELECT | GLO | The sound editor: the keys', then the pad's, then out |
+| Melody | SELECT | KNOB 1 · 2 · 3 · 4 | The sound · the mode · the arpeggio's pattern · its Skip |
+| Melody | SELECT | GLO | The sound editor, and out |
+| Melody, in Keys Arp | SELECT | REC | Latch. In any other mode or page, REC holds the chord as ever |
+| Bass | SELECT | KNOB 1 | The sound |
+| Bass | SELECT | GLO | The sound editor, and out |
+| Space | SELECT | KNOB 1 · 2 · 3 · 4 | Keys' effect · keys' Motion · melody's effect · melody's Motion |
+| Space | FX | KNOB 1 · 2 · 3 · 4 | Keys' Echo · keys' Reverb · melody's Echo · melody's Reverb. Letting go of FX then does nothing else |
+| Space | GLO | KNOB 1 · 3 | Keys' Depth · melody's Depth. KNOB 2 and 4 do nothing under GLO. Letting go of GLO then does nothing else |
+| Setup | | GLO alone | Not a hold: M and S start afresh |
+
+SELECT + GLO does nothing on Home, Drums, Space and Setup. Home and Drums have no holds of their own.
+
+**In the sound editor** (Keys, Melody and Bass pages, until you leave it)
+
+| Hold | And | What it does |
+|---|---|---|
+| | KNOB 1 · 2 · 3 · 4 | Ratio · Depth · Attack · Decay |
+| SELECT | KNOB 1 · 2 · 4 | Start · Mod time (Bass: Speak; Pad: Detune) · Release. KNOB 3 does nothing |
+| SELECT | GLO | Leaves it; on the Keys page, from the keys' editor to the pad's first |
+| SELECT | ENV · ARP · LFO · SEQ · FX · HOME · EDIT · a key | As anywhere |
+
+The page's own button leaves it too. So does another page's button, the SELECT encoder, a new piece, or holding SAVE.
 
 ### Degrees
 
@@ -394,6 +442,8 @@ under a held button, with the four knobs as they were. Left knobs for the keys, 
 | FX | Keys' Echo | Keys' Reverb | Melody's Echo | Melody's Reverb |
 | GLO | Keys' Depth | | Melody's Depth | |
 
+![The Space page with an effect on each: KChor50/MFilt70 in the top line](img/screen-space-effects.png "Space, with the effects on")
+
 The header shows what is on with its Motion, `KChor50/MFilt70`; with both Off it says nothing. A turn says the value by itself.
 Letting go of FX or GLO after a turn does nothing else, so GLO doesn't take you to Setup.
 
@@ -470,6 +520,8 @@ The sound doesn't change what's composed, and MIDI out is the same whichever you
 ### Building a sound
 
 Each of the four layers has a sound of your own, **User**, kept with the piece: its ratio, its depth, how it comes in and how it goes. It starts from one of the sounds in the list, so you don't begin from nothing, and it's yours to take where you like. Strange bells are allowed: that's your choice, and nothing stops you. It can't get dangerously loud: the further a setting goes past where it started, the more AQ-1 turns it down.
+
+![The sound editor on the Keys page: Build keys in the top line, and the knobs Ratio, Depth, Attack, Decay](img/screen-editor.png "The sound editor")
 
 **Getting in and out.**
 

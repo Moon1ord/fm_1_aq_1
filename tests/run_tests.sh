@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: MPL-2.0
 # Copyright (C) 2026 Charles Vestal
 # AQ-1's tests: the instrument (tests/host/amb_test.c), the whole app in fm1-base's simulator (tests/scenarios/*.amb:
-# UI, chords, rhythm, persistence, the screen reader), the browser build, and the update path against the package
-# (./build.sh first). Screenshots and audio in app/build/scenarios/. fm1-base's own tests: base/tests/run_tests.sh.
+# UI, chords, rhythm, persistence, the screen reader), the same again under AddressSanitizer and UBSan, the browser build,
+# and the update path against the package (./build.sh first). Screenshots and audio in app/build/scenarios/. fm1-base's own tests: base/tests/run_tests.sh.
 #   tests/run_tests.sh
 set -u
 cd "$(dirname "$0")/.."
@@ -86,5 +86,21 @@ for s in tests/scenarios/*.amb; do
 done
 mkdir -p $B/screens                                     # every screen, to be looked at: the plan's check
 run screens $B/host/aq1_host tests/screens/screens.amb $B/screens
+# The panel under AddressSanitizer and UBSan: a text past its buffer, or a table read past its end, is caught here and not on the device. The simulator built the same way (tests/host/san-cc.sh), then
+# built again as it was, so nothing else sees it. All the scenarios and the screens, about a minute: tests/host/san-run.sh says what is let through (one line of fm1-base's)
+SAN=$OUT/aq1_host_san
+rm -f "$SAN"
+if echo 'int main(void){return 0;}' > "$OUT/san_probe.c" && cc -fsanitize=address,undefined -o "$OUT/san_probe" "$OUT/san_probe.c" 2>/dev/null && "$OUT/san_probe"; then
+    run san-build sh -c "CC=$PWD/tests/host/san-cc.sh sh build.sh --host && cp $B/host/aq1_host $SAN"
+    run host-rebuild sh build.sh --host
+    if [ -x "$SAN" ]; then
+        for s in tests/scenarios/*.amb tests/screens/screens.amb; do
+            n=$(basename "$s" .amb)
+            run "san-$n" tests/host/san-run.sh "$SAN" "$s" "$B/scenarios_san/$n" 300
+        done
+    fi
+else
+    echo "  skip sanitizers (cc has no AddressSanitizer here)"
+fi
 [ $FAIL -eq 0 ] && echo "all tests passed" || echo "TESTS FAILED"
 exit $FAIL

@@ -1,0 +1,45 @@
+# every text the panel builds stays inside what it is built in: every combination of each layer's sound, the melody's mode, pattern, Skip and Latch, the editor's headers, the effects', Setup's reading at its largest, the card, the break, every knob's every value, what the reader says. "textroom" counts what would not fit its buffer, and proves a buffer too small is never written past
+# (under tests/host/san-run.sh, AddressSanitizer watches all of it, and the two ways in below)
+wait 300
+expect textroom 0
+expect unfit 0
+# by hand, as the owner would: the Melody page, Music box, Keys Arp, Up-Down: the header is drawn
+tap ARP
+wait 1600
+press SEL
+turn K1 5
+turn K2 1
+turn K3 2
+release SEL
+wait 1600
+expect par31 5
+expect par32 3
+expect par33 2
+expect view 2
+# the longest there is: Skip 100 and Latch, and it comes back from the flash
+setpar 34 100
+setpar 35 1
+wait 300
+expect view 2
+expect stale 0
+shot melody_longest.png
+tap SAVE
+wait 1500
+reboot
+wait 3000
+expect par31 5
+expect par34 100
+expect par35 1
+tap ARP
+wait 1600
+expect view 2
+expect stale 0
+# every sound in turn with it, and back
+press SEL
+turn K1 3
+wait 200
+turn K1 5
+wait 200
+release SEL
+wait 300
+expect textroom 0

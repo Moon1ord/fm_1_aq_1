@@ -115,6 +115,8 @@ static struct {
 } sp_tp;
 static void sp_piece(void);
 #define PIECE_CARD_MS 2600u
+#define MSG_TEXT 48                             /* a message as one text: 23 + a space + 23, and its end */
+#define KNOB_TEXT 16                            /* a knob's value, a sound's name ("textroom" holds them to it) */
 static void msg_text(const char *a, const char *b, char *t)   /* the message as a reader gets it: "a b" */
 {
     uint32_t i, k = 0;
@@ -132,7 +134,7 @@ static void msg_text(const char *a, const char *b, char *t)   /* the message as 
 static void say_as(const char *a, const char *b, uint32_t flags)
 {
     uint32_t i;
-    char t[48];
+    char t[MSG_TEXT];
     for (i = 0; i < 23u && a && a[i]; i++)
         ui.msg[0][i] = a[i];
     ui.msg[0][i] = 0;
@@ -162,6 +164,20 @@ static void itoa_u(uint32_t v, char *b)
     while (n)
         *b++ = t[--n];
     *b = 0;
+}
+/* text built in a buffer of a known size: whatever comes stays inside it and is ended. n: where it has got to; the new n back. The buffers are the size of their longest text, which tests/scenarios/text_room.amb measures ("textroom") */
+static int put_s(char *b, int size, int n, const char *s)
+{
+    while (*s && n < size - 1)
+        b[n++] = *s++;
+    b[n] = 0;
+    return n;
+}
+static int put_u(char *b, int size, int n, uint32_t v)
+{
+    char t[12];
+    itoa_u(v, t);
+    return put_s(b, size, n, t);
 }
 
 /* SAVING: a flash erase stops everything for tens of ms, so every write goes through the volume's duck (en_duck). It fades, it writes, it comes back, and all
@@ -1291,59 +1307,44 @@ static uint32_t chord_sig(void)
 /* the header: the page or the piece and what goes with it, on a pane; on the right the battery, what is unsaved, the tempo (a play triangle while resting).
  * Setup: the audio load instead: smoothed, worst block %, missed, shed. A message takes its place for a moment, in any scene */
 static int msg_up(void) { return scr.now < ui.msg_until && scr.scene != SC_CARD && scr.scene != SC_SAVE; }   /* (those two say it whole themselves) */
-static void setup_read(char *c)
+#define SETUP_TEXT 32                           /* "CPU 100 M999 X999 S999" and room to spare: past 9999 and more of them it is cut, not written past */
+static void setup_read(char *c, int size)
 {
-    uint32_t k = 4;
-    c[0] = 'C', c[1] = 'P', c[2] = 'U', c[3] = ' ';
-    itoa_u(scr.r_cpu, c + k);
-    while (c[k]) k++;
-    c[k++] = ' ';
-    c[k++] = 'M';
-    itoa_u(scr.r_max * 100u / (APP_BLOCK * 1000000u / 44100u), c + k);
-    while (c[k]) k++;
-    c[k++] = ' ';
-    c[k++] = 'X';
-    itoa_u(scr.r_x, c + k);
-    while (c[k]) k++;
-    c[k++] = ' ';
-    c[k++] = 'S';
-    itoa_u(scr.r_s, c + k);
+    int k = put_s(c, size, 0, "CPU ");
+    k = put_u(c, size, k, scr.r_cpu);
+    k = put_s(c, size, k, " M");
+    k = put_u(c, size, k, scr.r_max * 100u / (APP_BLOCK * 1000000u / 44100u));
+    k = put_s(c, size, k, " X");
+    k = put_u(c, size, k, scr.r_x);
+    k = put_s(c, size, k, " S");
+    put_u(c, size, k, scr.r_s);
 }
 /* what the header says of a page's sounds: Keys has two, the keys' and the pad's. 0: none */
 #define HEADER_SOUND_ROOM(view) (231 - BATT_W - 6 - 9 - 22 - 6 - 10 - (9 + text_w(&FONT_B, VIEW_NAME[view]) + 5))   /* with the tempo, a dot, the battery and a rest's mark on its right */
-static int page_sounds(int view, char *b, int leave, int tight)
+#define SOUND_TEXT 34                           /* the longest a page's sounds can be: "Music box/Keys Arp/Up-Down/S100/L", and its end ("textroom" holds this to every combination) */
+static int page_sounds(int view, char *b, int size, int leave, int tight)
 {
     int i, n = 0;
-    if (ui.edit) {                               /* which sound the knobs are */
-        const char *w = EDIT_WORD[EDIT_LAYER];
-        while (*w)
-            b[n++] = *w++;
-        b[n] = 0;
-        return n;
-    }
+    b[0] = 0;
+    if (ui.edit)                                 /* which sound the knobs are */
+        return put_s(b, size, 0, EDIT_WORD[EDIT_LAYER]);
     if (view == V_SPACE) {                       /* each layer's effect, if it has one, with its Motion: KChor50/MFilt70. What else there is, says itself when turned */
         static const char *const FX_SHORT[EN_NFX] = {"", "Chor", "Pan", "Trem", "Filt"};
         for (i = 0; i < 2; i++) {
             const int fx = proj.par[i ? P_MFX : P_KFX];
-            const char *w = FX_SHORT[fx];
             if (fx == EN_FX_OFF)
                 continue;
             if (n)
-                b[n++] = '/';
-            b[n++] = i ? 'M' : 'K';
-            while (*w)
-                b[n++] = *w++;
-            itoa_u((uint32_t)proj.par[i ? P_MMOTION : P_KMOTION], b + n);
-            while (b[n])
-                n++;
+                n = put_s(b, size, n, "/");
+            n = put_s(b, size, n, i ? "M" : "K");
+            n = put_s(b, size, n, FX_SHORT[fx]);
+            n = put_u(b, size, n, (uint32_t)proj.par[i ? P_MMOTION : P_KMOTION]);
         }
-        b[n] = 0;
         return n;
     }
     for (i = 0; i < NSOUND_KNOBS; i++)
         if (SOUND_KNOB[i].view == view && sound_said(i) && SOUND_KNOB[i].par != leave) {
             char t[16];
-            int k = 0;
             en_param_text(SOUND_KNOB[i].par, proj.par[SOUND_KNOB[i].par], t);
             if (tight && SOUND_KNOB[i].par == P_MELMODE && proj.par[P_MELMODE] == EN_MEL_KEYS_ARP) {
                 t[0] = 'K', t[1] = 'A', t[2] = 'r', t[3] = 'p', t[4] = 0;
@@ -1353,26 +1354,22 @@ static int page_sounds(int view, char *b, int leave, int tight)
                 t[4] = 0;                        /* Rand */
             }
             if (n)
-                b[n++] = '/';
+                n = put_s(b, size, n, "/");
             if (SOUND_KNOB[i].par == P_ARPSKIP)
-                b[n++] = 'S';                    /* (a bare number is not a word for what it is) */
-            while (t[k])
-                b[n++] = t[k++];
+                n = put_s(b, size, n, "S");      /* (a bare number is not a word for what it is) */
+            n = put_s(b, size, n, t);
         }
-    if (view == V_MOTIFS && proj.par[P_MELMODE] == EN_MEL_KEYS_ARP && proj.par[P_ARPLATCH]) {
-        b[n++] = '/';
-        b[n++] = 'L';
-    }
-    b[n] = 0;
+    if (view == V_MOTIFS && proj.par[P_MELMODE] == EN_MEL_KEYS_ARP && proj.par[P_ARPLATCH])
+        n = put_s(b, size, n, "/L");
     return n;
 }
-static int page_sound(int view, char *b)         /* in an arpeggio the mode and the pattern are what the page can not say otherwise: a sound's long name gives way to them (it says itself when turned), then in Keys Arp the longest words to shorter ones */
+static int page_sound(int view, char *b, int size)   /* in an arpeggio the mode and the pattern are what the page can not say otherwise: a sound's long name gives way to them (it says itself when turned), then in Keys Arp the longest words to shorter ones */
 {
-    int n = page_sounds(view, b, -1, 0);
+    int n = page_sounds(view, b, size, -1, 0);
     if (n && text_w(&FONT_XS, b) > HEADER_SOUND_ROOM(view))
-        n = page_sounds(view, b, P_MELSND, 0);
+        n = page_sounds(view, b, size, P_MELSND, 0);
     if (n && text_w(&FONT_XS, b) > HEADER_SOUND_ROOM(view))
-        n = page_sounds(view, b, P_MELSND, 1);
+        n = page_sounds(view, b, size, P_MELSND, 1);
     return n;
 }
 static const char *header_word(int sc)
@@ -1381,7 +1378,7 @@ static const char *header_word(int sc)
 }
 static void draw_header(int sc)
 {
-    char t[24], c[32];
+    char t[24], c[SETUP_TEXT];
     int32_t x = 231, xl;
     if (!in_view(0, 0, 240, HDR_H))
         return;
@@ -1423,7 +1420,7 @@ static void draw_header(int sc)
     if (sc == SC_DEG) {
         text(xl, 8, &FONT_XS, "press a key", K_SOFT);
     } else if (sc == SC_PAGE && ui.view == V_SETUP) {
-        setup_read(c);
+        setup_read(c, sizeof c);
         text(xl, 8, &FONT_XS, c, K_SOFT);
     } else if (sc == SC_HOME) {
         if (xl + text_w(&FONT_XS, EN_NOTE_NAME[proj.par[P_ROOT]]) <= x) {
@@ -1432,8 +1429,8 @@ static void draw_header(int sc)
                 text(xl + 3, 8, &FONT_XS, mode_name(), K_SOFT);
         }
     } else {
-        char nm[16], snd[24];
-        if (sc == SC_PAGE && page_sound(ui.view, snd) && xl + text_w(&FONT_XS, snd) <= x)
+        char nm[16], snd[SOUND_TEXT];
+        if (sc == SC_PAGE && page_sound(ui.view, snd, sizeof snd) && xl + text_w(&FONT_XS, snd) <= x)
             xl = text(xl, 8, &FONT_XS, snd, K_INK) + 6;          /* (the page's sound, then the chord in its usual colour) */
         chord_now(nm);
         if (xl + text_w(&FONT_XS, nm) <= x)
@@ -1639,7 +1636,7 @@ static void draw_knob(int i)
 {
     const int k = page_knob(i), hot = scr.now < ui.touch_until && ui.touched == i;
     const int32_t x = i * KCELL_W, cx = x + 30;
-    char t[16];
+    char t[KNOB_TEXT];
     int lo, hi, v;
     if (k == K_NONE || !in_view(x, PANEL_Y, KCELL_W, PANEL_H))
         return;
@@ -1830,31 +1827,32 @@ static void draw_deg_panel(void)
 /* the piece's card: under its name, its mood (the spec's) */
 static const char *const PIECE_LINE[NPIECES] = {"The wait itself", "Sunny, glossy", "Open, the fastest", "More room, a sparse beat",
                                                 "Wide pads, slow light", "The warmest, on the bass", "The quietest, to rest", "Sunset, in minor"};
+#define CARD_TEXT 32                            /* "C# Pent maj  /  Loading  /  200": 31 at its longest, and its end */
+static int card_line(char *t, int size)
+{
+    int k = put_s(t, size, 0, EN_NOTE_NAME[proj.par[P_ROOT]]);
+    k = put_s(t, size, k, " ");
+    k = put_s(t, size, k, mode_name());
+    k = put_s(t, size, k, "  /  ");
+    k = put_s(t, size, k, EN_STYLE_NAME[proj.par[P_STYLE]]);
+    k = put_s(t, size, k, "  /  ");
+    return put_u(t, size, k, (uint32_t)proj.par[P_TEMPO]);
+}
 static void draw_card(void)
 {
-    char t[32];
-    uint32_t k = 0;
-    const char *s;
+    char t[CARD_TEXT];
+    int k;
     if (!in_view(0, 0, 240, 240))
         return;
     rect(0, 158, 240, 1, K_INK);
     text(10, 160, &FONT_L, piece_name(proj.piece), K_INK);
     text(10, 197, &FONT_XS, PIECE_LINE[proj.piece % NPIECES], K_SOFT);
-#define C(p) for (s = (p); *s && k < sizeof t - 1u; s++) t[k++] = *s
-    C(EN_NOTE_NAME[proj.par[P_ROOT]]);
-    C(" ");
-    C(mode_name());
-    C("  /  ");
-    C(EN_STYLE_NAME[proj.par[P_STYLE]]);
-    C("  /  ");
-#undef C
-    itoa_u((uint32_t)proj.par[P_TEMPO], t + k);
+    card_line(t, sizeof t);
     text(10, 215, &FONT_XS, t, K_INK);
-    t[0] = '0';
-    itoa_u((uint32_t)proj.piece + 1u, t + 1);
-    k = 2;
-    t[k++] = ' ', t[k++] = '/', t[k++] = ' ', t[k++] = '0';
-    itoa_u(NPIECES, t + k);
+    k = put_s(t, sizeof t, 0, "0");              /* (eight pieces: a figure each) */
+    k = put_u(t, sizeof t, k, (uint32_t)proj.piece + 1u);
+    k = put_s(t, sizeof t, k, " / 0");
+    put_u(t, sizeof t, k, NPIECES);
     text_r(231, 6, &FONT_B, t, K_INK);
 }
 static uint32_t card_sig(void)
@@ -1865,14 +1863,7 @@ static void draw_break(void)
 {
     char t[12];
     text(10, 192, &FONT_L, "BREAK", K_INK);
-    itoa_u(en_break_bars, t);
-    {
-        uint32_t k = 0;
-        const char *s = en_break_bars == 1u ? " BAR" : " BARS";
-        while (t[k]) k++;
-        while (*s) t[k++] = *s++;
-        t[k] = 0;
-    }
+    put_s(t, sizeof t, put_u(t, sizeof t, 0, en_break_bars), en_break_bars == 1u ? " BAR" : " BARS");
     text_r(231, 206, &FONT_B, t, K_SOFT);
 }
 static int save_star_size(int i, uint32_t now)   /* each star grows and goes in its turn */
@@ -2429,6 +2420,17 @@ static void sp_cat(const char *s)
         sp_buf[sp_n++] = *s++;
     sp_buf[sp_n] = 0;
 }
+static void sp_words(void)                     /* it ran out of room: it ends at a word, not within one */
+{
+    uint32_t k = sp_n;
+    if (sp_n < ANN_MAX)
+        return;
+    while (k && sp_buf[k - 1] != ' ')
+        k--;
+    while (k && (sp_buf[k - 1] == ' ' || sp_buf[k - 1] == ','))
+        k--;
+    sp_buf[k] = 0;
+}
 static void sp_int(uint32_t v)
 {
     char t[12];
@@ -2444,7 +2446,7 @@ static int sp_same(const char *a, const char *b)
 
 static void sp_value(int k)                    /* a value as it is said: as shown */
 {
-    char t[16];
+    char t[KNOB_TEXT];
     knob_text(k, t);
     sp_cat(t);
 }
@@ -2498,6 +2500,7 @@ static void sp_page(int all)
             sp_cat(" ");
             sp_value(K_U + ORDER[i]);
         }
+        sp_words();
         return;
     }
     sp_cat(VIEW_NAME[ui.view]);
@@ -2513,8 +2516,10 @@ static void sp_page(int all)
         }
     if (ui.view == V_MOTIFS && proj.par[P_MELMODE] == EN_MEL_KEYS_ARP && proj.par[P_ARPLATCH])
         sp_cat(", latch on");
-    if (!all)
+    if (!all) {
+        sp_words();
         return;
+    }
     sp_cat(". Piece ");
     sp_cat(piece_name(proj.piece));
     sp_cat(", ");
@@ -2539,6 +2544,7 @@ static void sp_page(int all)
         sp_cat(". ");
         sp_cat(batt_words(batt()));
     }
+    sp_words();
 }
 
 /* the garden: the chord and how far to the next, the scale from the root up ("F and F sharp": one letter's
@@ -2782,7 +2788,7 @@ static int unfit_one(const felucca_font_t *f, const char *s, int32_t room, const
 }
 static int unfit_msg(const char *a, const char *b)   /* a message: in the header, its two parts 8 apart */
 {
-    char t[48];
+    char t[MSG_TEXT];
     int w = text_w(&FONT_B, a) + (b ? 8 + text_w(&FONT_B, b) : 0);
     if (w <= 224)                                     /* inside the header's pane */
         return 0;
@@ -2831,10 +2837,10 @@ static int ui_unfit(void)                             /* the host's "unfit": wha
     for (x = 0; x < EN_NSTYLES; x++)
         n += unfit_one(&FONT_XS, EN_STYLE_NAME[x], CHORD_W - 6, "style");
     {                                                 /* Setup's reading at its longest, with the page's name and what is on the right */
-        char c[32];
+        char c[SETUP_TEXT];
         const uint32_t k[4] = {scr.r_cpu, scr.r_max, scr.r_x, scr.r_s};
         scr.r_cpu = 100u, scr.r_max = 999u * (APP_BLOCK * 1000000u / 44100u) / 100u, scr.r_x = 999u, scr.r_s = 999u;
-        setup_read(c);
+        setup_read(c, sizeof c);
         n += unfit_one(&FONT_XS, c, 231 - BATT_W - 6 - 9 - 22 - 6 - (9 + text_w(&FONT_B, "Setup") + 5), "Setup's reading");
         scr.r_cpu = k[0], scr.r_max = k[1], scr.r_x = k[2], scr.r_s = k[3];
     }
@@ -2850,35 +2856,35 @@ static int ui_unfit(void)                             /* the host's "unfit": wha
         }
     }
     {                                                 /* Space's header: both effects, at their longest Motion */
-        char c[24];
+        char c[SOUND_TEXT];
         const project_t k = proj;
         for (x = 0; x < EN_NFX * EN_NFX; x++) {
             proj.par[P_KFX] = (int16_t)(x % EN_NFX), proj.par[P_MFX] = (int16_t)(x / EN_NFX);
             proj.par[P_KMOTION] = proj.par[P_MMOTION] = 100;
-            if (page_sound(V_SPACE, c))
+            if (page_sound(V_SPACE, c, sizeof c))
                 n += unfit_one(&FONT_XS, c, HEADER_SOUND_ROOM(V_SPACE), "the header's effects");
         }
         proj = k;
     }
     for (v = 0; v < NVIEWS; v++) {
-        char c[24];
+        char c[SOUND_TEXT];
         const project_t k = proj;
-        for (x = 0; x < 7 * 4 * EN_ARP_NPATTERNS * 3 * 2; x++) {
+        for (x = 0; x < 8 * 4 * EN_ARP_NPATTERNS * 3 * 2; x++) {
             int16_t *q[8] = {&proj.par[P_KEYSND], &proj.par[P_PADSND], &proj.par[P_BASSSND], &proj.par[P_MELSND], &proj.par[P_MELMODE], &proj.par[P_ARPPAT], &proj.par[P_ARPSKIP], &proj.par[P_ARPLATCH]};
-            *q[0] = (int16_t)(x % 4), *q[1] = (int16_t)(x / 4 % 4), *q[2] = (int16_t)(x % 4), *q[3] = (int16_t)(x % 7), *q[4] = (int16_t)(x / 7 % 4), *q[5] = (int16_t)(x / 28 % EN_ARP_NPATTERNS), *q[6] = (int16_t)(x / (28 * EN_ARP_NPATTERNS) % 3 * 50), *q[7] = (int16_t)(x / (84 * EN_ARP_NPATTERNS));
-            if (page_sound(v, c))
+            *q[0] = (int16_t)(x % 5), *q[1] = (int16_t)(x / 5 % 5), *q[2] = (int16_t)(x % 5), *q[3] = (int16_t)(x % 8), *q[4] = (int16_t)(x / 8 % 4), *q[5] = (int16_t)(x / 32 % EN_ARP_NPATTERNS), *q[6] = (int16_t)(x / (32 * EN_ARP_NPATTERNS) % 3 * 50), *q[7] = (int16_t)(x / (96 * EN_ARP_NPATTERNS));
+            if (page_sound(v, c, sizeof c))
                 n += unfit_one(&FONT_XS, c, HEADER_SOUND_ROOM(v), "the header's sound");
         }
         proj = k;
     }
     {                                                 /* the sound editor: its names, every value from every sound, what it says */
         const uint8_t ke = ui.edit;
-        char c[24];
+        char c[SOUND_TEXT];
         for (x = 0; x < EN_NUSER; x++) {
             int f, p;
             ui.edit = (uint8_t)(x + 1);
             for (v = 0; v < NVIEWS; v++)
-                if (page_sound(v, c))
+                if (page_sound(v, c, sizeof c))
                     n += unfit_one(&FONT_XS, c, HEADER_SOUND_ROOM(v), "the header's editor");
             n += unfit_msg("BUILD", EDIT_NAME[x]);
             n += unfit_msg(EDIT_NAME[x], "SOUND KEPT");
@@ -2927,6 +2933,221 @@ static int ui_unfit(void)                             /* the host's "unfit": wha
         n += unfit_msg("NO CHORDS ON", EN_NOTE_NAME[x]);
     return n;
 }
+/* the host's "textroom": what would not fit the buffer it is built in, whatever the settings, each measured in one with room to spare; and a buffer too small is never written past */
+#define ROOM_PROBE 96
+static int room_one(const char *what, const char *s, int size)
+{
+    int k = 0;
+    while (s[k])
+        k++;
+    if (k < size)
+        return 0;
+    printf("textroom: %s \"%s\": %d in %d\n", what, s, k + 1, size);
+    return 1;
+}
+static int room_small(int view, int leave, int tight)   /* the same text into every small size: inside it, and ended */
+{
+    int size, n = 0;
+    for (size = 1; size <= 12; size += 3) {
+        char c[32];
+        int i, end = 0;
+        for (i = 0; i < 32; i++)
+            c[i] = 'x';
+        page_sounds(view, c + 8, size, leave, tight);
+        for (i = 0; i < 32; i++)
+            if (c[i] != 'x' && (i < 8 || i >= 8 + size))
+                n++;
+        for (i = 8; i < 8 + size; i++)
+            if (!c[i])
+                end = 1;
+        n += !end;
+    }
+    return n;
+}
+static int sounds_room(int *most)                /* a page's sounds, as every combination has them, as far as page_sound can go */
+{
+    char c[ROOM_PROBE];
+    int n = 0, v, t;
+    for (v = 0; v < NVIEWS; v++)
+        for (t = 0; t < 3; t++) {
+            const int k = page_sounds(v, c, sizeof c, t ? P_MELSND : -1, t == 2);
+            n += room_one("the header's sound", c, SOUND_TEXT);
+            n += room_small(v, t ? P_MELSND : -1, t == 2);
+            if (k > *most)
+                *most = k;
+        }
+    return n;
+}
+static int ui_text_room(void)
+{
+    const project_t keep = proj;
+    const uint8_t ke = ui.edit, kb = en_break_bars;
+    const uint32_t kbtn = ui.btn, kr[4] = {scr.r_cpu, scr.r_max, scr.r_x, scr.r_s};
+    char c[ROOM_PROBE];
+    int n = 0, most = 0, v, i, x, lo, hi;
+    int16_t *const k = &proj.par[P_KEYSND], *const pd = &proj.par[P_PADSND], *const b = &proj.par[P_BASSSND];
+    int16_t *const ms = &proj.par[P_MELSND], *const mm = &proj.par[P_MELMODE], *const pt = &proj.par[P_ARPPAT], *const sk = &proj.par[P_ARPSKIP], *const la = &proj.par[P_ARPLATCH];
+    static const int16_t SKIPS[4] = {0, 1, 10, 100};
+    /* every layer's sound by the melody's sound, mode, pattern, Latch and Skip's lengths; then the melody by every Skip */
+    for (*k = 0; *k <= en_param_info(P_KEYSND)->hi; (*k)++)
+        for (*pd = 0; *pd <= en_param_info(P_PADSND)->hi; (*pd)++)
+            for (*b = 0; *b <= en_param_info(P_BASSSND)->hi; (*b)++)
+                for (*ms = 0; *ms <= en_param_info(P_MELSND)->hi; (*ms)++)
+                    for (*mm = 0; *mm <= en_param_info(P_MELMODE)->hi; (*mm)++)
+                        for (*pt = 0; *pt <= en_param_info(P_ARPPAT)->hi; (*pt)++)
+                            for (*la = 0; *la <= 1; (*la)++)
+                                for (i = 0; i < 4; i++) {
+                                    *sk = SKIPS[i];
+                                    n += sounds_room(&most);
+                                }
+    for (*ms = 0; *ms <= en_param_info(P_MELSND)->hi; (*ms)++)
+        for (*mm = 0; *mm <= en_param_info(P_MELMODE)->hi; (*mm)++)
+            for (*pt = 0; *pt <= en_param_info(P_ARPPAT)->hi; (*pt)++)
+                for (*la = 0; *la <= 1; (*la)++)
+                    for (*sk = 0; *sk <= en_param_info(P_ARPSKIP)->hi; (*sk)++)
+                        n += sounds_room(&most);
+    printf("textroom: the longest sound %d in %d\n", most, SOUND_TEXT);
+    proj = keep;
+    /* the effects' header */
+    for (x = 0; x < EN_NFX * EN_NFX; x++)
+        for (i = 0; i <= 100; i++) {
+            proj.par[P_KFX] = (int16_t)(x % EN_NFX), proj.par[P_MFX] = (int16_t)(x / EN_NFX);
+            proj.par[P_KMOTION] = proj.par[P_MMOTION] = (int16_t)i;
+            page_sounds(V_SPACE, c, sizeof c, -1, 0);
+            n += room_one("the header's effects", c, SOUND_TEXT);
+            n += room_small(V_SPACE, -1, 0);
+        }
+    proj = keep;
+    /* the editor's header, its knobs; every value of every sound's set, with SEL and without */
+    for (x = 0; x < EN_NUSER; x++) {
+        int f, p, st;
+        ui.edit = (uint8_t)(x + 1);
+        for (v = 0; v < NVIEWS; v++) {
+            page_sounds(v, c, sizeof c, -1, 0);
+            n += room_one("the header's editor", c, SOUND_TEXT);
+            n += room_small(v, -1, 0);
+        }
+        for (f = 0; f < en_user_nfrom(x); f++) {
+            en_user_load(x, f, &proj.user[x]);
+            proj.user[x].from = (uint8_t)f;
+            ui.btn |= 1u << B_SEL;
+            knob_text(K_UFROM, c);
+            ui.btn = kbtn;
+            n += room_one("Start", c, KNOB_TEXT);
+            msg_text("BUILD FROM", en_user_from_name(x, f), c);
+            n += room_one("message", c, MSG_TEXT);
+            for (p = 0; p < EN_NUP; p++) {
+                const int own = proj.user[x].v[p];
+                for (st = 0; st < en_user_steps(x, p); st++) {
+                    proj.user[x].v[p] = (uint8_t)st;
+                    knob_text(K_U + p, c);
+                    n += room_one("the editor's value", c, KNOB_TEXT);
+                    en_user_text(x, p, &proj.user[x], c);
+                    n += room_one("the editor's value", c, KNOB_TEXT);
+                }
+                proj.user[x].v[p] = (uint8_t)own;
+            }
+        }
+    }
+    ui.edit = ke;
+    proj = keep;
+    /* every page's knobs, every value */
+    for (v = 0; v < NVIEWS; v++)
+        for (i = 0; i < 4; i++) {
+            const int kk = VIEW_KNOB[v][i];
+            knob_range(kk, &lo, &hi);
+            for (x = lo; x <= hi; x++) {
+                if (kk < P_NPARAMS)
+                    proj.par[kk] = (int16_t)x;
+                else
+                    proj.leds = (uint8_t)x;
+                knob_text(kk, c);
+                n += room_one("a knob's value", c, KNOB_TEXT);
+            }
+            proj = keep;
+        }
+    for (x = 0; x < NSOUND_KNOBS; x++)               /* and with SEL: each sound, each amount */
+        for (i = 0; i <= en_param_info(SOUND_KNOB[x].par)->hi; i++) {
+            en_param_text(SOUND_KNOB[x].par, i, c);
+            n += room_one("a sound's name", c, KNOB_TEXT);
+            n += room_one("its message's part", c, 24);
+        }
+    for (x = en_param_info(P_MOCT)->lo; x <= en_param_info(P_MOCT)->hi; x++) {
+        en_param_text(P_MOCT, x, c);
+        n += room_one("melody's octave", c, 8);
+    }
+    /* Setup's reading, at what it may come to, and at numbers it can not; a piece's card; a break */
+    scr.r_cpu = 100u, scr.r_max = 999u * (APP_BLOCK * 1000000u / 44100u) / 100u, scr.r_x = 999u, scr.r_s = 999u;
+    setup_read(c, sizeof c);
+    n += room_one("Setup's reading", c, SETUP_TEXT);
+    scr.r_cpu = scr.r_max = scr.r_x = scr.r_s = 0xFFFFFFFFu;
+    {
+        char g[SETUP_TEXT + 8];
+        for (i = 0; i < (int)sizeof g; i++)
+            g[i] = 'x';
+        setup_read(g, SETUP_TEXT);
+        for (i = SETUP_TEXT; i < (int)sizeof g; i++)
+            n += g[i] != 'x';
+        n += g[SETUP_TEXT - 1] != 0;
+    }
+    scr.r_cpu = kr[0], scr.r_max = kr[1], scr.r_x = kr[2], scr.r_s = kr[3];
+    for (x = 0; x < 12; x++)
+        for (v = -1; v < EN_NMODES; v++)
+            for (i = 0; i < EN_NSTYLES; i++) {
+                proj.par[P_ROOT] = (int16_t)x;
+                proj.par[P_MODE] = (int16_t)(v < 0 ? 0 : v);
+                proj.pool = v < 0 ? (uint16_t)0xFFFu : EN_MODE_POOL[v];     /* (-1: Custom) */
+                proj.par[P_STYLE] = (int16_t)i;
+                proj.par[P_TEMPO] = en_param_info(P_TEMPO)->hi;
+                card_line(c, sizeof c);
+                n += room_one("the card", c, CARD_TEXT);
+            }
+    proj = keep;
+    for (x = 0; x < 256; x++) {
+        char g[12];
+        en_break_bars = (uint8_t)x;
+        put_s(g, sizeof g, put_u(g, sizeof g, 0, en_break_bars), en_break_bars == 1u ? " BAR" : " BARS");
+        n += room_one("a break", g, 12);
+    }
+    en_break_bars = kb;
+    /* every chord name there can be, on a root of two letters' name */
+    for (x = 0; x < 4096; x++) {
+        int pcs[13], m = 1, q;
+        pcs[0] = 1;                                  /* C# */
+        for (q = 0; q < 12; q++)
+            if (x >> q & 1)
+                pcs[m++] = (1 + q) % 12;
+        en_chord_name(pcs, m, c);
+        n += room_one("a chord", c, 16);
+    }
+    /* a message at its longest */
+    msg_text("12345678901234567890123", "12345678901234567890123", c);
+    n += room_one("a message at its longest", c, MSG_TEXT);
+    /* the reader: sp_cat keeps it inside; that nothing a page says is cut. Each page at its longest: every sound named, every send not as ever, Latch on, unsaved, resting */
+    {
+        const uint8_t kd = ui.dirty, kv = ui.view;
+        int said = 0;
+        proj.par[P_KEYSND] = 0, proj.par[P_MELSND] = 5, proj.par[P_MELMODE] = EN_MEL_KEYS_ARP, proj.par[P_ARPPAT] = EN_ARP_UPDOWN, proj.par[P_ARPSKIP] = 100, proj.par[P_ARPLATCH] = 1;
+        proj.par[P_KFX] = proj.par[P_MFX] = EN_FX_AUTOPAN, proj.par[P_KECHO] = proj.par[P_KREV] = proj.par[P_MECHO] = proj.par[P_MREV] = 99;
+        ui.dirty = 1u;
+        for (v = 0; v < NVIEWS; v++) {
+            ui.view = (uint8_t)v;
+            sp_page(1);
+            said = (int)sp_n > said ? (int)sp_n : said;
+            if (sp_n >= ANN_MAX) {                   /* (Space, all of it moved: it says the page and not all of where. Whole words) */
+                int e = 0;
+                while (sp_buf[e])
+                    e++;
+                printf("textroom: the reader cuts at %d: %s\n", e, sp_buf);
+                n += e >= (int)ANN_MAX || !e || sp_buf[e - 1] == ' ';
+            }
+        }
+        printf("textroom: the longest page the reader says %d in %d\n", said, (int)ANN_MAX);
+        ui.dirty = kd, ui.view = kv;
+    }
+    proj = keep;
+    return n;
+}
 static void speak_dump(void)
 {
     static const char *const MSG[][2] = {{"UPDATE MODE IN", "3.."}, {"UPDATE MODE", "CANCELLED"},
@@ -2941,7 +3162,7 @@ static void speak_dump(void)
     uint8_t keep_view = ui.view, keep_help = ui.help, keep_dirty = ui.dirty, keep_play = sp_tp.playing;
     uint8_t keep_ext = en_ext, keep_held = en_held;
     int v, i, x, lo, hi;
-    char t[48];
+    char t[MSG_TEXT];
     for (v = 0; v < NVIEWS; v++) {
         ui.view = (uint8_t)v;
         sp_page(0);

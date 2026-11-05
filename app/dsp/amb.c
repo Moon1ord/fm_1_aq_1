@@ -4531,15 +4531,15 @@ static inline void push(dl_t *d, float x)
 }
 static inline float allpass(dl_t *d, int len, float x, float g)
 {
-    float z = tap(d, len), v = x - g * z;
-    push(d, fm_flush(v));
+    const float z = tap(d, len), v = fm_flush(x - g * z);   /* (what comes out goes on into the room's long lines: flushed before either, as they have no flush of their own) */
+    push(d, v);
     return z + g * v;
 }
 static inline float allpass_mod(dl_t *d, float len, float x, float g)
 {
     int k = (int)len;
-    float f = len - (float)k, z = tap(d, k) + (tap(d, k + 1) - tap(d, k)) * f, v = x - g * z;
-    push(d, fm_flush(v));
+    const float f = len - (float)k, z = tap(d, k) + (tap(d, k + 1) - tap(d, k)) * f, v = fm_flush(x - g * z);
+    push(d, v);
     return z + g * v;
 }
 
@@ -4680,10 +4680,6 @@ static void heads_step(uint32_t n)
     vmax = 0.008f / fm_maxf(echo_len, 100.0f);
     want = fm_clampf((head2_t - head2) * (1.0f / (2.0f * TAPE_SR)), -vmax, vmax);
     head2_v = fm_flush(head2_v + (want - head2_v) * fm_minf((float)n * (1.0f / EN_SR), 1.0f));
-    plex_lp = fm_flush(plex_lp);                 /* Echo at 0, or nothing going to it, for long: their ones and zeros have gone, and these would stay among the denormals */
-    plex_lp2 = fm_flush(plex_lp2);
-    tape_lp = fm_flush(tape_lp);
-    tape_hp = fm_flush(tape_hp);
 }
 
 /* one sample of both: the input (a mono send) to the tape's heads (el, er) and the Echoplex (xl, xr) */
@@ -6018,7 +6014,7 @@ static void fx_targets(fx_t *f, uint32_t n)
         } else {                                 /* a whole number of turns in four bars, on the grid */
             const float c = f->err * fm_minf(nf * (1.0f / (0.1f * EN_SR)), 1.0f);
             f->ph += c;
-            f->err -= c;
+            f->err = fm_flush(f->err - c);
             inc = (float)f->cycles * (1.0f / 64.0f) / step_len;
         }
         f->ph += inc * nf;
@@ -6749,7 +6745,7 @@ static void render_bass(uint32_t n)
     const bass_sound_t *bs = &BASS_SOUND[par[P_BASSSND]];
     float base = bs->base, bk, irate = 0.012f;
     bass_lvl = lv_to;
-    bass.sus = sus_now;
+    bass.sus = fm_flush(sus_now);                /* (a player's decay and a note held on past it) */
     if (amp < 1e-5f && bass.hold <= 0 && bass_hear <= 0) {
         bass_lvl = bass_vol;                     /* (nothing sounding: nothing to go easy on) */
         bass.amp = 0.0f;
@@ -6817,7 +6813,7 @@ static void render_bass(uint32_t n)
     }
     bass.ph = ph;
     bass.amp = fm_flush(amp);
-    bass.idx = idx;
+    bass.idx = fm_flush(idx);                    /* (Sub's index has nowhere to go but down, for as long as a legato note lasts) */
     bass.spk = fm_flush(spk);
     bass.inc = inc;
     if (bass_hear > 0)
@@ -6827,7 +6823,7 @@ static void render_bass(uint32_t n)
         if (bass.hold <= 0)
             midi(0x82, bass.midi_note, 0);
     }
-    en_bass_level = amp;
+    en_bass_level = fm_flush(amp);
 }
 
 /* what MIDI is told of a note in a chosen timbre: it stops where the phrase's own timbre would have died away, or at the gate. The same multiplications as that voice would have done, a sample at a time, so the same block */
@@ -6966,7 +6962,7 @@ static void render_bells(uint32_t n)
         v->cph = cph;
         v->mph = mph;
         v->amp = amp;
-        v->idx = idx;
+        v->idx = fm_flush(idx);                  /* (a set's Mod time short, its Decay long: the index has gone long before the note) */
         v->att = att;
         v->esg = fm_flush(esg);
         if (v->left > 0) {
@@ -7039,7 +7035,7 @@ static void render_break(uint32_t n)
     brk_lp[0] = fm_flush(brk_lp[0]);
     brk_lp[1] = fm_flush(brk_lp[1]);
     brk_hp = fm_flush(brk_hp);
-    en_break_level += (pk - en_break_level) * 0.2f;
+    en_break_level = fm_flush(en_break_level + (pk - en_break_level) * 0.2f);
     en_hits = brk_hits;
 }
 
@@ -7173,6 +7169,13 @@ static void render_chunk(int32_t *out, uint32_t n, float gain)
         out[2 * j] = (int32_t)(fm_tanhf(l) * 8300000.0f);
         out[2 * j + 1] = (int32_t)(fm_tanhf(r) * 8300000.0f);
     }
+    plex_lp = fm_flush(plex_lp);                 /* Echo at 0, or nothing going to it, for long: their ones and zeros have gone, and these would stay among the denormals */
+    plex_lp2 = fm_flush(plex_lp2);
+    tape_lp = fm_flush(tape_lp);
+    tape_hp = fm_flush(tape_hp);
+    pl_bw = fm_flush(pl_bw);                     /* (likewise the room's, which a one-pole holds at the smallest number there is for as long as it rests) */
+    pl_damp_l = fm_flush(pl_damp_l);
+    pl_damp_r = fm_flush(pl_damp_r);
     if (vol < 1.0f || vol_t < 1.0f)              /* (a multiplication a sample only while it is called for) */
         vol_render(out, n);
 }

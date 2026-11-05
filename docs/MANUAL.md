@@ -97,6 +97,7 @@ The drawing at the top shows most of them; here they all are.
 | PRESETS | The piece, one of eight. It goes round. |
 | KNOB 1–4 | The page's four values, shown at the bottom of the screen. A few clicks are always single steps; on the wider ranges a quick turn speeds up, so half a turn sweeps the range. |
 | SELECT + KNOB 1 | On the Keys, Melody and Bass pages: the layer's sound (see "Sounds"). The knob's value doesn't move. |
+| SELECT + GLO | On the Keys, Melody and Bass pages: the sound editor (see "Building a sound"). On the other pages, nothing. |
 | SELECT + KNOB 2 | On the Keys page: the pad's sound. On the Melody page: the melody's mode, Phrases, Arp, Keys or Keys Arp (see "The melody's modes"). |
 | SELECT + KNOB 3 | On the Melody page: the arpeggio's pattern. |
 | SELECT + KNOB 4 | On the Melody page: the arpeggio's skip, how many of its notes rest (see "Arp"). Octave doesn't move. |
@@ -455,6 +456,7 @@ The other knobs, and the knobs on the other pages, do what they always do with S
 | | **Round** | More of the octave above, a softer start and end |
 | Melody | **Auto** | AQ-1 chooses from what Tone allows, and changes it now and then |
 | | **Flute**, **Vocal**, **Vibes**, **Marimba**, **Music box**, **Glass** | Always that voice. The phrases are the same ones either way |
+| All four | **User** | The one you build, the last in each list (see "Building a sound") |
 
 **When you hear it:**
 
@@ -464,6 +466,48 @@ The other knobs, and the knobs on the other pages, do what they always do with S
 - **Melody:** from its next note. If nothing is playing it, one quiet note in the new voice answers the turn, once you stop turning.
 
 The sound doesn't change what's composed, and MIDI out is the same whichever you choose. All of them work in Hands and in Auto, and none costs noticeably more to play.
+
+### Building a sound
+
+Each of the four layers has a sound of your own, **User**, kept with the piece: its ratio, its depth, how it comes in and how it goes. It starts from one of the sounds in the list, so you don't begin from nothing, and it's yours to take where you like. Strange bells are allowed: that's your choice, and nothing stops you. It can't get dangerously loud: the further a setting goes past where it started, the more AQ-1 turns it down.
+
+**Getting in and out.**
+
+1. Go to the Keys, Melody or Bass page.
+2. Hold SELECT and press GLO. The top line says `BUILD FROM` and the sound you were in, and that sound's values are loaded into User: you hear no change. If the layer was already on User, nothing is loaded (`BUILD`). If the Melody was on Auto, it starts from the voice Tone would have used.
+3. The four knobs are now the sound's: **Ratio, Depth, Attack, Decay**. The strip at the bottom and the top line (`Build keys`) say so.
+4. Hold SELECT and the same four knobs are the rest of it: **Start**, the modulation's time (**Mod time**; on the Bass **Speak**; on the Pad **Detune**), nothing, and **Release**. The strip shows them for as long as you hold it. (There's no Degrees screen while you're in the editor.)
+5. To leave, press the page's own button (or SELECT + GLO). The knobs are the page's again, and the sound stays: `KEYS` `SOUND KEPT`. Any other page's button or the SELECT encoder leaves too, and so does a new piece.
+
+On the Keys page, SELECT + GLO goes round three places: the keys' editor, the pad's, and out.
+
+Everything else stays as it was: the other pages' knobs, SELECT + a page's button, SELECT + a key, PLAY, and on the Melody page in Keys and Keys Arp the keys still play it, so you can hold a note with one hand and turn with the other.
+
+**Start** (SELECT + KNOB 1) loads another sound's values, one a click. Whatever you had built is not lost at once: **Before**, the last place in that list, brings it back, until the next piece. Going into the editor from a sound in the list loads that sound's values too, and the same goes for what they replace. Before isn't saved, and doesn't come through a power-off.
+
+| Knob | Keys | Melody | Bass | Pad |
+|---|---|---|---|---|
+| **Ratio** | The body's modulator against the note | The modulator against the note | The modulator against the note | The second saw against the first |
+| **Depth** | How much modulation, 0–100 | The same | The same | **Bright**, its filter, 0–100: much darker to much brighter than its first sound |
+| **Attack** | 5 ms – 6.4 s; 75 ms is where Electric is, and Bloom goes on acting on it | 1 ms – 6.4 s | 1 ms – 1.6 s | 18 ms – 13 s, the whole pad at each new chord |
+| **Decay** | 0.1 – 18 s, or **Long**, the voice's own, a very slow one | 50 ms – 18 s | 70 ms – 9 s, or **Hold**: full level for its whole length | 140 ms – 18 s, or **Hold**: stays up through the chord |
+| SELECT + **KNOB 2** | **Mod time**: how long the modulation stays open, 18 ms – 18 s | **Mod time**: how long it takes to fall, 5 ms – 9 s | **Speak**: how much more as a note starts, 0–100 | **Detune**: the two saws apart, 0–50 cents |
+| SELECT + **KNOB 4** | **Release**, 50 ms – 18 s | **Release**, 18 ms – 18 s | **Release**, 5 ms – 1.6 s | **Release**: falls this fast before each new chord's attack, 18 ms – 3.2 s, or **Off**: no fall, unless Attack has moved, when it dips quickly |
+
+**Ratio** is a list, the same for all: 0.25, 0.5, 0.75, 1, 1.25, 1.41, 1.5, 1.73, 2, 2.41, 2.5, 2.76, 3, 3.14, 3.5, 4, 4.24, 5, 5.4, 6, 6.27, 7, 8, 9, 10, 12, 14. The whole numbers give harmonics; the rest are what bells are made of (1.41, 2.76, 3.14 and 4.24 are good places to start).
+
+The pad isn't FM: it's two saws through a filter, and its knobs are what those can do. It never lets go, so its Attack, Decay and Release move through the whole pad, with each new chord.
+
+**What you hear when:**
+
+- Ratio and Depth reach what's sounding at once and softly, with no click, however fast you turn. On the Bass the modulation comes off first and returns with the new ratio, in about a tenth of a second.
+- Attack is heard on the next note. The keys' Decay and Release and the Pad's envelope reach what's sounding; the Melody's do too on a key you're holding, and otherwise from its next note. The Bass's Attack and Release act at once.
+- In Arp and Keys Arp, as with every sound, a long Release is kept to two divisions.
+- If the layer is on and has nothing sounding when you turn a knob, one quiet note answers once you stop. It isn't on MIDI, and nothing else hears of it. A layer that's off stays silent.
+
+The keys have at most nine voices sounding at once, a long Release included: the same as the song ever asks of them. A very long Release is let down early, softly, when a new note needs the room. An overload's shed (see "GLO: Setup") takes them as it does the others.
+
+MIDI out doesn't change with any of it: a note's length on MIDI is what it was, however short or long its sound. A piece saved with a User sound keeps it through a power-off, each piece its own; the recipes use the first sounds, and holding SAVE takes the piece back to them, its User values too.
 
 ---
 
@@ -565,7 +609,7 @@ The FM-1 says nothing until the page connects, so a DAW on the same cable never 
 
 ## 11. Saving
 
-AQ-1 keeps all eight pieces in the FM-1's memory, each as you left it: the knobs, the scale, the degrees, the sounds, the melody's mode and Latch, Hands or Auto,
+AQ-1 keeps all eight pieces in the FM-1's memory, each as you left it: the knobs, the scale, the degrees, the sounds, the ones you built, the melody's mode and Latch, Hands or Auto,
 and the piece you're on, plus Tune, MIDI out and Lights. The music isn't saved, nor the notes you're playing or have latched, and neither are the layers you switched:
 power-on starts anew, with the keys and the pad.
 
@@ -662,14 +706,15 @@ The defaults are Load Screen's; each piece has its own.
 | Setup | MIDI out | Off, On | On |
 | Setup | Lights | Off, On, Keys | On |
 | ALGORITHM | Mode | 8 modes, or Custom | Lydian |
-| Keys, SELECT + KNOB 1 | Keys' sound | Electric, Clear, Organ, Felt | Electric |
-| Keys, SELECT + KNOB 2 | Pad's sound | Warm, Airy, Choral, Deep | Warm |
-| Melody, SELECT + KNOB 1 | Melody's sound | Auto, Flute, Vocal, Vibes, Marimba, Music box, Glass | Auto |
+| Keys, SELECT + KNOB 1 | Keys' sound | Electric, Clear, Organ, Felt, User | Electric |
+| Keys, SELECT + KNOB 2 | Pad's sound | Warm, Airy, Choral, Deep, User | Warm |
+| Melody, SELECT + KNOB 1 | Melody's sound | Auto, Flute, Vocal, Vibes, Marimba, Music box, Glass, User | Auto |
 | Melody, SELECT + KNOB 2 | Melody's mode | Phrases, Arp, Keys, Keys Arp | Keys (Auto: Phrases) |
 | Melody, SELECT + KNOB 3 | The arpeggio's pattern | Up, Down, Up-Down, Random, Conv, PedT, PedR, Played | Up |
 | Melody, SELECT + KNOB 4 | The arpeggio's skip | 0–100 | 0 |
 | Melody, in Keys Arp, SELECT + REC | Latch | Off, On | Off |
-| Bass, SELECT + KNOB 1 | Bass's sound | Warm, Sub, Hollow, Round | Warm |
+| Bass, SELECT + KNOB 1 | Bass's sound | Warm, Sub, Hollow, Round, User | Warm |
+| Keys, Melody, Bass, SELECT + GLO | The sound editor | Ratio, Depth, Attack, Decay; with SELECT: Start, Mod time (Speak, Detune), Release (see "Building a sound") | As the sound it starts from |
 | Space, SELECT + KNOB 1, 3 | Keys' effect, melody's effect | Off, Chorus, Autopan, Tremolo, Filter | Off |
 | Space, SELECT + KNOB 2, 4 | Keys' Motion, melody's Motion | 0–100 | 50 |
 | Space, GLO + KNOB 1, 3 | Keys' Depth, melody's Depth | 0–100 | 50 |

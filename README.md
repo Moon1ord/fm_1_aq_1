@@ -54,6 +54,7 @@ If it no longer starts at all, see "Recovering an FM-1 that won't start" in the 
 | SELECT + ENV · ARP · LFO · SEQ · FX | Keys and pad · melody · bass · kick and snare · hats, on or off |
 | SELECT + HOME | Hands (you lead) or Auto (the arranger leads) |
 | SELECT + KNOB 1 | On Keys, Melody and Bass: the layer's sound (on Keys, KNOB 2: the pad's) |
+| SELECT + GLO | On Keys, Melody and Bass: build a sound of your own: Ratio, Depth, Attack, Decay on the knobs (Keys: again, the pad's); the page's button to leave |
 | SELECT, FX or GLO + KNOB 1–4 | On Space: the keys' and the melody's effect, Motion, sends and Depth |
 | PLAY · REC | Play / rest · hold the chord |
 | EDIT · SELECT + EDIT | The next section · a break, each on the next bar |

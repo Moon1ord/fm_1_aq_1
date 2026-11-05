@@ -122,7 +122,7 @@ static void t_table(void)
         {P_DRUMS, 0, 100, 45}, {P_BREAKS, 0, 100, 50}, {P_HATS, 0, 100, 50}, {P_KIT, 0, 1, 0},
         {P_ECHO, 0, 100, 40}, {P_ETIME, 0, 5, 3}, {P_REVERB, 0, 100, 65}, {P_SIZE, 0, 100, 80},
         {P_ROOT, 0, 11, 2}, {P_TUNE, -50, 50, 0}, {P_MIDI, 0, 1, 1}, {P_MODE, 0, EN_NMODES - 1, 3},
-        {P_KEYSND, 0, 3, 0}, {P_PADSND, 0, 3, 0}, {P_BASSSND, 0, 3, 0}, {P_MELSND, 0, EN_NTIMBRES, 0},
+        {P_KEYSND, 0, EN_SND_USER, 0}, {P_PADSND, 0, EN_SND_USER, 0}, {P_BASSSND, 0, EN_SND_USER, 0}, {P_MELSND, 0, EN_MELSND_USER, 0},
         {P_MELMODE, 0, 3, 0}, {P_ARPPAT, 0, 7, 0}, {P_ARPSKIP, 0, 100, 0}, {P_ARPLATCH, 0, 1, 0},
         {P_KFX, 0, 4, 0}, {P_KMOTION, 0, 100, 50}, {P_KDEPTH, 0, 100, 50}, {P_KECHO, 0, 200, 100}, {P_KREV, 0, 200, 100},
         {P_MFX, 0, 4, 0}, {P_MMOTION, 0, 100, 50}, {P_MDEPTH, 0, 100, 50}, {P_MECHO, 0, 200, 100}, {P_MREV, 0, 200, 100},

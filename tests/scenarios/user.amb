@@ -1,0 +1,436 @@
+# The sound editor, as a hand has it: SEL + GLO on Keys, Melody, Bass; the four knobs its own until a page's button or SEL + GLO; the same four with SEL held the rest; kept with the piece. The sound itself is tests/host/user_test.c. Params: 28 keys, 29 pad, 30 bass, 31 melody; expect userLP: L 0 keys 1 melody 2 bass 3 pad, P 0 ratio 1 depth 2 attack 3 decay 4 mod 5 release
+wait 300
+expect unfit 0
+expect stale 0
+expect edit 0
+expect par28 0
+expect enagree 0
+expect user00 3
+expect usermoved0 0
+listen
+# ---- from a page that has no sound to build: SEL + GLO does what it did: nothing
+tap HOME
+wait 100
+press SEL
+tap GLO
+release SEL
+wait 100
+expect view 0
+expect edit 0
+expect par28 0
+# ---- Keys: SEL + GLO: Electric's values, User chosen, the page stays
+tap ENV
+wait 300
+expect view 1
+press SEL
+tap GLO
+said BUILD FROM Electric
+release SEL
+wait 100
+expect view 1
+expect edit 1
+expect par28 4
+expect userfrom0 0
+expect usermoved0 0
+expect mutekeys 0
+expect enagree 0
+shot edit_keys.png
+expect stale 0
+expect screen 2
+# the knobs are its own: nothing of the page's moves
+spin K1 1
+wait 200
+expect user00 4
+expect par4 60
+said Ratio 1.25
+spin K2 1
+wait 200
+expect par5 50
+said Depth 64
+spin K3 -1
+wait 50
+expect par6 50
+spin K4 -1
+wait 200
+expect par7 3
+said Decay 18s
+expect usermoved0 1
+expect enagree 0
+expect stale 0
+shot edit_keys_moved.png
+# ---- SEL held: the other half. No Degrees screen however long; the strip says so
+press SEL
+wait 500
+expect screen 2
+shot edit_keys_sel.png
+expect stale 0
+# (the two halves' last knob at one number: the cell is still another's)
+spin K4 3
+wait 100
+expect user05 15
+expect user03 15
+release SEL
+wait 300
+expect stale 0
+press SEL
+wait 300
+expect stale 0
+release SEL
+wait 300
+expect stale 0
+press SEL
+wait 100
+spin K4 -6
+wait 200
+expect user05 9
+said Release 1.1s
+spin K2 2
+wait 200
+expect user04 15
+spin K3 1
+expect user00 4
+expect par6 50
+release SEL
+wait 100
+expect view 1
+expect edit 1
+expect enagree 0
+expect stale 0
+# ---- SEL + KNOB 1: where it starts from: a sound's values at once; what was built can be had back
+press SEL
+spin K1 1
+said START FROM Clear
+expect userfrom0 1
+expect usermoved0 0
+expect user00 12
+spin K1 1
+said START FROM Organ
+spin K1 1
+said START FROM Felt
+spin K1 1
+said START FROM Before
+expect userfrom0 0
+expect usermoved0 1
+expect user00 4
+spin K1 1
+said START FROM Electric
+expect usermoved0 0
+spin K1 -1
+said START FROM Before
+expect user00 4
+expect enagree 0
+release SEL
+wait 100
+# ---- the keys of the scale are as ever in it, SEL + key too
+tapkey 3
+wait 50
+expect enagree 0
+tapkey 3
+wait 50
+expect enagree 0
+# ---- out by the page's own button: the knobs are the page's again, the sound stays
+tap ENV
+wait 100
+expect edit 0
+expect par28 4
+said KEYS SOUND KEPT
+expect screen 2
+spin K1 1
+wait 50
+expect par4 61
+expect user00 4
+spin K1 -1
+wait 50
+expect stale 0
+# ---- SEL + GLO again: User already: nothing loaded. Again: the pad's. Again: out, by the same chord
+press SEL
+tap GLO
+said BUILD KEYS
+expect edit 1
+expect usermoved0 1
+tap GLO
+said BUILD FROM Warm
+expect edit 4
+expect par29 4
+expect userfrom3 0
+tap GLO
+said PAD SOUND KEPT
+expect edit 0
+release SEL
+wait 100
+expect view 1
+# the pad's: its own values on the same knobs
+press SEL
+tap GLO
+tap GLO
+release SEL
+wait 100
+expect edit 4
+spin K2 3
+wait 200
+said Bright
+spin K4 -2
+wait 200
+press SEL
+wait 50
+spin K2 2
+wait 200
+expect user34 4
+said Detune
+spin K4 -1
+wait 200
+said Release
+release SEL
+wait 50
+expect enagree 0
+shot edit_pad.png
+expect stale 0
+# out by another page's button: its page, its own knobs
+tap ARP
+wait 200
+expect view 2
+expect edit 0
+spin K1 1
+wait 50
+expect par8 61
+spin K1 -1
+# ---- Melody: from Auto: what Tone would have it in; User chosen; the keys still play it
+press SEL
+tap GLO
+release SEL
+wait 100
+expect edit 2
+expect par31 7
+expect usermoved1 0
+spin K1 1
+wait 200
+said Ratio
+expect par8 60
+spin K3 3
+wait 50
+expect par9 50
+expect enagree 0
+shot edit_melody.png
+expect stale 0
+key 3 down
+wait 100
+expect kplay 8
+expect bellson 1
+spin K2 5
+wait 50
+key 3 up
+wait 200
+expect kplay 0
+expect bellson 0
+press SEL
+tap GLO
+said MELODY SOUND KEPT
+release SEL
+wait 100
+expect edit 0
+expect view 2
+# ---- Bass, and the select encoder lets go of it
+tap LFO
+wait 200
+press SEL
+tap GLO
+said BUILD FROM Warm
+release SEL
+wait 100
+expect edit 3
+expect par30 4
+spin K1 2
+expect user20 5
+expect par12 50
+press SEL
+wait 50
+spin K2 4
+wait 200
+expect user24 63
+said Speak
+release SEL
+wait 100
+expect enagree 0
+shot edit_bass.png
+expect stale 0
+turn SELECT 1 1
+wait 100
+expect edit 0
+expect view 4
+turn SELECT -1 1
+wait 100
+expect view 3
+expect par30 4
+# ---- the list, on the page: User stands after the rest, a detent at a time, round. A preset chosen by hand keeps the set
+press SEL
+spin K1 -1
+expect par30 3
+spin K1 1
+expect par30 4
+said BASS SOUND User
+spin K1 1
+expect par30 0
+expect user20 5
+release SEL
+wait 100
+# from a sound: its values are loaded over the set; what was built can be had back
+press SEL
+tap GLO
+said BUILD FROM Warm
+expect usermoved2 0
+spin K1 -1
+said START FROM Before
+expect user20 5
+expect user24 63
+expect usermoved2 1
+wait 50
+expect enagree 0
+tap GLO
+release SEL
+wait 100
+expect edit 0
+# ---- a flood: not a set lost, and the project and the engine one. What the queue refused comes round, and the sets were never in it
+press SEL
+tap ENV
+tap ENV
+release SEL
+wait 100
+tap ENV
+wait 50
+press SEL
+tap GLO
+release SEL
+wait 50
+flood 200
+floodset 300
+spin K1 1
+wait 400
+expect enagree 0
+floodset 300
+wait 400
+expect enagree 0
+tap ENV
+wait 100
+# ---- a quick turn of PRESET under a set being turned: the last piece's sets, in the project and the engine; the editor lets go
+press SEL
+tap GLO
+release SEL
+wait 50
+expect edit 1
+turn PRESET 5 1
+expect edit 0
+spin K1 1
+wait 300
+expect enagree 0
+expect piece 5
+expect par28 0
+expect usermoved0 0
+expect par4 57
+spin K1 -1
+wait 50
+turn PRESET -5 1
+wait 400
+expect piece 0
+expect enagree 0
+expect par28 4
+expect user00 5
+expect usermoved0 1
+expect par30 4
+expect user20 5
+# ---- saved through a power-off: every value, the piece's own
+tap SAVE
+wait 800
+reboot
+wait 300
+expect piece 0
+expect par28 4
+expect user00 5
+expect user05 9
+expect user04 15
+expect par29 4
+expect user34 4
+expect par31 7
+expect par30 4
+expect user20 5
+expect user24 63
+expect edit 0
+expect enagree 0
+expect stale 0
+# the page's knobs at power-on
+tap ENV
+wait 100
+spin K1 1
+expect par4 61
+spin K1 -1
+wait 100
+# ---- a recipe: the piece's own back; the set too. Not saved until saved
+press SEL
+tap GLO
+release SEL
+wait 100
+expect edit 1
+press SAVE
+wait 1700
+release SAVE
+wait 300
+expect edit 0
+expect par28 0
+expect usermoved0 0
+expect par30 0
+expect enagree 0
+reboot
+wait 300
+expect par28 4
+expect user00 5
+# ---- out of range, on the flash: a value, where it starts from; in the piece playing and in another; the recipes, as a save of another format
+storebaduser -1 0 0 27
+reboot
+wait 300
+expect par28 0
+expect usermoved0 0
+setpar 20 33
+tap SAVE
+wait 800
+storebaduser 3 2 5 200
+reboot
+wait 300
+expect par20 40
+setpar 20 33
+tap SAVE
+wait 800
+storebaduser 2 1 9 6
+reboot
+wait 300
+expect par20 40
+setpar 20 33
+tap SAVE
+wait 800
+storebaduser -1 3 4 16
+reboot
+wait 300
+expect par20 40
+setpar 20 33
+tap SAVE
+wait 800
+storeold
+reboot
+wait 300
+expect par20 40
+expect enagree 0
+# what is in range comes back
+setpar 20 33
+tap SAVE
+wait 800
+storebaduser 3 2 5 16
+reboot
+wait 300
+expect par20 33
+expect enagree 0
+# ---- the Setup page's reading, as ever, after all of it
+tap GLO
+wait 300
+expect view 6
+expect edit 0
+expect screen 2
+expect stale 0
+expect unfit 0

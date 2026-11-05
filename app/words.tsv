@@ -32,3 +32,14 @@ Keys Arp	keys arpeggio
 Played	as played
 ARP LATCH	arpeggio latch
 SEL + REC	select and rec
+#ms	# milliseconds
+#s	# seconds
+#c	# cents
+SOUND KEPT	sound kept
+BUILD FROM	build it starting from
+START FROM	start it from
+Build keys	sound editor, keys
+Build melody	sound editor, melody
+Build bass	sound editor, bass
+Build pad	sound editor, pad
+Mod time	modulation time

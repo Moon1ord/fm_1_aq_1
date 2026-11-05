@@ -399,6 +399,39 @@ typedef struct {
     float ratio, index, floor_idx, idec_s, att_s, t60_s, rel_s, vib, level;
 } en_mel_voice_t;
 void en_mel_voice(int timbre, int tone, en_mel_voice_t *v);
+/* The player's own sounds: User, the sound after each layer's list, so that a stored number keeps its meaning. A layer's set is a list of steps, one byte each, so nothing read from the flash can be a NaN, and out of the same steps every value the render takes is bounded (see "the player's own sounds" in amb.c):
+ *   from: the sound it started from (a keys', a pad's, a bass's or one of the six timbres), which gives what has no knob of its own (the tine, the vibrato, the level, a pad's stereo). A step left where that sound stands IS that sound's number, to the bit, so a set just loaded is that sound, to the bit;
+ *   v: EN_UP_*: the modulator's ratio to the carrier (the pad, which has no modulator: its second saw's), the depth (the pad: its filter), attack, decay, the modulation's time (the bass: how much it speaks; the pad: its two saws' detune) and release.
+ * Not through the queue, which has no room for it: one shared set a layer, written whole by the main loop under a sequence word (en_user_set) and taken at a block's start. It cannot be dropped, and it tears no value: a set being written is left for the next block. The last one written is the one that stays. MIDI knows nothing of any of it, whatever the values */
+#define EN_SND_USER 4                          /* P_KEYSND, P_PADSND, P_BASSSND */
+#define EN_MELSND_USER (EN_NTIMBRES + 1)       /* P_MELSND */
+#define EN_TB_USER EN_NTIMBRES                 /* what a note struck in it is struck in */
+enum { EN_U_KEYS, EN_U_MEL, EN_U_BASS, EN_U_PAD, EN_NUSER };
+enum { EN_UP_RATIO, EN_UP_DEPTH, EN_UP_ATT, EN_UP_DEC, EN_UP_MOD, EN_UP_REL, EN_NUP };
+typedef struct {
+    uint8_t from, v[EN_NUP];
+} en_user_t;
+int en_user_par(int layer);                    /* P_KEYSND, P_MELSND, P_BASSSND, P_PADSND */
+int en_user_value(int layer);                  /* what that parameter is at, in User */
+int en_user_nfrom(int layer);                  /* the sounds it can start from */
+const char *en_user_from_name(int layer, int from);
+int en_user_steps(int layer, int up);          /* how many steps the value has */
+const char *en_user_name(int layer, int up);   /* what the knob is called */
+void en_user_text(int layer, int up, const en_user_t *u, char *b);   /* the value as the screen shows it (10 bytes) */
+void en_user_load(int layer, int from, en_user_t *u);   /* a sound's own values: the starting point */
+int en_user_ok(int layer, const en_user_t *u); /* every value in range */
+int en_user_moved(int layer, const en_user_t *u);   /* it is no longer what it started from */
+void en_user_set(int layer, const en_user_t *u);   /* (the main loop) the set, whole */
+void en_user_hear(int layer);                  /* the hand has turned: if the layer is silent and on, one quiet note of it, once the turning has stopped; never on MIDI */
+#if defined EN_HOST || defined PLAT_HOST
+void en_test_user_get(int layer, en_user_t *u);    /* what the engine has taken */
+void en_test_user_torn(int layer, const en_user_t *u);   /* a set caught half written, as the render finds it when the audio interrupt falls in the middle of en_user_set */
+void en_test_user_finish(int layer, const en_user_t *u);
+float en_test_user_num(int layer, int up);     /* the number a value has come to in the render: a ratio, an index, seconds; 0: none */
+float en_test_user_gain(int layer);            /* what its loudness is multiplied by */
+extern uint32_t en_test_user_heard[EN_NUSER];  /* the notes en_user_hear has played */
+int en_test_keys_tails(void);                  /* voices sounding that no key has, and MIDI knows nothing of */
+#endif
 #if defined EN_HOST || defined PLAT_HOST
 extern void (*en_trace_mel)(uint32_t step, const en_phrase_t *p);   /* each phrase as it is planned */
 extern uint32_t en_test_mel_refits;             /* phrases that had to be moved: a chord that was not the one foreseen */

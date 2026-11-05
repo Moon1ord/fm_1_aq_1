@@ -31,7 +31,7 @@ static const en_param_t PARAMS[P_NPARAMS] = {
     {"Echo", 0, 100, 40},     {"Echo time", 0, 5, 3},  {"Reverb", 0, 100, 65},  {"Size", 0, 100, 80},
     {"Root", 0, 11, 2},       {"Tune", -50, 50, 0},    {"MIDI out", 0, 1, 1},
     {"Mode", 0, EN_NMODES - 1, 3},
-    {"Keys sound", 0, 3, 0},  {"Pad sound", 0, 3, 0},  {"Bass sound", 0, 3, 0}, {"Mel sound", 0, EN_NTIMBRES, 0},
+    {"Keys sound", 0, EN_SND_USER, 0},  {"Pad sound", 0, EN_SND_USER, 0},  {"Bass sound", 0, EN_SND_USER, 0}, {"Mel sound", 0, EN_MELSND_USER, 0},
     {"Mel mode", EN_MEL_PHRASES, EN_MEL_KEYS_ARP, EN_MEL_PHRASES}, {"Arp pattern", EN_ARP_UP, EN_ARP_NPATTERNS - 1, EN_ARP_UP}, {"Arp skip", 0, 100, 0},
     {"Arp latch", 0, 1, 0},
     {"Keys FX", EN_FX_OFF, EN_NFX - 1, EN_FX_OFF}, {"Keys motion", 0, 100, 50}, {"Keys depth", 0, 100, 50}, {"Keys echo", 0, 200, 100}, {"Keys reverb", 0, 200, 100},
@@ -72,9 +72,9 @@ void en_piece(int i, int16_t *par, uint16_t *pool)
 static const char *const ETIME_NAME[6] = {"1 bar", "1/2", "1/2.", "1/4.", "2 bars", "4 bars"};
 static const float ETIME_BEATS[6] = {4.0f, 2.0f, 3.0f, 1.5f, 8.0f, 16.0f};
 
-static const char *const KEYS_SOUND_NAME[4] = {"Electric", "Clear", "Organ", "Felt"};
-static const char *const PAD_SOUND_NAME[4] = {"Warm", "Airy", "Choral", "Deep"};
-static const char *const BASS_SOUND_NAME[4] = {"Warm", "Sub", "Hollow", "Round"};
+static const char *const KEYS_SOUND_NAME[5] = {"Electric", "Clear", "Organ", "Felt", "User"};
+static const char *const PAD_SOUND_NAME[5] = {"Warm", "Airy", "Choral", "Deep", "User"};
+static const char *const BASS_SOUND_NAME[5] = {"Warm", "Sub", "Hollow", "Round", "User"};
 static const char *const MEL_MODE_NAME[4] = {"Phrases", "Arp", "Keys", "Keys Arp"};
 static const char *const ARP_PAT_NAME[EN_ARP_NPATTERNS] = {"Up", "Down", "Up-Down", "Random", "Conv", "PedT", "PedR", "Played"};
 const char *const EN_FX_NAME[EN_NFX] = {"Off", "Chorus", "Autopan", "Tremolo", "Filter"};
@@ -114,13 +114,13 @@ void en_param_text(int i, int v, char *b)
     else if (i == P_ROOT)
         s = EN_NOTE_NAME[(unsigned)v < 12u ? v : 0];
     else if (i == P_KEYSND)
-        s = KEYS_SOUND_NAME[(unsigned)v < 4u ? v : 0];
+        s = KEYS_SOUND_NAME[(unsigned)v < 5u ? v : 0];
     else if (i == P_PADSND)
-        s = PAD_SOUND_NAME[(unsigned)v < 4u ? v : 0];
+        s = PAD_SOUND_NAME[(unsigned)v < 5u ? v : 0];
     else if (i == P_BASSSND)
-        s = BASS_SOUND_NAME[(unsigned)v < 4u ? v : 0];
+        s = BASS_SOUND_NAME[(unsigned)v < 5u ? v : 0];
     else if (i == P_MELSND)
-        s = v > 0 && v <= EN_NTIMBRES ? EN_TIMBRE_NAME[v - 1] : "Auto";
+        s = v == EN_MELSND_USER ? "User" : v > 0 && v <= EN_NTIMBRES ? EN_TIMBRE_NAME[v - 1] : "Auto";
     else if (i == P_MELMODE)
         s = MEL_MODE_NAME[(unsigned)v < 4u ? v : 0];
     else if (i == P_ARPPAT)
@@ -1687,7 +1687,7 @@ typedef struct {
     float a_l, b_l, b_r, a_r;                    /* into the left: the first and the second saw; into the right */
     float fc, level, rev, echo;
 } pad_sound_t;
-static const pad_sound_t PAD_SOUND[4] = {
+static pad_sound_t PAD_SOUND[5] = {            /* (the last is the player's: the player's own sounds, below) */
     /* Warm */   {0.99856f, 1.00144f, 1.0f, 0.28f, 0.60f, 0.42f, 1.0f, 1.0f, 0.42f, 0.06f},
     /* Airy */   {0.99711f, 1.00289f, 0.80f, 0.45f, 0.75f, 0.35f, 2.6f, 0.80f, 0.62f, 0.10f},
     /* Choral */ {0.99480f, 1.00520f, 0.80f, 0.80f, 0.80f, 0.80f, 1.5f, 0.70f, 0.50f, 0.06f},
@@ -1696,6 +1696,19 @@ static const pad_sound_t PAD_SOUND[4] = {
 static pad_sound_t pad_s = {0.99856f, 1.00144f, 1.0f, 0.28f, 0.60f, 0.42f, 1.0f, 1.0f, 0.42f, 0.06f};   /* where they are now */
 static const pad_sound_t *pad_to = &PAD_SOUND[0];
 static uint8_t sounds_moving;                    /* the pad and the keys' bus are on their way to a sound */
+/* The player's own, where the voices need them; all of them made in user_make(), once, when a value changes. See "the player's own sounds" */
+static struct {
+    uint8_t path;                                /* a voice struck in it goes the voice's other way (ep_um) */
+    float att, dec_k, rel_k;                     /* its attack as a factor of the chord's 75 ms; a sample's fall in its decay, its release; 0: as the voice's own */
+} ku = {0u, 1.0f, 0.0f, 0.0f};
+static float keys_comp = 1.0f, keys_comp_to = 1.0f, keys_comp_was = 1.0f;   /* the keys' loudness, against a depth that is more than the sound's: where it is, where it is going, where the last chunk ended it. 1 but for that */
+static struct {
+    uint8_t env;                                 /* the chord has an envelope of its own */
+    float att_k, dec_k, rel_k;                   /* its rise a sample; its fall in the decay; in the release, before the next chord's attack (0: none) */
+} pu = {0u, 0.0f, 0.0f, 0.0f};
+enum { PE_REL, PE_ATT, PE_DEC };
+static float pad_env = 1.0f;                     /* the whole pad's, within the chord: goes with the mute's gain */
+static uint8_t pad_eph = PE_DEC;
 
 static inline float blep_saw(float t, float dt)
 {
@@ -1724,8 +1737,10 @@ typedef struct {
     float amp, dec, rel, att, arate;
     float ib, ibt, ibd, it, itd, gl, gr, last;
     float ib0, k;                                /* the body's index as struck, before its sound; the body's ratio to the carrier */
+    float ua, upk, uenv, urate;                  /* on the player's way (um): the level this chunk starts at; what the note's touch has it at; its envelope; the rise a sample */
     int32_t wait, hold;                          /* hold: samples before the key comes up; 0 held or already up */
     uint8_t on, note, held;
+    uint8_t um, tail, uph;                       /* um: the player's way, tph the modulator's phase (ep_um_start). tail: not on, MIDI knows nothing of it, nothing counts it, and the first note that wants its place takes it softly: what a long release has left, or an audition. uph: its envelope's stage */
 } ep_t;
 static ep_t ep[NKEYS];
 /* The keys' sounds: the same voices, and no voice's level or length changes with them, so what is taken when, and all MIDI says, is the same (only the first has the tine, the one thing that costs a look-up more).
@@ -1734,7 +1749,7 @@ static ep_t ep[NKEYS];
 typedef struct {
     float tine, body, close, k, bus, level;
 } keys_sound_t;
-static const keys_sound_t KEYS_SOUND[4] = {
+static keys_sound_t KEYS_SOUND[5] = {          /* (the last is the player's) */
     /* Electric */ {1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f},
     /* Clear */    {0.0f, 0.80f, 5.0f, 3.0f, 1.25f, 0.97f},
     /* Organ */    {0.0f, 0.85f, 12.0f, 2.0f, 1.0f, 0.88f},
@@ -1792,33 +1807,82 @@ void en_shed(void)
 
 static float ep_amp_of(float vel) { return 0.42f + 0.58f * fm_clampf(vel * song_touch, 0.05f, 1.0f); }
 
-static ep_t *ep_strike(int n, float vel, float att_s, int32_t hold, int32_t wait)
+/* The player's way, for a keys voice whose ratio, attack, decay or release has moved from where the sound it came from has them. All that was there goes on as ever, to the bit: amp, att and dec are what the voice's life, the choice of a voice to take, and so MIDI are decided by, whatever the player has done. What is heard is another level, ua: a line over each chunk to the note's touch times its own envelope (ep_env), so that it costs a chunk's arithmetic and an add where the first way has a multiplication. And the modulator has a phase of its own, in tph (the tine, while it lasts, a whole number of the carrier, so that needs none): so a ratio not whole has no step where the carrier's phase wraps, and a change slides on an unbroken phase */
+enum { UP_ATT, UP_DEC, UP_REL };
+static void ep_um_start(ep_t *e, float att_s)
 {
-    int i, best = 0;
-    float lo = 9.0f, v2, top, p;
-    ep_t *e;
+    e->um = 1u;
+    e->tph = 0.0f;
+    e->tinc = fm_minf(e->cinc * e->k, 0.45f);    /* (past that it folds back; it is a sound, but not one the phase should have) */
+    e->ua = e->uenv = 0.0f;
+    e->upk = e->amp;
+    e->uph = UP_ATT;
+    e->urate = 1.0f / (att_s * bloom_att * ku.att * EN_SR);
+}
+static void ep_um_take(ep_t *e)                  /* what is sounding, on the first way: from where it is, unbroken */
+{
+    const float mp = e->cph * e->k;
+    e->um = 1u;
+    e->tph = mp - (float)(int)mp;
+    e->tinc = fm_minf(e->cinc * e->k, 0.45f);
+    e->ua = e->amp * e->att;
+    e->upk = e->amp;
+    e->uenv = e->att;
+    e->uph = !(e->held || e->hold > 0) ? UP_REL : e->att < 0.999f ? UP_ATT : UP_DEC;
+    e->urate = e->arate;
+}
+/* a chunk's worth of its envelope: to the level the chunk ends at. Off User it goes where the first way would: the voice's own decay and release */
+static float ep_env(ep_t *e, int shed, uint32_t n)
+{
+    const int user = par[P_KEYSND] == EN_SND_USER, gate = !shed && (e->held || e->hold > 0);
+    const float rel = shed ? 1.0f / (0.040f * EN_SR) : user ? ku.rel_k : 0.0f, dec = user ? ku.dec_k : 0.0f;
+    if (gate || rel <= 0.0f)                     /* (under a release of its own the touch stays where it was) */
+        e->upk = e->amp > e->upk ? e->upk + (e->amp - e->upk) * fm_minf((float)n * (1.0f / (0.9f * EN_SR)), 1.0f) : e->amp;
+    if (!gate)
+        e->uph = UP_REL;
+    else if (e->uph == UP_REL)
+        e->uph = UP_ATT;
+    if (e->uph == UP_ATT) {
+        e->uenv += (float)n * e->urate;
+        if (e->uenv >= 1.0f) {
+            e->uenv = 1.0f;
+            e->uph = UP_DEC;
+        }
+    } else if (e->uph == UP_DEC) {
+        e->uenv -= e->uenv * fm_minf((float)n * dec, 1.0f);
+    } else {
+        e->uenv -= e->uenv * fm_minf((float)n * rel, 1.0f);
+    }
+    e->uenv = fm_flush(e->uenv);
+    return e->upk * e->uenv;
+}
+
+/* What a long release leaves is no voice more than the song already has: the first way never has more than this many going at once, in any style or Energy, so with what goes on past them neither. Over that, the quietest of them is let down at once, softly */
+#define EP_SOUNDING 9
+static void ep_tails_trim(int more)              /* more: places wanted */
+{
+    int i, n = more;
+    for (i = 0; i < NKEYS; i++)
+        n += ep[i].on || ep[i].tail;
+    while (n > EP_SOUNDING) {
+        ep_t *q = 0;
+        for (i = 0; i < NKEYS; i++)
+            if (ep[i].tail && (!q || ep[i].ua < q->ua))
+                q = &ep[i];
+        if (!q)
+            return;                              /* (on, all of them: the song's own) */
+        ep_gone[0] += q->last * q->gl;
+        ep_gone[1] += q->last * q->gr;
+        q->tail = 0u;
+        n--;
+    }
+}
+
+/* a voice's sound as struck: no MIDI, no count, no voice chosen; what vel comes to */
+static float ep_set(ep_t *e, int n, float vel, float att_s, int32_t hold, int32_t wait)
+{
+    float v2, top, p;
     const keys_sound_t *ks = &KEYS_SOUND[par[P_KEYSND]];
-    while (n > 96)
-        n -= 12;
-    for (i = 0; i < ep_lim; i++) {
-        float a = ep[i].on ? ep[i].amp : -1.0f;
-        if (ep[i].on && ep[i].note == n) {       /* the same key again: its own voice */
-            best = i;
-            break;
-        }
-        if (a < lo) {
-            lo = a;
-            best = i;
-        }
-    }
-    e = &ep[best];
-    if (e->on) {
-        if (e->note != n && e->amp > 0.004f)
-            en_ep_steals++;
-        ep_gone[0] += e->last * e->gl;           /* (last: at the bus's gain) */
-        ep_gone[1] += e->last * e->gr;
-        midi(0x80, e->note, 0);
-    }
     e->amp = ep_amp_of(vel);
     vel = fm_clampf(vel * song_touch, 0.05f, 1.0f);
     v2 = vel * vel;
@@ -1846,6 +1910,44 @@ static ep_t *ep_strike(int n, float vel, float att_s, int32_t hold, int32_t wait
     e->gr = fm_sinf(p) * ks->level;
     e->wait = wait;
     e->hold = hold;
+    e->um = e->tail = 0u;
+    if (par[P_KEYSND] == EN_SND_USER && ku.path)
+        ep_um_start(e, att_s);
+    return vel;
+}
+
+static ep_t *ep_strike(int n, float vel, float att_s, int32_t hold, int32_t wait)
+{
+    int i, best = 0;
+    float lo = 9.0f;
+    ep_t *e;
+    while (n > 96)
+        n -= 12;
+    for (i = 0; i < ep_lim; i++) {
+        float a = ep[i].on ? ep[i].amp : -1.0f;
+        if (ep[i].on && ep[i].note == n) {       /* the same key again: its own voice */
+            best = i;
+            break;
+        }
+        if (a < lo) {
+            lo = a;
+            best = i;
+        }
+    }
+    e = &ep[best];
+    if (e->on) {
+        if (e->note != n && e->amp > 0.004f)
+            en_ep_steals++;
+        ep_gone[0] += e->last * e->gl;           /* (last: at the bus's gain) */
+        ep_gone[1] += e->last * e->gr;
+        midi(0x80, e->note, 0);
+    } else if (e->tail) {                        /* it has gone on past its voice: let down likewise */
+        ep_gone[0] += e->last * e->gl;
+        ep_gone[1] += e->last * e->gr;
+        e->tail = 0u;
+    }
+    ep_tails_trim(e->on ? 0 : 1);
+    vel = ep_set(e, n, vel, att_s, hold, wait);
     en_ep_notes++;
     midi(0x90, (uint32_t)n, (uint32_t)(vel * 120.0f));
     return e;
@@ -1888,6 +1990,8 @@ static void ep_chord(float vel, int with_root)
             e->ibt = fm_maxf(e->ibt, 0.5f * (0.10f + 0.95f * vel * vel) * (1.0f / FM_TWO_PI) * bright_body * KEYS_SOUND[par[P_KEYSND]].body);
             e->held = 1;
             e->hold = 0;
+            if (e->um)                           /* (a short decay has left it silent: a new chord wakes it, softly) */
+                e->uph = UP_ATT;
         } else if (e->held || e->hold > 0) {
             ep_key_up(e);
         }
@@ -1993,7 +2097,7 @@ static void ep_fresh(void)
  * heard as a note on small speakers too, and almost none after. Its own envelope: 12 ms up, falling slowly, gone
  * 60 ms after its time. */
 static struct {
-    float ph, inc, inc_t, amp, sus, idx, spk;
+    float ph, inc, inc_t, amp, sus, idx, spk, mph;   /* mph: the modulator's own phase, for a ratio not whole (ph times it would step as ph wraps) */
     int32_t hold;
     uint8_t midi_note;
 } bass;
@@ -2003,14 +2107,18 @@ static float bass_vol, bass_lvl, bass_song, bass_song_t, bass_glide = 0.0012f;  
 typedef struct {
     float k, base, spk_new, spk_leg, att_s, rel_s, level;
 } bass_sound_t;
-static const bass_sound_t BASS_SOUND[4] = {
+static bass_sound_t BASS_SOUND[5] = {          /* (the last is the player's) */
     /* Warm */   {1.0f, 0.034f, 0.12f, 0.035f, 0.012f, 0.022f, 1.0f},
     /* Sub */    {1.0f, 0.0f, 0.015f, 0.0f, 0.012f, 0.022f, 1.0f},
     /* Hollow */ {2.0f, 0.070f, 0.10f, 0.03f, 0.012f, 0.022f, 0.85f},
     /* Round */  {1.0f, 0.075f, 0.09f, 0.03f, 0.025f, 0.035f, 1.04f},
 };
 static int32_t bass_easy;                        /* samples yet of the index going easy, after the sound has changed */
+static float bass_easy_rate = 0.002f;            /* how easy: slower than its level goes, for a set moved (its level comes down as its index goes up, and first) */
 static float bass_k = 1.0f, bass_att = 1.0f / (0.012f * EN_SR), bass_rel = 1.0f / (0.022f * EN_SR);
+static float bass_dk;                            /* the player's decay: the held level's fall, a sample; 0 none */
+static uint8_t bass_frac;                        /* bass_k is not a whole number */
+static int32_t bass_hear;                        /* an audition: samples yet of its gate. No key, no MIDI */
 static uint8_t bass_back;                        /* out of a rest: it does not wait for the figure's next note */
 volatile uint32_t en_bass_notes;
 
@@ -2147,7 +2255,7 @@ static void bass_note(int off, uint32_t len)
  * The voices: two operators, whole-number ratios, nothing that rings: a warm digital palette, softest to brightest. A timbre lasts
  * several phrases; an answer may take its near relation; Tone sets which part of the palette may be used, and how much index. */
 const char *const EN_TIMBRE_NAME[EN_NTIMBRES] = {"Flute", "Vocal", "Vibes", "Marimba", "Music box", "Glass"};
-static const en_mel_voice_t TIMBRE[EN_NTIMBRES] = {
+static en_mel_voice_t TIMBRE[EN_NTIMBRES + 1] = {     /* (the last is the player's) */
     /*             ratio index floor idec   att     t60    rel   vib      level */
     /* Flute */   {1.0f, 0.55f, 0.28f, 0.18f, 0.045f, 7.0f, 0.16f, 0.0028f, 0.74f},
     /* Vocal */   {2.0f, 0.34f, 0.26f, 0.25f, 0.070f, 6.0f, 0.24f, 0.0034f, 0.82f},
@@ -2161,9 +2269,225 @@ static const uint8_t TIMBRE_KIN[EN_NTIMBRES] = {EN_TB_VOCAL, EN_TB_FLUTE, EN_TB_
 void en_mel_voice(int timbre, int tone, en_mel_voice_t *v)
 {
     const float k = knob_curve(tone, 50, 0.55f, 1.0f, 1.45f);
-    *v = TIMBRE[(unsigned)timbre < EN_NTIMBRES ? timbre : 0];
+    *v = TIMBRE[(unsigned)timbre <= EN_TB_USER ? timbre : 0];
     v->index *= k;
     v->floor_idx *= k;
+}
+
+/* ---------------------------------------------------------- the player's own sounds --- */
+/* A set of steps a layer (en_user_t), and what they come to. Every value is on a list or a curve here and nowhere else, so all of it is bounded here:
+ *   ratio    a list: whole numbers, useful fractions, and inharmonic ones for bells;
+ *   depth    by the square of the knob, up to what each voice's lookup has room for: its phase offset is never passed, whatever Bright and Tone do on top (keys: 2.5 of the body, at Bright 100 and full touch 1.75 turns against 2; melody: 8 radians and its floor's share at Tone 100, under 3.3 turns against 4; bass: 0.6 turns and 0.35 speaking against 1);
+ *   times    a list of times, from what does not click to what is musically of any use; a decay has one more place at its top, the sound's own. No rate is over 1 or a time 0.
+ * A step left where the sound it came from stands is that sound's own number and no other, and what has no knob comes from there: so a set just loaded is that sound, to the bit, and is struck and sounds by the same code.
+ * Loudness: FM moves power, it does not add it, but it moves it to where the ear is, and the keys' voice is louder for its index as well. So the further a set goes past the sound it came from, in depth by the ratio's root, the less gain (user_comp): 1 at or under it, the same whichever sound; and the keys, against their own (1 + 1.8 index), by that factor too. Bounds: user_test, HEARD_DB, RMS_DB, PEAK_RATIO.
+ *
+ * What it costs in the render is the first way's lookups: no operator, no voice. The melody has the bells' code as it is, in a row of the table; the bass and the pad their own too, the bass's ratio not whole with a phase more. The keys: ep_um. The pad's envelope is a line over each chunk in the mute's own gain.
+ *
+ * And it goes to the render, not by the queue (a whole piece is 52 of its 56 places): one set a layer, written whole under a sequence word (odd while writing), read at a block's start. The render is an interrupt over the main loop, so it finds a set either whole or being written, and being written it waits for the next block, 6 ms. Nothing can be dropped, and the last one written is what stays */
+#define UR_N 27
+static const float U_RATIO[UR_N] = {0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.41f, 1.5f, 1.73f, 2.0f, 2.41f, 2.5f, 2.76f, 3.0f, 3.14f, 3.5f, 4.0f, 4.24f, 5.0f, 5.4f, 6.0f, 6.27f, 7.0f, 8.0f, 9.0f, 10.0f, 12.0f, 14.0f};
+static const char *const U_RATIO_TXT[UR_N] = {"0.25", "0.5", "0.75", "1", "1.25", "1.41", "1.5", "1.73", "2", "2.41", "2.5", "2.76", "3", "3.14", "3.5", "4", "4.24", "5", "5.4", "6", "6.27", "7", "8", "9", "10", "12", "14"};
+#define UT_N 27
+static const float U_TIME[UT_N] = {0.001f, 0.002f, 0.003f, 0.005f, 0.008f, 0.012f, 0.018f, 0.025f, 0.035f, 0.05f, 0.07f, 0.1f, 0.14f, 0.2f, 0.28f, 0.4f, 0.56f, 0.8f, 1.1f, 1.6f, 2.2f, 3.2f, 4.5f, 6.4f, 9.0f, 13.0f, 18.0f};
+#define UC_N 16
+static const float U_CENTS[UC_N] = {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 8.0f, 10.0f, 12.0f, 15.0f, 20.0f, 25.0f, 30.0f, 40.0f, 50.0f};
+/* what each value is, by layer: a time list's first and last place (+ 1: a place above it, the sound's own or none), or a curve */
+enum { UK_RATIO, UK_CURVE, UK_TIME, UK_CENTS };
+typedef struct {
+    const char *name;
+    uint8_t kind, lo, hi, top;                   /* lo, hi: places in U_TIME; top: a last place that is no time ("Long", "Hold", "Off") */
+    float most;                                  /* a curve's end */
+} u_par_t;
+static const u_par_t U_PAR[EN_NUSER][EN_NUP] = {
+    /* keys */   {{"Ratio", UK_RATIO, 0, 0, 0, 0.0f}, {"Depth", UK_CURVE, 0, 0, 0, 2.5f}, {"Attack", UK_TIME, 3, 23, 0, 0.0f}, {"Decay", UK_TIME, 11, 26, 1, 0.0f}, {"Mod time", UK_TIME, 6, 26, 0, 0.0f}, {"Release", UK_TIME, 9, 26, 0, 0.0f}},
+    /* melody */ {{"Ratio", UK_RATIO, 0, 0, 0, 0.0f}, {"Depth", UK_CURVE, 0, 0, 0, 8.0f}, {"Attack", UK_TIME, 0, 23, 0, 0.0f}, {"Decay", UK_TIME, 9, 26, 0, 0.0f}, {"Mod time", UK_TIME, 3, 24, 0, 0.0f}, {"Release", UK_TIME, 6, 26, 0, 0.0f}},
+    /* bass */   {{"Ratio", UK_RATIO, 0, 0, 0, 0.0f}, {"Depth", UK_CURVE, 0, 0, 0, 0.6f}, {"Attack", UK_TIME, 0, 19, 0, 0.0f}, {"Decay", UK_TIME, 10, 24, 1, 0.0f}, {"Speak", UK_CURVE, 0, 0, 0, 0.35f}, {"Release", UK_TIME, 3, 19, 0, 0.0f}},
+    /* pad */    {{"Ratio", UK_RATIO, 0, 0, 0, 0.0f}, {"Bright", UK_CURVE, 0, 0, 0, 5.0f}, {"Attack", UK_TIME, 6, 25, 0, 0.0f}, {"Decay", UK_TIME, 12, 26, 1, 0.0f}, {"Detune", UK_CENTS, 0, 0, 0, 0.0f}, {"Release", UK_TIME, 6, 21, 1, 0.0f}},
+};
+#define U_PAD_FC_LO 0.3f                         /* the pad's filter, against its own: 0.3 .. 5 on an even curve of octaves (U_PAR's most) */
+int en_user_par(int l) { return l == EN_U_KEYS ? P_KEYSND : l == EN_U_MEL ? P_MELSND : l == EN_U_BASS ? P_BASSSND : P_PADSND; }
+int en_user_value(int l) { return l == EN_U_MEL ? EN_MELSND_USER : EN_SND_USER; }
+int en_user_nfrom(int l) { return l == EN_U_MEL ? EN_NTIMBRES : 4; }
+const char *en_user_from_name(int l, int f)
+{
+    f = f < 0 || f >= en_user_nfrom(l) ? 0 : f;
+    return l == EN_U_KEYS ? KEYS_SOUND_NAME[f] : l == EN_U_MEL ? EN_TIMBRE_NAME[f] : l == EN_U_BASS ? BASS_SOUND_NAME[f] : PAD_SOUND_NAME[f];
+}
+static const u_par_t *u_par(int l, int p) { return &U_PAR[(unsigned)l < EN_NUSER ? l : 0][(unsigned)p < EN_NUP ? p : 0]; }
+int en_user_steps(int l, int p)
+{
+    const u_par_t *u = u_par(l, p);
+    return u->kind == UK_RATIO ? UR_N : u->kind == UK_CURVE ? 101 : u->kind == UK_CENTS ? UC_N : (int)u->hi - (int)u->lo + 1 + (int)u->top;
+}
+const char *en_user_name(int l, int p) { return u_par(l, p)->name; }
+static float u_step(const u_par_t *u, int v)     /* what a step is, by itself. A place with no time: 0 */
+{
+    if (u->kind == UK_RATIO)
+        return U_RATIO[v];
+    if (u->kind == UK_CENTS)
+        return U_CENTS[v];
+    if (u->kind == UK_CURVE) {
+        if (u->most == 5.0f)                     /* (the pad's filter) */
+            return U_PAD_FC_LO * fm_exp2f((float)v * 0.01f * 4.0589f);
+        return u->most * (float)(v * v) * 0.0001f;
+    }
+    return (int)u->lo + v > (int)u->hi ? 0.0f : U_TIME[(int)u->lo + v];
+}
+static int u_near(const u_par_t *u, int steps, float want)   /* the step nearest a number, a ratio's way (times are nearer by ratio than by difference); want 0: a place with no time */
+{
+    int v, best = 0;
+    float lo = 1e30f;
+    if (want <= 0.0f && u->top)
+        return steps - 1;
+    for (v = 0; v < steps - (int)u->top; v++) {
+        const float x = u_step(u, v), d = u->kind == UK_TIME || u->kind == UK_RATIO ? fm_fabsf(fm_log2f(x) - fm_log2f(want)) : fm_fabsf(x - want);
+        if (d < lo) {
+            lo = d;
+            best = v;
+        }
+    }
+    return best;
+}
+/* a sound's own number for each value, the numbers en_user_num then makes of the steps. The sounds' tables give them; what a sound has no number for is 0: the top place */
+static float u_own(int l, int from, int p)
+{
+    if (l == EN_U_KEYS) {
+        const keys_sound_t *k = &KEYS_SOUND[from];
+        return p == EN_UP_RATIO ? k->k : p == EN_UP_DEPTH ? k->body : p == EN_UP_ATT ? 0.075f : p == EN_UP_MOD ? 1.7f * k->close : p == EN_UP_REL ? 0.45f * 6.9f : 0.0f;
+    }
+    if (l == EN_U_MEL) {
+        const en_mel_voice_t *t = &TIMBRE[from];
+        return p == EN_UP_RATIO ? t->ratio : p == EN_UP_DEPTH ? t->index : p == EN_UP_ATT ? t->att_s : p == EN_UP_DEC ? t->t60_s : p == EN_UP_MOD ? t->idec_s : t->rel_s;
+    }
+    if (l == EN_U_BASS) {
+        const bass_sound_t *b = &BASS_SOUND[from];
+        return p == EN_UP_RATIO ? b->k : p == EN_UP_DEPTH ? b->base : p == EN_UP_ATT ? b->att_s : p == EN_UP_MOD ? b->spk_new : p == EN_UP_REL ? b->rel_s : 0.0f;
+    }
+    {
+        const pad_sound_t *d = &PAD_SOUND[from];
+        return p == EN_UP_RATIO ? 1.0f : p == EN_UP_DEPTH ? d->fc : p == EN_UP_ATT ? 1.1f : p == EN_UP_MOD ? (d->d1 - 1.0f) * 1731.0f : 0.0f;   /* (the swell's time; the detune's cents, about: for the step, not the number: u_num's "own") */
+    }
+}
+/* (a search, with logarithms: once, and never in the render) */
+static uint8_t u_own_at[EN_NUSER][EN_NTIMBRES][EN_NUP], u_own_made;
+static int u_own_step(int l, int from, int p)
+{
+    if (!u_own_made) {
+        int a, f, q;
+        for (a = 0; a < EN_NUSER; a++)
+            for (f = 0; f < en_user_nfrom(a); f++)
+                for (q = 0; q < EN_NUP; q++)
+                    u_own_at[a][f][q] = (uint8_t)u_near(u_par(a, q), en_user_steps(a, q), u_own(a, f, q));
+        u_own_made = 1u;
+    }
+    return u_own_at[l][from][p];
+}
+void en_user_load(int l, int from, en_user_t *u)
+{
+    int p;
+    from = from < 0 || from >= en_user_nfrom(l) ? 0 : from;
+    u->from = (uint8_t)from;
+    for (p = 0; p < EN_NUP; p++)
+        u->v[p] = (uint8_t)u_own_step(l, from, p);
+}
+int en_user_ok(int l, const en_user_t *u)
+{
+    int p;
+    if ((unsigned)l >= EN_NUSER || u->from >= en_user_nfrom(l))
+        return 0;
+    for (p = 0; p < EN_NUP; p++)
+        if (u->v[p] >= en_user_steps(l, p))
+            return 0;
+    return 1;
+}
+static int u_at_own(int l, const en_user_t *u, int p) { return u->v[p] == u_own_step(l, u->from, p); }
+int en_user_moved(int l, const en_user_t *u)
+{
+    int p;
+    for (p = 0; p < EN_NUP; p++)
+        if (!u_at_own(l, u, p))
+            return 1;
+    return 0;
+}
+/* the number a value is: its sound's own, at its step; else the step's */
+static float u_num(int l, const en_user_t *u, int p)
+{
+    return u_at_own(l, u, p) ? u_own(l, u->from, p) : u_step(u_par(l, p), u->v[p]);
+}
+void en_user_text(int l, int p, const en_user_t *u, char *b)
+{
+    const u_par_t *q = u_par(l, p);
+    const int v = u->v[(unsigned)p < EN_NUP ? p : 0];
+    float x = u_num(l, u, p);
+    const char *word = 0;
+    if (q->kind == UK_RATIO) {
+        word = U_RATIO_TXT[v < UR_N ? v : 0];
+    } else if (q->kind == UK_CURVE) {
+        itoa_s(v, b);
+        return;
+    } else if (q->kind == UK_CENTS) {
+        b = itoa_s((int)(u_step(q, v < UC_N ? v : 0) + 0.5f), b);
+        b[0] = 'c';
+        b[1] = 0;
+        return;
+    } else if (q->top && v == en_user_steps(l, p) - 1) {
+        word = l == EN_U_KEYS ? "Long" : l == EN_U_PAD && p == EN_UP_REL ? "Off" : "Hold";
+    }
+    if (word) {
+        while (*word)
+            *b++ = *word++;
+        *b = 0;
+        return;
+    }
+    /* a time: as it is, in three figures at most */
+    if (x < 1.0f) {
+        b = itoa_s((int)(x * 1000.0f + 0.5f), b);
+        b[0] = 'm', b[1] = 's', b[2] = 0;
+    } else if (x < 10.0f) {
+        const int t = (int)(x * 10.0f + 0.5f);
+        b = itoa_s(t / 10, b);
+        *b++ = '.';
+        b = itoa_s(t % 10, b);
+        b[0] = 's', b[1] = 0;
+    } else {
+        b = itoa_s((int)(x + 0.5f), b);
+        b[0] = 's', b[1] = 0;
+    }
+}
+
+/* the sets as the render has them, and as they are written */
+static en_user_t user_now[EN_NUSER];
+static volatile uint32_t user_seq[EN_NUSER];     /* odd: being written */
+static volatile uint8_t user_w[EN_NUSER][sizeof(en_user_t)];
+static uint32_t user_seen[EN_NUSER];
+static volatile uint32_t user_hear_w[EN_NUSER];  /* one word each: how many times the hand has turned */
+static uint32_t user_hear_seen[EN_NUSER];
+static int32_t user_hear_left[EN_NUSER];         /* samples until it plays, 0 none */
+#if defined EN_HOST || defined PLAT_HOST
+uint32_t en_test_user_heard[EN_NUSER];
+#endif
+static void user_write(int l, const en_user_t *u)
+{
+    const uint8_t *s = (const uint8_t *)u;
+    uint32_t i;
+    for (i = 0; i < sizeof *u; i++)
+        user_w[l][i] = s[i];
+}
+void en_user_set(int l, const en_user_t *u)
+{
+    if ((unsigned)l >= EN_NUSER)
+        return;
+    user_seq[l] = user_seq[l] + 1u;
+    BARRIER();
+    user_write(l, u);
+    BARRIER();
+    user_seq[l] = user_seq[l] + 1u;
+}
+void en_user_hear(int l)
+{
+    if ((unsigned)l < EN_NUSER)
+        user_hear_w[l] = user_hear_w[l] + 1u;
 }
 
 /* Hands, Rate above what any recipe has (Aqua's 60): a period's rest, section's or not, goes towards a bar, by the square of the way to 100. So a calm section counts for less and less, and at 100
@@ -2995,6 +3319,9 @@ typedef struct {
     uint8_t on, down, note;                      /* down: MIDI has been told it is */
     uint8_t hand;                                /* Keys: the key + 1 that holds it down: it goes up with the key, and no sooner, whatever the voice has done meanwhile. 0: the grid's */
     uint32_t age;                                /* Keys: when it went down */
+    uint8_t uv, uglide;                          /* struck in User; its modulator on its way to another ratio */
+    int32_t ulen;                                /* a depth changing under it: samples yet of the line. Only then the render has idx times dg, and at the end that is folded into idx */
+    float dg, dgto, iflto, ui;                   /* that factor, where it is going; the floor likewise; the index it was last told */
 } bell_t;
 static bell_t bell[NBELL];
 static float bell_vol;
@@ -3007,6 +3334,7 @@ uint32_t en_test_mel_heard;
 static uint32_t bell_case[2];
 #endif
 
+static uint8_t mu_moved;                         /* the melody's set is no longer the sound it came from */
 static uint8_t fx_note;                          /* the melody's last note, and how many: for the effects, which follow it */
 static uint32_t fx_notes;
 
@@ -3021,6 +3349,7 @@ static void bell_up(bell_t *v)                   /* its key lets go: it rings ou
 }
 
 static void bell_set(bell_t *v, int timbre, int n, float vel, int echo, int32_t gate, float pan, int32_t wait);
+static void bell_steal(bell_t *v);
 
 /* a note of the phrase. timbre: what it sounds in; own: the phrase's own, whose length MIDI is told (it dies away by itself, and a sound chosen is not to change MIDI) */
 static bell_t *bell_strike(int timbre, int own, int n, float vel, int echo, int32_t gate, float pan, int32_t wait)
@@ -3043,6 +3372,8 @@ static bell_t *bell_strike(int timbre, int own, int n, float vel, int echo, int3
         bell_stolen = lo;
     en_test_bell_struck = timbre;
 #endif
+    if (timbre == EN_TB_USER && mu_moved)        /* (the sounds' tails are made so that what is taken has died away. A set's may not be) */
+        bell_steal(v);
     bell_set(v, timbre, n, vel, echo, gate, pan, wait);
     v->down = 1u;
     if (timbre != own) {
@@ -3070,6 +3401,13 @@ static void bell_set(bell_t *v, int timbre, int n, float vel, int echo, int32_t 
     v->cinc = mtof((float)n) * (1.0f / EN_SR);
     v->ratio = tv.ratio;
     v->minc = v->cinc * tv.ratio;
+    v->uv = timbre == EN_TB_USER;
+    v->uglide = 0u;
+    v->ulen = 0;
+    v->dg = 1.0f;
+    v->ui = tv.index * (1.0f / FM_TWO_PI);
+    if (v->uv && mu_moved)
+        v->minc = fm_minf(v->minc, 0.45f);       /* (past that it folds back; as the keys') */
     v->amp = vel * tv.level;
     v->att = 0.0f;
     v->arate = 1.0f / (tv.att_s * EN_SR);
@@ -3790,13 +4128,14 @@ static void keys_step(uint32_t s)
             const uint32_t vary = hhash(song_seed, s, 49u) >> 8;
             const float len = (float)div * step_len;
             const int timbre = par[P_MELSND] ? par[P_MELSND] - 1 : en_keys_timbre(par[P_MTONE]);
+            const int own = timbre == EN_TB_USER ? en_keys_timbre(par[P_MTONE]) : timbre;   /* (what MIDI goes by: a set may die away before the key is up, a list's do not) */
             float vel = div == 1u ? 0.40f : div == 2u ? 0.44f : 0.48f;
             bell_t *v;
             ka_first = 0u;
             if (on_grid ? en_arp_rest(song_seed, s, (int)div, par[P_ARPSKIP]) : par[P_ARPSKIP] >= 100)
                 return;                          /* (the figure has moved on, as Arp's does) */
             vel += (float)(vary % 7u) * 0.01f - 0.03f + (s & 15u ? 0.0f : 0.03f);
-            v = bell_strike(timbre, timbre, en_keys_note(k, par[P_MOCT]), vel, 0, (int32_t)(len * 0.85f), (s / div) & 1u ? 0.10f : -0.10f, (int32_t)(vary % 120u));
+            v = bell_strike(timbre, own, en_keys_note(k, par[P_MOCT]), vel, 0, (int32_t)(len * 0.85f), (s / div) & 1u ? 0.10f : -0.10f, (int32_t)(vary % 120u));
             v->rdec = fm_minf(v->rdec, fm_expf(-6.9f / (ARP_RELEASE_DIVS * len)));
             en_loop_glow[0] = 0.75f;
         }
@@ -3990,6 +4329,8 @@ static void song_step(uint32_t s)
         pad_midi();
         publish_chord();
         pad_swell_t = 1.0f;
+        if (par[P_PADSND] == EN_SND_USER && pu.env)
+            pad_eph = pu.rel_k > 0.0f ? PE_REL : PE_ATT;
     } else if (cs == (ch_steps >= 32u ? 24u : 12u)) {
         pad_swell_t = 0.80f;
     }
@@ -4692,6 +5033,309 @@ static void notes_off(void)                      /* every note down let go, by n
     midi(0xB9, 123, 0);
 }
 
+/* ---- what the sets come to, in the render's own tables. Each a row of its layer's table, so that everything that reads a sound reads it */
+#define U_AT(p) u_at_own(l, u, (p))
+#define U_NUM(p) u_num(l, u, (p))
+static float u_comp(float i0, float r0, float i, float r, float a)   /* how much less, for how far past the sound it came from it has gone */
+{
+    const float h0 = 1.0f + a * i0 * fm_sqrtf(r0), h = 1.0f + a * i * fm_sqrtf(r);
+    return h > h0 ? h0 / h : 1.0f;
+}
+static float u_rate(float t60) { return t60 > 0.0f ? 6.9f / (t60 * EN_SR) : 0.0f; }
+#define KEYS_HARSH 0.35f                         /* by measurement: user_test t_levels; HEARD_DB */
+#define MEL_HARSH 0.09f
+#define BASS_HARSH 7.5f
+static void keys_comp_make(void)
+{
+    const float was = keys_comp_to;
+    keys_comp_to = 1.0f;
+    if (par[P_KEYSND] == EN_SND_USER) {
+        const keys_sound_t *o = &KEYS_SOUND[user_now[EN_U_KEYS].from], *r = &KEYS_SOUND[EN_SND_USER];
+        const float ib = 0.7f * 1.05f * (1.0f / FM_TWO_PI) * bright_body;   /* (the voice has 1 + 1.8 index on it: where the index is a little after the attack, by how long it stays: near enough) */
+        const float so = 1.7f * o->close, sr = 1.7f * r->close, was_i = 1.0f + 1.8f * ib * o->body * so / (so + 0.5f), now_i = 1.0f + 1.8f * ib * r->body * sr / (sr + 0.5f);
+        keys_comp_to = u_comp(o->body, o->k, r->body, r->k, KEYS_HARSH);
+        if (o->k == 1.0f && r->k != 1.0f)        /* (the first of each ratio stands that much under: the list's own sounds have it in their level) */
+            keys_comp_to *= 0.80f;
+        if (now_i > was_i)
+            keys_comp_to *= was_i / now_i;
+    }
+    if (keys_comp_to != was)
+        sounds_moving = 1u;
+}
+static void user_make_keys(void)
+{
+    const int l = EN_U_KEYS;
+    const en_user_t *u = &user_now[l];
+    const keys_sound_t *o = &KEYS_SOUND[u->from];
+    keys_sound_t r = *o;
+    r.k = U_NUM(EN_UP_RATIO);
+    r.body = U_NUM(EN_UP_DEPTH);
+    if (!U_AT(EN_UP_MOD))
+        r.close = U_NUM(EN_UP_MOD) * (1.0f / 1.7f);
+    KEYS_SOUND[EN_SND_USER] = r;
+    ku.path = (uint8_t)(!U_AT(EN_UP_RATIO) || !U_AT(EN_UP_ATT) || !U_AT(EN_UP_DEC) || !U_AT(EN_UP_REL));
+    ku.att = U_NUM(EN_UP_ATT) * (1.0f / 0.075f);
+    ku.dec_k = U_AT(EN_UP_DEC) ? 0.0f : u_rate(U_NUM(EN_UP_DEC));
+    ku.rel_k = U_AT(EN_UP_REL) ? 0.0f : u_rate(U_NUM(EN_UP_REL));
+}
+static void user_make_mel(void)
+{
+    const int l = EN_U_MEL;
+    const en_user_t *u = &user_now[l];
+    const en_mel_voice_t *o = &TIMBRE[u->from];
+    en_mel_voice_t r = *o;
+    r.ratio = U_NUM(EN_UP_RATIO);
+    r.index = U_NUM(EN_UP_DEPTH);
+    if (!U_AT(EN_UP_DEPTH))
+        r.floor_idx = o->floor_idx * (r.index * (1.0f / o->index));
+    r.att_s = U_NUM(EN_UP_ATT);
+    r.t60_s = U_NUM(EN_UP_DEC);
+    r.idec_s = U_NUM(EN_UP_MOD);
+    r.rel_s = U_NUM(EN_UP_REL);
+    r.level = o->level * u_comp(o->index, o->ratio, r.index, r.ratio, MEL_HARSH);
+    TIMBRE[EN_TB_USER] = r;
+    mu_moved = (uint8_t)en_user_moved(l, u);
+}
+static void user_make_bass(void)
+{
+    const int l = EN_U_BASS;
+    const en_user_t *u = &user_now[l];
+    const bass_sound_t *o = &BASS_SOUND[u->from];
+    bass_sound_t r = *o;
+    r.k = U_NUM(EN_UP_RATIO);
+    r.base = U_NUM(EN_UP_DEPTH);
+    if (!U_AT(EN_UP_MOD)) {
+        r.spk_new = U_NUM(EN_UP_MOD);
+        r.spk_leg = o->spk_leg * (r.spk_new * (1.0f / o->spk_new));
+    }
+    r.att_s = U_NUM(EN_UP_ATT);
+    r.rel_s = U_NUM(EN_UP_REL);
+    r.level = o->level * u_comp(o->base, o->k, r.base, r.k, BASS_HARSH);
+    BASS_SOUND[EN_SND_USER] = r;
+}
+static void user_make_pad(void)
+{
+    const int l = EN_U_PAD;
+    const en_user_t *u = &user_now[l];
+    const pad_sound_t *o = &PAD_SOUND[u->from];
+    pad_sound_t r = *o;
+    if (!U_AT(EN_UP_MOD)) {
+        r.d1 = fm_exp2f(U_NUM(EN_UP_MOD) * (1.0f / 1200.0f));
+        r.d0 = 1.0f / r.d1;
+    }
+    if (!U_AT(EN_UP_RATIO))
+        r.d1 *= U_NUM(EN_UP_RATIO);
+    r.fc = U_NUM(EN_UP_DEPTH);
+    if (r.fc > o->fc)                            /* (a filter further open lets more through. Near enough) */
+        r.level = o->level * (1.0f / (1.0f + 0.13f * (r.fc * (1.0f / o->fc) - 1.0f)));
+    PAD_SOUND[EN_SND_USER] = r;
+    pu.env = (uint8_t)(!U_AT(EN_UP_ATT) || !U_AT(EN_UP_DEC) || !U_AT(EN_UP_REL));
+    pu.att_k = 1.0f / (U_NUM(EN_UP_ATT) * EN_SR);
+    pu.dec_k = u_rate(U_NUM(EN_UP_DEC));
+    pu.rel_k = u_rate(U_NUM(EN_UP_REL));
+    if (pu.rel_k <= 0.0f && !U_AT(EN_UP_ATT))    /* (an attack needs somewhere to rise from: a quick dip as the chord changes) */
+        pu.rel_k = u_rate(0.12f);
+}
+#undef U_AT
+#undef U_NUM
+static void bass_sound_take(int v)
+{
+    bass_vol = (float)(par[P_BASS] * par[P_BASS]) * 0.0001f * BASS_SOUND[v].level;
+    bass_att = 1.0f / (BASS_SOUND[v].att_s * EN_SR);
+    bass_rel = 1.0f / (BASS_SOUND[v].rel_s * EN_SR);
+    bass_dk = 0.0f;
+    if (v == EN_SND_USER) {
+        const int l = EN_U_BASS;
+        const en_user_t *u = &user_now[l];
+        bass_dk = u_at_own(l, u, EN_UP_DEC) ? 0.0f : u_rate(u_num(l, u, EN_UP_DEC));
+    }
+}
+static void user_make_all(void)                  /* en_init: the first sound of each */
+{
+    int l;
+    for (l = 0; l < EN_NUSER; l++) {
+        en_user_load(l, 0, &user_now[l]);
+        user_seq[l] = user_seen[l] = 0u;
+        user_hear_w[l] = user_hear_seen[l] = 0u;
+        user_hear_left[l] = 0;
+    }
+    user_make_keys();
+    user_make_mel();
+    user_make_bass();
+    user_make_pad();
+}
+/* a set has changed: what it makes, and what sounds in it now, softly. A ratio goes over on an unbroken phase, a depth by a line or through the index's own slide. A voice of the keys comes round to the player's way by itself (render_keys), a bell has its modulator moved (render_bells); the bass takes its index off first, as it always has for a ratio. An attack has its next note; the rest, on a key held, now */
+static void user_changed(int l)
+{
+    if (l == EN_U_KEYS) {
+        const keys_sound_t was = KEYS_SOUND[EN_SND_USER];
+        user_make_keys();
+        if (par[P_KEYSND] == EN_SND_USER) {
+            const keys_sound_t *r = &KEYS_SOUND[EN_SND_USER];
+            int i;
+            keys_bus_to = r->bus;
+            keys_comp_make();
+            sounds_moving = 1u;
+            if (r->body != was.body || r->close != was.close)
+                for (i = 0; i < NKEYS; i++)
+                    if (ep[i].on || ep[i].tail) {
+                        ep[i].ibt = ep[i].ib0 * r->body * 0.7f;
+                        ep[i].ibd = fm_expf(-1.0f / (1.7f * bloom_close * r->close * EN_SR));
+                    }
+        }
+    } else if (l == EN_U_MEL) {
+        const en_mel_voice_t was = TIMBRE[EN_TB_USER];
+        en_mel_voice_t tv;
+        int i;
+        user_make_mel();
+        en_mel_voice(EN_TB_USER, par[P_MTONE], &tv);
+        for (i = 0; i < NBELL; i++) {
+            bell_t *v = &bell[i];
+            if (!v->on || !v->uv)
+                continue;
+            if (tv.ratio != was.ratio) {
+                v->ratio = tv.ratio;
+                v->uglide = 1u;
+            }
+            if (TIMBRE[EN_TB_USER].index != was.index || TIMBRE[EN_TB_USER].floor_idx != was.floor_idx) {
+                const float to = tv.index * (1.0f / FM_TWO_PI);
+                v->idx *= v->dg;
+                v->dg = 1.0f;
+                v->dgto = v->ui > 0.0f ? to * (1.0f / v->ui) : 1.0f;
+                v->ui = to;
+                v->iflto = tv.floor_idx * (1.0f / FM_TWO_PI);
+                v->ulen = (int32_t)(0.05f * EN_SR);
+            }
+            if (v->hand) {                       /* a key held: the player is listening to this one */
+                v->idec = fm_expf(-1.0f / (tv.idec_s * EN_SR));
+                v->adec = fm_expf(-6.9f / (tv.t60_s * EN_SR));
+                v->rdec = fm_expf(-6.9f / (tv.rel_s * EN_SR));
+            }
+        }
+    } else if (l == EN_U_BASS) {
+        const bass_sound_t was = BASS_SOUND[EN_SND_USER];
+        user_make_bass();
+        if (par[P_BASSSND] == EN_SND_USER) {
+            const bass_sound_t *r = &BASS_SOUND[EN_SND_USER];
+            if (r->k != was.k || r->base != was.base) {
+                bass_easy = (int32_t)(0.15f * EN_SR);
+                bass_easy_rate = 0.0004f;
+            }
+            bass_sound_take(EN_SND_USER);
+        }
+    } else {
+        user_make_pad();
+        if (par[P_PADSND] == EN_SND_USER)
+            sounds_moving = 1u;
+    }
+}
+static void user_take(void)                      /* a block's start */
+{
+    int l;
+    uint32_t i;
+    for (l = 0; l < EN_NUSER; l++) {
+        const uint32_t sq = user_seq[l], hw = user_hear_w[l];
+        if (sq != user_seen[l] && !(sq & 1u)) {  /* (odd: the main loop is in the middle of it, under this interrupt: the next block has it) */
+            en_user_t t;
+            uint8_t *d = (uint8_t *)&t, *c = (uint8_t *)&user_now[l];
+            uint32_t diff = 0u;
+            for (i = 0; i < sizeof t; i++) {
+                d[i] = user_w[l][i];
+                diff |= (uint32_t)(d[i] ^ c[i]);
+            }
+            user_seen[l] = sq;
+            if (diff && en_user_ok(l, &t)) {
+                user_now[l] = t;
+                user_changed(l);
+            }
+        }
+        if (hw != user_hear_seen[l]) {
+            user_hear_seen[l] = hw;
+            user_hear_left[l] = (int32_t)(0.15f * EN_SR);   /* (a turn of several detents: once, at the end) */
+        }
+    }
+}
+/* the hand has turned, and the layer has nothing to say: one quiet note. Never MIDI, never a key down, never a voice anyone counts: so the song is the same to the bit */
+static void user_heard(int l)
+{
+    int i;
+    if (silent || par[en_user_par(l)] != en_user_value(l))
+        return;
+    if (l == EN_U_MEL) {
+        mel_heard();
+    } else if (l == EN_U_KEYS) {
+        ep_t *e = 0;
+        if (en_mute_keys)
+            return;
+        for (i = 0; i < NKEYS; i++)
+            if ((ep[i].on || ep[i].tail) && ep[i].wait <= 0 && (ep[i].um ? ep[i].ua >= 0.01f : ep[i].amp * ep[i].att >= 0.01f))
+                return;
+        for (i = 0; i < ep_lim && !e; i++)
+            if (!ep[i].on && !ep[i].tail)
+                e = &ep[i];
+        if (!e)
+            return;
+        ep_tails_trim(1);
+        ep_set(e, ch_now.keys_v[2], 0.5f, 0.030f, (int32_t)(0.5f * EN_SR), 0);
+        e->on = 0u;
+        e->tail = 1u;
+        if (!e->um)
+            ep_um_start(e, 0.030f);
+#if defined EN_HOST || defined PLAT_HOST
+        en_test_user_heard[l]++;
+#endif
+    } else if (l == EN_U_BASS) {
+        int n = 24 + h_root + bass_off(ch_now.ch.bass) + 12 * par[P_BASSOCT];
+        if (en_mute_bass || bass.amp >= 0.01f || bass.hold > 0)
+            return;
+        while (n < 24)
+            n += 12;
+        bass.inc = bass.inc_t = mtof((float)n) * (1.0f / EN_SR);
+        bass.sus = 1.0f;
+        bass.spk = BASS_SOUND[EN_SND_USER].spk_new;
+        bass_song = fm_maxf(bass_song, 0.8f);    /* (it comes back to where the song has it by itself) */
+        bass_hear = (int32_t)(0.5f * EN_SR);
+#if defined EN_HOST || defined PLAT_HOST
+        en_test_user_heard[l]++;
+#endif
+    } else {
+        if (en_mute_keys || !pu.env || pad_env >= 0.1f)
+            return;
+        pad_eph = PE_ATT;                        /* (the pad never lets go: it is only its own envelope that has left it silent) */
+#if defined EN_HOST || defined PLAT_HOST
+        en_test_user_heard[l]++;
+#endif
+    }
+}
+#if defined EN_HOST || defined PLAT_HOST
+void en_test_user_get(int l, en_user_t *u) { *u = user_now[l]; }
+void en_test_user_torn(int l, const en_user_t *u)
+{
+    const uint8_t *s = (const uint8_t *)u;
+    uint32_t i;
+    user_seq[l] = user_seq[l] + 1u;
+    for (i = 0; i < sizeof *u / 2u; i++)
+        user_w[l][i] = s[i];
+}
+void en_test_user_finish(int l, const en_user_t *u)
+{
+    user_write(l, u);
+    user_seq[l] = user_seq[l] + 1u;
+}
+float en_test_user_num(int l, int p) { return u_num(l, &user_now[l], p); }
+float en_test_user_gain(int l)
+{
+    return l == EN_U_KEYS ? keys_comp_to : l == EN_U_MEL ? TIMBRE[EN_TB_USER].level * (1.0f / TIMBRE[user_now[l].from].level) : l == EN_U_BASS ? BASS_SOUND[EN_SND_USER].level * (1.0f / BASS_SOUND[user_now[l].from].level) : PAD_SOUND[EN_SND_USER].level * (1.0f / PAD_SOUND[user_now[l].from].level);
+}
+int en_test_keys_tails(void)
+{
+    int i, n = 0;
+    for (i = 0; i < NKEYS; i++)
+        n += ep[i].tail;
+    return n;
+}
+#endif
+
 static void apply(int p, int v)
 {
     const en_param_t *pi = &PARAMS[p];
@@ -4709,9 +5353,10 @@ static void apply(int p, int v)
     case P_MOTIFS: bell_vol = (float)(v * v) * 0.0001f; break;
     case P_BASS: bass_vol = (float)(v * v) * 0.0001f * BASS_SOUND[par[P_BASSSND]].level; break;
     case P_KEYSND: {                             /* what is sounding: its index, softly (it slides by itself); the rest with the next chord */
-        const keys_sound_t *ks = &KEYS_SOUND[v];
+        const keys_sound_t *ks = &KEYS_SOUND[v], *ws = &KEYS_SOUND[was];
         keys_bus_to = ks->bus;
-        if (v != was) {
+        keys_comp_make();
+        if (v != was && (ks->tine != ws->tine || ks->body != ws->body || ks->close != ws->close || ks->k != ws->k || ks->bus != ws->bus || ks->level != ws->level)) {   /* (User, just loaded from the sound it was in: nothing has changed) */
             int i;
             sounds_moving = 1u;
             for (i = 0; i < NKEYS; i++)
@@ -4727,13 +5372,13 @@ static void apply(int p, int v)
         if (v != was)
             sounds_moving = 1u;
         break;
-    case P_BASSSND:                              /* its level goes there over about 50 ms by itself (render_bass), its index easily */
-        if (v != was)
+    case P_BASSSND: {                            /* its level goes there over about 50 ms by itself (render_bass), its index easily */
+        const bass_sound_t *bo = &BASS_SOUND[was], *bn = &BASS_SOUND[v];
+        if (v != was && (bo->k != bn->k || bo->base != bn->base || bo->spk_new != bn->spk_new || bo->spk_leg != bn->spk_leg || bo->att_s != bn->att_s || bo->rel_s != bn->rel_s || bo->level != bn->level))
             bass_easy = (int32_t)(0.15f * EN_SR);
-        bass_vol = (float)(par[P_BASS] * par[P_BASS]) * 0.0001f * BASS_SOUND[v].level;
-        bass_att = 1.0f / (BASS_SOUND[v].att_s * EN_SR);
-        bass_rel = 1.0f / (BASS_SOUND[v].rel_s * EN_SR);
+        bass_sound_take(v);
         break;
+    }
     case P_DRUMS:                                /* over its default it climbs slower: at 100 the kick is 10 dB up, not 14, and stays a kick */
         break_vol = v <= 45 ? (float)(v * v) * 0.0001f : (float)(45 * 45) * 0.0001f + (float)(v - 45) * (1.0f / 55.0f) * 0.42f;
         break;
@@ -4746,6 +5391,7 @@ static void apply(int p, int v)
         bright_body = knob_curve(v, 50, 0.25f, 1.0f, 4.0f);
         bright_tine = knob_curve(v, 50, 0.0f, 1.0f, 4.0f);
         bright_bus = knob_curve(v, 50, 0.20f, 0.40f, 0.62f);       /* 1.6 kHz .. 3.6 kHz .. 6.8 kHz */
+        keys_comp_make();
         break;
     case P_GLIDE: bass_glide = 0.0012f / knob_curve(v, 10, 0.06f, 1.0f, 16.0f); break;   /* 1 ms .. 19 ms .. 300 ms, a time constant */
     case P_HATS: hat_vol = (float)(v * v) / 2500.0f; break;        /* 1 at 50 */
@@ -4866,8 +5512,13 @@ static void quiet(void)
     hand_clear();
     bell_gone[0] = bell_gone[1] = bell_gone[2] = 0.0f;
     for (i = 0; i < NKEYS; i++)
-        ep[i].on = 0;
+        ep[i].on = ep[i].tail = ep[i].um = 0u;
     ep_gone[0] = ep_gone[1] = 0.0f;
+    pad_env = 1.0f;
+    pad_eph = PE_DEC;
+    bass_hear = 0;
+    for (i = 0; i < EN_NUSER; i++)
+        user_hear_left[i] = 0;
     brk_stop();
     hat[0].on = hat[1].on = 0;
     for (i = 0; i < EN_NPAD; i++)
@@ -4974,12 +5625,18 @@ void en_init(void)
         pad[i].inc[0] = pad[i].inc[1] = 0.0f;
     }
     for (i = 0; i < NKEYS; i++)
-        ep[i].on = 0;
+        ep[i].on = ep[i].tail = ep[i].um = 0u;
     for (i = 0; i < NBELL; i++)
-        bell[i].on = bell[i].down = bell[i].hand = 0u;
+        bell[i].on = bell[i].down = bell[i].hand = bell[i].uv = 0u;
     hand_clear();
     bell_gone[0] = bell_gone[1] = bell_gone[2] = 0.0f;
     keys_word = keys_seen = 0u;
+    user_make_all();                             /* (before apply: what it reads) */
+    keys_comp = keys_comp_to = keys_comp_was = 1.0f;
+    pad_env = 1.0f;
+    pad_eph = PE_DEC;
+    bass_hear = 0;
+    bass.sus = 1.0f;
     hand_mode = EN_MEL_PHRASES;
     hand_epoch = 0u;
     for (i = 0; i < EN_NPAD; i++)
@@ -5037,6 +5694,7 @@ void en_init(void)
     keys_bus = keys_bus_to;
     sounds_moving = 0u;
     bass_k = BASS_SOUND[par[P_BASSSND]].k;
+    bass_frac = 0u;
     bass_easy = 0;
     mel_hear_left = 0;
     pool = EN_MODE_POOL[par[P_MODE]];
@@ -5129,6 +5787,7 @@ static void silence_over(void)                   /* en_restore: it grows, from w
 static void drain(void)
 {
     const uint32_t dw = duck_word;
+    user_take();
     if (dw != duck_seen) {                       /* (before the queue: a panic asked for after it ends it) */
         duck_seen = dw;
         vol_t = dw & 1u ? 0.0f : 1.0f;
@@ -5728,6 +6387,28 @@ float en_test_fx_q(int layer, int what)
 #endif
 
 
+static void pad_env_step(uint32_t n)
+{
+    if (par[P_PADSND] != EN_SND_USER || !pu.env) {   /* off it, or no longer its own: back to all of it, over 50 ms */
+        pad_env = fm_minf(pad_env + (float)n * (1.0f / (0.05f * EN_SR)), 1.0f);
+        pad_eph = PE_DEC;
+        return;
+    }
+    if (pad_eph == PE_REL) {
+        pad_env -= pad_env * fm_minf((float)n * pu.rel_k, 1.0f);
+        if (pad_env < 0.02f)
+            pad_eph = PE_ATT;
+    } else if (pad_eph == PE_ATT) {
+        pad_env += (float)n * pu.att_k;
+        if (pad_env >= 1.0f) {
+            pad_env = 1.0f;
+            pad_eph = PE_DEC;
+        }
+    } else {
+        pad_env = fm_flush(pad_env - pad_env * fm_minf((float)n * pu.dec_k, 1.0f));
+    }
+}
+
 static void render_pad(uint32_t n)
 {
     int i;
@@ -5770,14 +6451,20 @@ static void render_pad(uint32_t n)
         v->now += ((float)v->note - v->now) * fm_minf((float)n * (1.0f / (0.11f * EN_SR)), 1.0f);   /* a third of a second */
         f = mtof(v->now + 0.05f * motion * mod[i].v);
         v->inc[0] = f * pad_s.d0 * (1.0f / EN_SR);           /* the first sound: -2.5 and +2.5 cents: slow, and warm */
-        v->inc[1] = f * pad_s.d1 * (1.0f / EN_SR);
+        v->inc[1] = fm_minf(f * pad_s.d1 * (1.0f / EN_SR), 0.45f);   /* (a ratio's: what a saw's corrections can follow) */
         lvl = fm_maxf(lvl, amp);
     }
     en_pad_level = lvl;
     c = 1.0f - fm_expf(-FM_TWO_PI * fm_clampf(pad_fc * pad_s.fc * (1.0f + 0.35f * lift + 0.10f * motion * mod[4].v), 200.0f, 4000.0f) * (1.0f / EN_SR));
     {
-        const float dd = (duck1 - duck0) * (1.0f / (float)n), md = mgd[EN_L_KEYS];
-        float dk = duck0, mv = mg[EN_L_KEYS];
+        const float dd = (duck1 - duck0) * (1.0f / (float)n);
+        float md = mgd[EN_L_KEYS], dk = duck0, mv = mg[EN_L_KEYS];
+        if ((par[P_PADSND] == EN_SND_USER && pu.env) || pad_env != 1.0f) {   /* its own envelope: in the mute's line, so a line over the chunk costs that line and no more */
+            const float e0 = pad_env, end = mv + md * (float)n;
+            pad_env_step(n);
+            mv *= e0;
+            md = (end * pad_env - mv) * (1.0f / (float)n);
+        }
         for (j = 0; j < n; j++) {
             float l, r, gd;
             plp[0] += c * (padl[j] - plp[0]);
@@ -5804,8 +6491,14 @@ static void render_keys(uint32_t n)
     int i;
     uint32_t j;
     const float g = ep_vol * KEYS_TEST_GAIN * 0.62f * (1.0f + 0.18f * lift), cl = bright_bus * keys_bus + 0.12f * lift;         /* the bus's one pole: at the default ~3.6 kHz */
-    float trem0, trem1, dt, tr, gd, dg, mv = mg[EN_L_KEYS];
-    const float ibo = bloom_open, md = mgd[EN_L_KEYS];
+    float trem0, trem1, dt, tr, gd, dg, mv = mg[EN_L_KEYS], md = mgd[EN_L_KEYS];
+    const float ibo = bloom_open;
+    if (keys_comp != 1.0f || keys_comp_was != 1.0f) {   /* a set's loudness: in the mute's line on the bus, a line and not a step, and nothing at all at 1 */
+        const float end = mv + md * (float)n;
+        mv *= keys_comp_was;
+        md = (end * keys_comp - mv) * (1.0f / (float)n);
+        keys_comp_was = keys_comp;
+    }
     {
         int on = 0;
         for (i = 0; i < ep_lim; i++)
@@ -5823,12 +6516,12 @@ static void render_keys(uint32_t n)
     ep_gone[1] = fm_flush(ep_gone[1]);
     for (i = 0; i < NKEYS; i++) {                /* (past the limit, what en_shed is letting go) */
         ep_t *e = &ep[i];
-        float cph = e->cph, tph = e->tph, amp = e->amp, ib = e->ib, ibt = e->ibt, it = e->it, att = e->att;
-        const float cinc = e->cinc, tinc = e->tinc, ibd = e->ibd, itd = e->itd, ar = e->arate, gl = e->gl * g, gr = e->gr * g;
+        float cph = e->cph, tph = e->tph, amp = e->amp, ib = e->ib, ibt = e->ibt, it = e->it, att = e->att, tinc = e->tinc;
+        const float cinc = e->cinc, ibd = e->ibd, itd = e->itd, ar = e->arate, gl = e->gl * g, gr = e->gr * g;
         float dec = e->dec, x = 0.0f;
         uint32_t k = 0;
         int settle;
-        if (!e->on)
+        if (!e->on && !e->tail)
             continue;
         if (e->wait > 0) {
             if ((uint32_t)e->wait >= n) {
@@ -5841,7 +6534,12 @@ static void render_keys(uint32_t n)
         if (e->hold > 0) {
             e->hold -= (int32_t)n;
             if (e->hold <= 0) {
-                ep_key_up(e);
+                if (e->tail) {                   /* (an audition: no key) */
+                    e->hold = 0;
+                    e->dec = e->rel;
+                } else {
+                    ep_key_up(e);
+                }
                 dec = e->rel;
             }
         }
@@ -5850,7 +6548,61 @@ static void render_keys(uint32_t n)
         settle = e->held && (en_held || !en_playing);
         if (settle)
             dec = amp > EP_HELD_AMP ? dec : amp < EP_HELD_AMP ? EP_HELD_RISE : 1.0f;
-        if (it > 0.0006f) {                      /* the tine's ping, then a lookup saved */
+        if (!e->um && it <= 0.0006f && ku.path && par[P_KEYSND] == EN_SND_USER) {   /* sounding when the set moved: it comes round now (the tine's phase is on a phase of its own, and would step: it waits for that to be over, a fifth of a second at the most) */
+            ep_um_take(e);
+            tph = e->tph;
+            tinc = e->tinc;
+        }
+        if (e->um) {                             /* the player's way: see ep_um_start */
+            const float to = fm_minf(cinc * KEYS_SOUND[par[P_KEYSND]].k, 0.45f), lv = ep_env(e, i >= ep_lim, n - k);
+            const float m0 = (float)(n - k), ib1 = ib + (ibt - ib) * fm_minf(m0 * ibo, 1.0f);   /* the index and what it adds to the level, in lines over the chunk: nothing that MIDI goes by, so what they cost a sample here pays for the phase */
+            const float dib = (ib1 - ib) * (1.0f / m0), g1 = fm_maxf(lv, 0.0f) * (1.0f + ib1 * 1.8f);
+            float ug = e->ua * (1.0f + ib * 1.8f);
+            const float dug = (g1 - ug) * (1.0f / m0);
+            e->k = KEYS_SOUND[par[P_KEYSND]].k;
+            tinc += (to - tinc) * fm_minf(m0 * (1.0f / (0.05f * EN_SR)), 1.0f);   /* a ratio: over an unbroken phase, so nothing to step */
+            if (fm_fabsf(to - tinc) < 1e-6f)
+                tinc = to;
+            ibt -= ibt * fm_minf(m0 * (1.0f - ibd), 1.0f);
+            if (it > 0.0006f) {
+                for (; k < n; k++) {
+                    const float m = sine(tph) * (ib + 0.012f) + sine(cph * 14.0f) * it;
+                    x = sine(cph + m + 2.0f) * ug;
+                    padl[k] += x * gl;
+                    padr[k] += x * gr;
+                    cph += cinc;
+                    tph += tinc;
+                    if (cph >= 1.0f)
+                        cph -= 1.0f;
+                    if (tph >= 1.0f)
+                        tph -= 1.0f;
+                    amp *= dec;
+                    it *= itd;
+                    att += (1.0f - att) * ar;
+                    ib += dib;
+                    ug += dug;
+                }
+            } else {
+                for (; k < n; k++) {
+                    const float m = sine(tph) * (ib + 0.012f);
+                    x = sine(cph + m + 2.0f) * ug;
+                    padl[k] += x * gl;
+                    padr[k] += x * gr;
+                    cph += cinc;
+                    tph += tinc;
+                    if (cph >= 1.0f)
+                        cph -= 1.0f;
+                    if (tph >= 1.0f)
+                        tph -= 1.0f;
+                    amp *= dec;
+                    att += (1.0f - att) * ar;
+                    ib += dib;
+                    ug += dug;
+                }
+            }
+            e->ua = fm_maxf(lv, 0.0f);
+            e->tinc = tinc;
+        } else if (it > 0.0006f) {               /* the tine's ping, then a lookup saved */
             for (; k < n; k++) {
                 const float m = sine(cph) * (ib + 0.012f) + sine(tph) * it;
                 x = sine(cph + m + 2.0f) * amp * att * (1.0f + ib * 1.8f);
@@ -5908,8 +6660,22 @@ static void render_keys(uint32_t n)
         e->it = fm_flush(it);
         e->att = att;
         e->last = x * g;
-        if (amp < 0.0035f && !e->held)           /* -45 dB: under everything, and the voice is free */
+        if (amp < 0.0035f && !e->held) {         /* -45 dB: under everything, and the voice is free */
+            if (e->on && e->um && e->ua >= 0.0005f) {   /* (free for what wants it. What a long release has left goes on until then: if there is room) */
+                int c, cnt = 0;
+                for (c = 0; c < NKEYS; c++)
+                    cnt += ep[c].on || ep[c].tail;
+                if (cnt <= EP_SOUNDING) {
+                    e->tail = 1u;
+                } else {
+                    ep_gone[0] += e->last * e->gl;
+                    ep_gone[1] += e->last * e->gr;
+                }
+            }
             e->on = 0;
+        }
+        if (e->tail && e->hold <= 0 && e->ua < 0.0005f)
+            e->tail = 0u;
     }
     /* a slow stereo tremolo: a quarter of 170, just there */
     trem0 = ep_trem;
@@ -5972,7 +6738,8 @@ static void render_bass(uint32_t n)
     /* A sine has no filter after it to hide a step, and a new piece can nearly double the level: a tick. So the level goes there over about 50 ms, in straight
      * lines; standing still it is the same number as ever */
     const float lv_to = fm_fabsf(bass_vol - bass_lvl) < 0.0005f ? bass_vol : bass_lvl + (bass_vol - bass_lvl) * 0.25f;
-    const float tgt = bass.hold > 0 ? bass.sus : 0.0f,
+    const float sus_now = bass_dk > 0.0f ? (bass.hold > 0 || bass_hear > 0 ? bass.sus - bass.sus * fm_minf((float)n * bass_dk, 1.0f) : bass.sus) : bass.sus < 1.0f ? fm_minf(bass.sus + (float)n * (1.0f / (0.05f * EN_SR)), 1.0f) : bass.sus;   /* (the player's decay; no decay any more, back to all of it; else the same number) */
+    const float tgt = bass.hold > 0 || bass_hear > 0 ? sus_now : 0.0f,
                 rate = tgt > bass.amp ? bass_att : bass_rel;
     const float dd = (duck1 - duck0) * (1.0f / (float)n), md = mgd[EN_L_BASS];
     const float dg = (lv_to - bass_lvl) * 0.86f * bass_song * (1.0f / (float)n);
@@ -5982,16 +6749,21 @@ static void render_bass(uint32_t n)
     const bass_sound_t *bs = &BASS_SOUND[par[P_BASSSND]];
     float base = bs->base, bk, irate = 0.012f;
     bass_lvl = lv_to;
-    if (amp < 1e-5f && bass.hold <= 0) {
+    bass.sus = sus_now;
+    if (amp < 1e-5f && bass.hold <= 0 && bass_hear <= 0) {
         bass_lvl = bass_vol;                     /* (nothing sounding: nothing to go easy on) */
         bass.amp = 0.0f;
         en_bass_level = 0.0f;
         bass_k = bs->k;
+        bass_frac = (uint8_t)(bass_k != (float)(int)bass_k);
         return;
     }
     if (bass_k != bs->k) {                       /* another ratio: the index comes off first, then it changes, and the index comes back, in about a tenth of a second: no step in the phase */
         if (idx < 0.00004f) {
+            const float mp = ph * bs->k;
             bass_k = bs->k;
+            bass_frac = (uint8_t)(bass_k != (float)(int)bass_k);
+            bass.mph = mp - (float)(int)mp;
             bass_easy = (int32_t)(0.15f * EN_SR);
         } else {
             base = spk = 0.0f;
@@ -5999,9 +6771,34 @@ static void render_bass(uint32_t n)
         irate = 0.002f;
     } else if (bass_easy > 0) {
         bass_easy -= (int32_t)n;
-        irate = 0.002f;
+        irate = bass_easy_rate;
+    } else {
+        bass_easy_rate = 0.002f;
     }
     bk = bass_k;
+    if (bass_frac) {                             /* a ratio not whole: its own phase, or it steps as ph wraps. So the same with an add more */
+        float mph = bass.mph;
+        for (j = 0; j < n; j++) {
+            const float m = sine(mph) * idx, x = sine(ph + m + 1.0f) * amp * g * (1.0f - 0.45f * dk) * mv;
+            mv += md;
+            g += dg;
+            dk += dd;
+            ph += inc;
+            mph += inc * bk;
+            if (ph >= 1.0f)
+                ph -= 1.0f;
+            if (mph >= 1.0f)
+                mph -= 1.0f;
+            inc += (bass.inc_t - inc) * bass_glide;
+            amp += (tgt - amp) * rate;
+            spk *= 0.99965f;
+            idx += (base + spk - idx) * irate;
+            mixl[j] += x;
+            mixr[j] += x;
+            rsend[j] += x * 0.05f;
+        }
+        bass.mph = mph;
+    } else
     for (j = 0; j < n; j++) {
         const float m = sine(ph * bk) * idx, x = sine(ph + m + 1.0f) * amp * g * (1.0f - 0.45f * dk) * mv;
         mv += md;
@@ -6023,6 +6820,8 @@ static void render_bass(uint32_t n)
     bass.idx = idx;
     bass.spk = fm_flush(spk);
     bass.inc = inc;
+    if (bass_hear > 0)
+        bass_hear -= (int32_t)n;
     if (bass.hold > 0) {
         bass.hold -= (int32_t)n;
         if (bass.hold <= 0)
@@ -6069,9 +6868,9 @@ static void render_bells(uint32_t n)
     for (i = 0; i < NBELL; i++) {
         bell_t *v = &bell[i];
         float cph = v->cph, mph = v->mph, amp = v->amp, idx = v->idx, att = v->att, esg = v->esg, cinc = v->cinc, minc = v->minc;
-        const float keep = v->ifl, adec = v->adec;
+        const float adec = v->adec;
         const float vgl = v->gl, vgr = v->gr, idec = v->idec, edec = v->edec, arate = v->arate;
-        float mv;
+        float mv, keep = v->ifl;
         uint32_t j = 0;
         if (!v->on) {
             if (v->down && !v->hand)             /* a chosen timbre that has died away before the phrase's own would have: its MIDI goes on as that one would */
@@ -6093,6 +6892,15 @@ static void render_bells(uint32_t n)
             bell_own(v, n - j0);
             v->left = left;
         }
+        if (v->uglide) {                         /* a set's ratio changed under it: the modulator goes there over an unbroken phase */
+            const float to = fm_minf(v->cinc * v->ratio, 0.45f);
+            minc += (to - minc) * fm_minf((float)(n - j) * (1.0f / (0.05f * EN_SR)), 1.0f);
+            if (fm_fabsf(to - minc) < 1e-6f) {
+                minc = to;
+                v->uglide = 0u;
+            }
+            v->minc = minc;
+        }
         if (v->vib > 0.0f) {                     /* a slow vibrato that comes in late: both operators, so the ratio stays whole */
             const float d = 1.0f + v->vib * v->vramp * (sine(v->vph) * 2.0f - 0.0f);
             v->vph += v->vinc * (float)n;
@@ -6103,6 +6911,40 @@ static void render_bells(uint32_t n)
             minc *= d;
         }
         mv = mg[EN_L_MEL] + (float)j * md;
+        if (v->ulen > 0) {                       /* a set's depth changed under it: a line, over 50 ms. Only for that long */
+            const float t = fm_minf((float)(n - j) * (1.0f / (float)v->ulen), 1.0f), dg1 = v->dg + (v->dgto - v->dg) * t, kp1 = keep + (v->iflto - keep) * t;
+            const float dd = (dg1 - v->dg) * (1.0f / (float)(n - j)), dk = (kp1 - keep) * (1.0f / (float)(n - j));
+            float dg = v->dg;
+            for (; j < n; j++) {
+                const float m = sine(mph) * (idx * dg + keep), x = sine(cph + m + 4.0f) * amp * att * g * mv;
+                dg += dd;
+                keep += dk;
+                mv += md;
+                ml[j] += x * vgl;
+                mr[j] += x * vgr;
+                rs[j] += x * 0.30f;
+                es[j] += x * esg;
+                cph += cinc;
+                mph += minc;
+                if (cph >= 1.0f)
+                    cph -= 1.0f;
+                if (mph >= 1.0f)
+                    mph -= 1.0f;
+                amp *= adec;
+                idx *= idec;
+                esg *= edec;
+                att += (1.0f - att) * arate;
+            }
+            v->dg = dg1;
+            v->ifl = kp1;
+            v->ulen -= (int32_t)n;
+            if (v->ulen <= 0) {
+                idx *= v->dg;
+                v->dg = 1.0f;
+                v->ifl = v->iflto;
+                v->ulen = 0;
+            }
+        }
         for (; j < n; j++) {
             const float m = sine(mph) * (idx + keep), x = sine(cph + m + 4.0f) * amp * att * g * mv;
             mv += md;
@@ -6361,6 +7203,7 @@ static void sounds_step(uint32_t n)
     SLIDE(pad_s.rev, pad_to->rev);
     SLIDE(pad_s.echo, pad_to->echo);
     SLIDE(keys_bus, keys_bus_to);
+    SLIDE(keys_comp, keys_comp_to);
 #undef SLIDE
     sounds_moving = (uint8_t)moving;
 }
@@ -6376,6 +7219,12 @@ static void control(uint32_t n)                 /* once a chunk: the slow things
         if (mel_hear_left <= 0)
             mel_heard();
     }
+    for (i = 0; i < EN_NUSER; i++)
+        if (user_hear_left[i] > 0) {
+            user_hear_left[i] -= (int32_t)n;
+            if (user_hear_left[i] <= 0)
+                user_heard(i);
+        }
     sounds_step(n);
     if (fx_stirred)                              /* (none of it, to the bit, while both are Off and their sends as ever) */
         fx_control(n);

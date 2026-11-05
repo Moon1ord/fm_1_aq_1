@@ -60,7 +60,20 @@ int app_expect(const char *what, int *got)
         g = (proj.pool != en_test_pool()) + (proj.mask != en_test_degrees()) + (proj.arrange != en_mode);
         for (i = 0; i < P_NPARAMS; i++)
             g += proj.par[i] != en_test_par(i);
+        for (i = 0; i < EN_NUSER; i++) {         /* and the sets */
+            en_user_t u;
+            en_test_user_get(i, &u);
+            g += memcmp(&u, &proj.user[i], sizeof u) != 0;
+        }
     }
+    else if (!strcmp(what, "edit"))               /* the sound editor: 0 not up, else EN_U_* + 1 */
+        g = ui.edit;
+    else if (!strncmp(what, "userfrom", 8))       /* userfromL: the set's sound */
+        g = proj.user[atoi(what + 8)].from;
+    else if (!strncmp(what, "usermoved", 9))      /* usermovedL: built on */
+        g = en_user_moved(atoi(what + 9), &proj.user[atoi(what + 9)]);
+    else if (!strncmp(what, "user", 4))           /* userLP: the set's value P, the layer's L: one digit each */
+        g = proj.user[what[4] - '0'].v[what[5] - '0'];
     else if (!strcmp(what, "sysnotes"))           /* the system's voice: its notes since the engine started, the last */
         g = (int)en_sys_notes;
     else if (!strcmp(what, "sysnote"))
@@ -324,6 +337,34 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
             bad.mel_other = (uint8_t)atoi(b);
         else
             bad.slot[n].mel_other = (uint8_t)atoi(b);
+        plat_store_save(OBJ_PROJ, &bad, sizeof bad);
+        return 1;
+    }
+    if (!strcmp(cmd, "floodset")) {               /* floodset N: as flood, and every layer's set told again N times with no render between, the last the project's */
+        int i, l;
+        for (i = 0; i < atoi(a); i++) {
+            en_set(P_BLOOM, (proj.par[P_BLOOM] + 1 + i % 2) % 100);
+            for (l = 0; l < EN_NUSER; l++) {
+                en_user_t u = proj.user[l];
+                u.v[EN_UP_DEPTH] = (uint8_t)(i % 101);
+                en_user_set(l, &u);
+            }
+        }
+        for (l = 0; l < EN_NUSER; l++)
+            en_user_set(l, &proj.user[l]);
+        return 1;
+    }
+    if (!strcmp(cmd, "storebaduser")) {           /* storebaduser N L P V: piece N's (-1: the piece playing's) set for layer L: its value P is V (P 9: where it starts from) */
+        static project_t bad;
+        const int n = atoi(a), l = atoi(b), pv = atoi(c);
+        en_user_t *u;
+        project_save();
+        bad = proj;
+        u = n < 0 ? &bad.user[l] : &bad.slot[n].user[l];
+        if (pv == 9)
+            u->from = (uint8_t)atoi(d);
+        else
+            u->v[pv] = (uint8_t)atoi(d);
         plat_store_save(OBJ_PROJ, &bad, sizeof bad);
         return 1;
     }

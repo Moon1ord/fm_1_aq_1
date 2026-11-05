@@ -117,3 +117,15 @@ wait 1500
 # the feather and the star, caught
 wait 7000
 shot 20_home_later.png
+# the sound editor: its two halves
+tap ENV
+wait 300
+press SEL
+tap GLO
+wait 100
+shot 90_edit_keys_sel.png
+release SEL
+wait 300
+shot 91_edit_keys.png
+tap ENV
+wait 300

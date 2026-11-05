@@ -1,0 +1,1317 @@
+# The player's own sounds: on Load Screen, in Hands, in context (the drums and the hats low), each layer in turn, about 30 s, through the sound editor as a hand has it: first its first sound; then the ratio goes up its list, through whole numbers and inharmonic ones; a bell's ratio; the depth up and back; a fast envelope; a slow one. Strange bells are the owner's choice. The times are in the file.
+#   PYTHON=.venv/bin/python3 sh build.sh --host && mkdir -p app/build/listen && app/build/host/aq1_host tests/listen/user_sounds.amb app/build/listen
+wait 100
+tap SAVE
+wait 800
+reboot
+seed 3101
+master 2430
+setpar 2 50
+press SEL
+tap LFO
+tap SEQ
+tap FX
+release SEL
+setpar 16 25
+setpar 18 25
+setpar 12 30
+setpar 4 42
+setpar 8 0
+wait 3000
+trace app/build/listen/user_sounds.trace
+wav user_sounds.wav
+# 0:00 KEYS: Electric, as it is
+echo KEYS: Electric, as it is
+tap ENV
+wait 100
+press SEL
+tap GLO
+release SEL
+wait 3900
+# 0:04 keys: the ratio goes up its list: 1 to 7
+echo keys: the ratio goes up its list: 1 to 7
+spin K1 1
+wait 416
+spin K1 1
+wait 416
+spin K1 1
+wait 416
+spin K1 1
+wait 416
+spin K1 1
+wait 416
+spin K1 1
+wait 416
+spin K1 1
+wait 416
+spin K1 1
+wait 416
+spin K1 1
+wait 416
+spin K1 1
+wait 416
+spin K1 1
+wait 416
+spin K1 1
+wait 416
+spin K1 1
+wait 416
+spin K1 1
+wait 416
+spin K1 1
+wait 416
+spin K1 1
+wait 416
+spin K1 1
+wait 416
+spin K1 1
+wait 416
+# 0:11 keys: back to the bell's 2.76
+echo keys: back to the bell's 2.76
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+# 0:11 keys: the depth up
+echo keys: the depth up
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+spin K2 1
+wait 150
+# 0:14 keys: the depth back
+echo keys: the depth back
+spin K2 -1
+wait 125
+spin K2 -1
+wait 125
+spin K2 -1
+wait 125
+spin K2 -1
+wait 125
+spin K2 -1
+wait 125
+spin K2 -1
+wait 125
+spin K2 -1
+wait 125
+spin K2 -1
+wait 125
+spin K2 -1
+wait 125
+spin K2 -1
+wait 125
+spin K2 -1
+wait 125
+spin K2 -1
+wait 125
+# 0:16 keys: a fast envelope: attack 5 ms, decay 0.3 s
+echo keys: a fast envelope: attack 5 ms, decay 0.3 s
+spin K3 -1
+wait 42
+spin K3 -1
+wait 42
+spin K3 -1
+wait 42
+spin K3 -1
+wait 42
+spin K3 -1
+wait 42
+spin K3 -1
+wait 42
+spin K3 -1
+wait 42
+spin K4 -1
+wait 50
+spin K4 -1
+wait 50
+spin K4 -1
+wait 50
+spin K4 -1
+wait 50
+spin K4 -1
+wait 50
+spin K4 -1
+wait 50
+spin K4 -1
+wait 50
+spin K4 -1
+wait 50
+spin K4 -1
+wait 50
+spin K4 -1
+wait 50
+wait 4700
+# 0:21 keys: a slow envelope: attack 1.6 s, decay long, release long
+echo keys: a slow envelope: attack 1.6 s, decay long, release long
+spin K3 1
+wait 20
+spin K3 1
+wait 20
+spin K3 1
+wait 20
+spin K3 1
+wait 20
+spin K3 1
+wait 20
+spin K3 1
+wait 20
+spin K3 1
+wait 20
+spin K3 1
+wait 20
+spin K3 1
+wait 20
+spin K3 1
+wait 20
+spin K3 1
+wait 20
+spin K3 1
+wait 20
+spin K3 1
+wait 20
+spin K3 1
+wait 20
+spin K3 1
+wait 20
+spin K4 1
+wait 30
+spin K4 1
+wait 30
+spin K4 1
+wait 30
+spin K4 1
+wait 30
+spin K4 1
+wait 30
+spin K4 1
+wait 30
+spin K4 1
+wait 30
+spin K4 1
+wait 30
+spin K4 1
+wait 30
+spin K4 1
+wait 30
+press SEL
+wait 20
+spin K4 1
+wait 60
+spin K4 1
+wait 60
+spin K4 1
+wait 60
+spin K4 1
+wait 60
+spin K4 1
+wait 60
+release SEL
+wait 20
+wait 6600
+press SEL
+spin K1 1
+spin K1 -1
+release SEL
+tap ENV
+wait 100
+press SEL
+spin K1 1
+release SEL
+wait 100
+press SEL
+tap ARP
+release SEL
+setpar 4 25
+setpar 8 60
+tap ARP
+wait 100
+# 0:29 MELODY: the keys hold two notes: what Tone would have it in
+echo MELODY: the keys hold two notes: what Tone would have it in
+press SEL
+tap GLO
+release SEL
+key 12 down
+key 19 down
+wait 3800
+# 0:33 melody: the ratio, under the held keys
+echo melody: the ratio, under the held keys
+spin K1 1
+wait 437
+spin K1 1
+wait 437
+spin K1 1
+wait 437
+spin K1 1
+wait 437
+spin K1 1
+wait 437
+spin K1 1
+wait 437
+spin K1 1
+wait 437
+spin K1 1
+wait 437
+spin K1 1
+wait 437
+spin K1 1
+wait 437
+spin K1 1
+wait 437
+spin K1 1
+wait 437
+spin K1 1
+wait 437
+spin K1 1
+wait 437
+spin K1 1
+wait 437
+spin K1 1
+wait 437
+# 0:40 melody: the depth up, and back
+echo melody: the depth up, and back
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+key 12 up
+key 19 up
+wait 200
+# 0:45 melody: fast: attack 1 ms, decay 0.14 s, release 18 ms; played
+echo melody: fast: attack 1 ms, decay 0.14 s, release 18 ms; played
+spin K3 -1
+wait 16
+spin K3 -1
+wait 16
+spin K3 -1
+wait 16
+spin K3 -1
+wait 16
+spin K3 -1
+wait 16
+spin K3 -1
+wait 16
+spin K3 -1
+wait 16
+spin K3 -1
+wait 16
+spin K3 -1
+wait 16
+spin K3 -1
+wait 16
+spin K3 -1
+wait 16
+spin K3 -1
+wait 16
+spin K4 -1
+wait 14
+spin K4 -1
+wait 14
+spin K4 -1
+wait 14
+spin K4 -1
+wait 14
+spin K4 -1
+wait 14
+spin K4 -1
+wait 14
+spin K4 -1
+wait 14
+spin K4 -1
+wait 14
+spin K4 -1
+wait 14
+spin K4 -1
+wait 14
+spin K4 -1
+wait 14
+spin K4 -1
+wait 14
+spin K4 -1
+wait 14
+spin K4 -1
+wait 14
+press SEL
+wait 20
+spin K4 -1
+wait 12
+spin K4 -1
+wait 12
+spin K4 -1
+wait 12
+spin K4 -1
+wait 12
+spin K4 -1
+wait 12
+spin K4 -1
+wait 12
+spin K4 -1
+wait 12
+spin K4 -1
+wait 12
+release SEL
+wait 20
+tapkey 0
+wait 170
+tapkey 5
+wait 170
+tapkey 10
+wait 170
+tapkey 15
+wait 170
+tapkey 20
+wait 170
+tapkey 1
+wait 170
+tapkey 6
+wait 170
+tapkey 11
+wait 170
+tapkey 16
+wait 170
+tapkey 21
+wait 170
+tapkey 2
+wait 170
+tapkey 7
+wait 170
+tapkey 12
+wait 170
+tapkey 17
+wait 170
+tapkey 22
+wait 170
+tapkey 3
+wait 170
+tapkey 8
+wait 170
+tapkey 13
+wait 170
+# 0:50 melody: slow: attack 1.1 s, decay 18 s, release 4.5 s; held
+echo melody: slow: attack 1.1 s, decay 18 s, release 4.5 s; held
+spin K3 1
+wait 5
+spin K3 1
+wait 5
+spin K3 1
+wait 5
+spin K3 1
+wait 5
+spin K3 1
+wait 5
+spin K3 1
+wait 5
+spin K3 1
+wait 5
+spin K3 1
+wait 5
+spin K3 1
+wait 5
+spin K3 1
+wait 5
+spin K3 1
+wait 5
+spin K3 1
+wait 5
+spin K3 1
+wait 5
+spin K3 1
+wait 5
+spin K3 1
+wait 5
+spin K3 1
+wait 5
+spin K3 1
+wait 5
+spin K3 1
+wait 5
+spin K4 1
+wait 7
+spin K4 1
+wait 7
+spin K4 1
+wait 7
+spin K4 1
+wait 7
+spin K4 1
+wait 7
+spin K4 1
+wait 7
+spin K4 1
+wait 7
+spin K4 1
+wait 7
+spin K4 1
+wait 7
+spin K4 1
+wait 7
+spin K4 1
+wait 7
+spin K4 1
+wait 7
+spin K4 1
+wait 7
+spin K4 1
+wait 7
+press SEL
+wait 20
+spin K4 1
+wait 6
+spin K4 1
+wait 6
+spin K4 1
+wait 6
+spin K4 1
+wait 6
+spin K4 1
+wait 6
+spin K4 1
+wait 6
+spin K4 1
+wait 6
+spin K4 1
+wait 6
+spin K4 1
+wait 6
+spin K4 1
+wait 6
+spin K4 1
+wait 6
+spin K4 1
+wait 6
+spin K4 1
+wait 6
+spin K4 1
+wait 6
+spin K4 1
+wait 6
+release SEL
+wait 20
+key 12 down
+key 16 down
+wait 3000
+key 12 up
+key 16 up
+wait 2500
+tap ARP
+wait 100
+press SEL
+spin K1 -7
+tap ARP
+release SEL
+wait 100
+setpar 4 25
+setpar 12 60
+tap LFO
+wait 100
+# 0:56 BASS: Warm, as it is
+echo BASS: Warm, as it is
+press SEL
+tap GLO
+release SEL
+wait 3900
+# 1:00 bass: the ratio up its list: 1 to 7
+echo bass: the ratio up its list: 1 to 7
+spin K2 1
+wait 25
+spin K2 1
+wait 25
+spin K2 1
+wait 25
+spin K2 1
+wait 25
+spin K2 1
+wait 25
+spin K2 1
+wait 25
+spin K2 1
+wait 25
+spin K2 1
+wait 25
+spin K2 1
+wait 25
+spin K2 1
+wait 25
+spin K2 1
+wait 25
+spin K2 1
+wait 25
+spin K1 1
+wait 388
+spin K1 1
+wait 388
+spin K1 1
+wait 388
+spin K1 1
+wait 388
+spin K1 1
+wait 388
+spin K1 1
+wait 388
+spin K1 1
+wait 388
+spin K1 1
+wait 388
+spin K1 1
+wait 388
+spin K1 1
+wait 388
+spin K1 1
+wait 388
+spin K1 1
+wait 388
+spin K1 1
+wait 388
+spin K1 1
+wait 388
+spin K1 1
+wait 388
+spin K1 1
+wait 388
+spin K1 1
+wait 388
+spin K1 1
+wait 388
+# 1:07 bass: a bell's ratio; the depth up, and back
+echo bass: a bell's ratio; the depth up, and back
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+spin K1 -1
+wait 50
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 1
+wait 100
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+spin K2 -1
+wait 60
+# 1:12 bass: a fast envelope: a pluck, attack 1 ms, decay 0.14 s, release 25 ms
+echo bass: a fast envelope: a pluck, attack 1 ms, decay 0.14 s, release 25 ms
+spin K3 -1
+wait 33
+spin K3 -1
+wait 33
+spin K3 -1
+wait 33
+spin K4 -1
+wait 16
+spin K4 -1
+wait 16
+spin K4 -1
+wait 16
+spin K4 -1
+wait 16
+spin K4 -1
+wait 16
+spin K4 -1
+wait 16
+spin K4 -1
+wait 16
+spin K4 -1
+wait 16
+spin K4 -1
+wait 16
+spin K4 -1
+wait 16
+spin K4 -1
+wait 16
+spin K4 -1
+wait 16
+press SEL
+wait 20
+spin K4 -1
+wait 50
+spin K4 -1
+wait 50
+release SEL
+wait 20
+wait 5400
+# 1:18 bass: a slow envelope: attack 0.1 s, decay held, release 0.4 s
+echo bass: a slow envelope: attack 0.1 s, decay held, release 0.4 s
+spin K3 1
+wait 10
+spin K3 1
+wait 10
+spin K3 1
+wait 10
+spin K3 1
+wait 10
+spin K3 1
+wait 10
+spin K3 1
+wait 10
+spin K3 1
+wait 10
+spin K3 1
+wait 10
+spin K3 1
+wait 10
+spin K3 1
+wait 10
+spin K4 1
+wait 8
+spin K4 1
+wait 8
+spin K4 1
+wait 8
+spin K4 1
+wait 8
+spin K4 1
+wait 8
+spin K4 1
+wait 8
+spin K4 1
+wait 8
+spin K4 1
+wait 8
+spin K4 1
+wait 8
+spin K4 1
+wait 8
+spin K4 1
+wait 8
+spin K4 1
+wait 8
+press SEL
+wait 20
+spin K4 1
+wait 12
+spin K4 1
+wait 12
+spin K4 1
+wait 12
+spin K4 1
+wait 12
+spin K4 1
+wait 12
+spin K4 1
+wait 12
+spin K4 1
+wait 12
+spin K4 1
+wait 12
+release SEL
+wait 20
+wait 4600
+tap LFO
+wait 100
+press SEL
+spin K1 1
+release SEL
+setpar 12 30
+wait 100
+tap ENV
+wait 100
+keysgain 0.1
+setpar 4 60
+# 1:23 PAD: Warm, as it is, the keys almost out of it
+echo PAD: Warm, as it is, the keys almost out of it
+press SEL
+tap GLO
+tap GLO
+release SEL
+wait 3900
+# 1:27 pad: the second saw's ratio up its list: 1 to 3
+echo pad: the second saw's ratio up its list: 1 to 3
+spin K1 1
+wait 722
+spin K1 1
+wait 722
+spin K1 1
+wait 722
+spin K1 1
+wait 722
+spin K1 1
+wait 722
+spin K1 1
+wait 722
+spin K1 1
+wait 722
+spin K1 1
+wait 722
+spin K1 1
+wait 722
+# 1:34 pad: a fifth, 1.5; its filter up and back
+echo pad: a fifth, 1.5; its filter up and back
+spin K1 -1
+wait 83
+spin K1 -1
+wait 83
+spin K1 -1
+wait 83
+spin K1 -1
+wait 83
+spin K1 -1
+wait 83
+spin K1 -1
+wait 83
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+spin K2 -1
+wait 75
+# 1:39 pad: its detune up
+echo pad: its detune up
+press SEL
+wait 20
+spin K2 1
+wait 222
+spin K2 1
+wait 222
+spin K2 1
+wait 222
+spin K2 1
+wait 222
+spin K2 1
+wait 222
+spin K2 1
+wait 222
+spin K2 1
+wait 222
+spin K2 1
+wait 222
+spin K2 1
+wait 222
+release SEL
+wait 20
+# 1:41 pad: a fast envelope with the chords: attack 18 ms, decay 0.4 s
+echo pad: a fast envelope with the chords: attack 18 ms, decay 0.4 s
+spin K3 -1
+wait 7
+spin K3 -1
+wait 7
+spin K3 -1
+wait 7
+spin K3 -1
+wait 7
+spin K3 -1
+wait 7
+spin K3 -1
+wait 7
+spin K3 -1
+wait 7
+spin K3 -1
+wait 7
+spin K3 -1
+wait 7
+spin K3 -1
+wait 7
+spin K3 -1
+wait 7
+spin K3 -1
+wait 7
+spin K3 -1
+wait 7
+spin K4 -1
+wait 18
+spin K4 -1
+wait 18
+spin K4 -1
+wait 18
+spin K4 -1
+wait 18
+spin K4 -1
+wait 18
+spin K4 -1
+wait 18
+spin K4 -1
+wait 18
+spin K4 -1
+wait 18
+spin K4 -1
+wait 18
+spin K4 -1
+wait 18
+spin K4 -1
+wait 18
+wait 5700
+# 1:47 pad: a slow envelope with the chords: attack 3.2 s, a release before each chord
+echo pad: a slow envelope with the chords: attack 3.2 s, a release before each chord
+spin K3 1
+wait 6
+spin K3 1
+wait 6
+spin K3 1
+wait 6
+spin K3 1
+wait 6
+spin K3 1
+wait 6
+spin K3 1
+wait 6
+spin K3 1
+wait 6
+spin K3 1
+wait 6
+spin K3 1
+wait 6
+spin K3 1
+wait 6
+spin K3 1
+wait 6
+spin K3 1
+wait 6
+spin K3 1
+wait 6
+spin K3 1
+wait 6
+spin K3 1
+wait 6
+spin K4 1
+wait 9
+spin K4 1
+wait 9
+spin K4 1
+wait 9
+spin K4 1
+wait 9
+spin K4 1
+wait 9
+spin K4 1
+wait 9
+spin K4 1
+wait 9
+spin K4 1
+wait 9
+spin K4 1
+wait 9
+spin K4 1
+wait 9
+spin K4 1
+wait 9
+press SEL
+wait 20
+spin K4 -1
+wait 25
+spin K4 -1
+wait 25
+spin K4 -1
+wait 25
+spin K4 -1
+wait 25
+release SEL
+wait 20
+wait 6000
+tap ENV
+wait 100
+keysgain 1
+press SEL
+spin K2 1
+release SEL
+wait 100
+# 1:53 all the first sounds again, a moment
+echo all the first sounds again, a moment
+wait 5000
+wavstop
+trace off

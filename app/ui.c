@@ -26,12 +26,13 @@
  *                  held 1.5 s: the piece back to its recipe */
 #include "fastmath.h"
 
+/*   SEL + GLO      on Keys, Melody and Bass: the sound editor (the Keys page: the keys, again the pad, again out). Its knobs: Ratio, Depth, Attack, Decay; with SEL held: where it starts from, Mod time (Bass: Speak; Pad: Detune), and Release. A page's button or SEL + GLO lets go of it */
 /* the pages, one a layer (a button each); SELECT steps through them in this order */
 enum { V_GARDEN, V_KEYS, V_MOTIFS, V_BASS, V_DRUMS, V_SPACE, V_SETUP, NVIEWS };
 static const char *const VIEW_NAME[NVIEWS] = {"Home", "Keys", "Melody", "Bass", "Drums", "Space", "Setup"};
 static const uint8_t VIEW_BTN[NVIEWS] = {B_HOME, B_ENV, B_ARP, B_LFO, B_SEQ, B_FX, B_GLO};
 /* the four knobs of each page: a parameter, or one of these; and what the knob is called there */
-enum { K_LEDS = 100, K_CPU, K_NONE };
+enum { K_LEDS = 100, K_CPU, K_NONE, K_UFROM, K_U };   /* K_U + EN_UP_*: the sound editor's values */
 static const uint8_t VIEW_KNOB[NVIEWS][4] = {
     {P_TEMPO, P_ENERGY, P_EVOLVE, P_STYLE},
     {P_KEYS, P_BLOOM, P_BRIGHT, P_NOTES},
@@ -77,6 +78,9 @@ static struct {
     int8_t touched;                    /* the knob turned last (0..3), shown bright for a moment */
     uint32_t touch_until;
     uint32_t frame;
+    uint8_t edit;                      /* the sound editor is up: EN_U_* + 1, 0 not. Its knobs are its own until a page's button or SEL + GLO */
+    uint8_t have_before, on_before;    /* a layer's bit: there is a set that a sound was loaded over; it is that one that is back */
+    en_user_t before[EN_NUSER];        /* (until the next piece, and not saved) */
 } ui;
 
 /* the screen's (below): which scene is up, how far its picture has gone, and what moves on it */
@@ -205,10 +209,16 @@ static const char *mode_name(void)
 /* ------------------------------------------------------------ values --- */
 static int mel_arp(void) { return proj.par[P_MELMODE] == EN_MEL_ARP || proj.par[P_MELMODE] == EN_MEL_KEYS_ARP; }
 static int mel_keys(void) { return proj.par[P_MELMODE] >= EN_MEL_KEYS; }
+#define EDIT_LAYER ((int)ui.edit - 1)
+static int from_count(int l) { return en_user_nfrom(l) + (int)(ui.have_before >> l & 1u); }
 static int knob_get(int k)
 {
     if (k < P_NPARAMS)
         return proj.par[k];
+    if (k >= K_U)
+        return proj.user[EDIT_LAYER].v[k - K_U];
+    if (k == K_UFROM)
+        return ui.on_before >> EDIT_LAYER & 1u ? en_user_nfrom(EDIT_LAYER) : proj.user[EDIT_LAYER].from;
     if (k == K_LEDS)
         return proj.leds;
     if (k == K_CPU)
@@ -220,6 +230,12 @@ static void knob_range(int k, int *lo, int *hi)
     if (k < P_NPARAMS) {
         *lo = en_param_info(k)->lo;
         *hi = en_param_info(k)->hi;
+    } else if (k >= K_U) {
+        *lo = 0;
+        *hi = en_user_steps(EDIT_LAYER, k - K_U) - 1;
+    } else if (k == K_UFROM) {
+        *lo = 0;
+        *hi = from_count(EDIT_LAYER) - 1;
     } else {
         *lo = 0;
         *hi = k == K_LEDS ? 2 : k == K_CPU ? 100 : 0;
@@ -229,6 +245,10 @@ static const char *knob_name(int k)
 {
     if (k < P_NPARAMS)
         return en_param_info(k)->name;
+    if (k >= K_U)
+        return en_user_name(EDIT_LAYER, k - K_U);
+    if (k == K_UFROM)
+        return "Start";
     return k == K_LEDS ? "Lights" : k == K_CPU ? "CPU" : "";
 }
 static void knob_text(int k, char *b)
@@ -241,6 +261,12 @@ static void knob_text(int k, char *b)
             ;
     } else if (k < P_NPARAMS) {
         en_param_text(k, v, b);
+    } else if (k >= K_U) {
+        en_user_text(EDIT_LAYER, k - K_U, &proj.user[EDIT_LAYER], b);
+    } else if (k == K_UFROM) {
+        const char *n = v >= en_user_nfrom(EDIT_LAYER) ? "Before" : EDIT_LAYER == EN_U_MEL && v == EN_TB_BOX ? "Box" : en_user_from_name(EDIT_LAYER, v);   /* (a cell's width) */
+        while ((*b++ = *n++))
+            ;
     } else if (k == K_LEDS) {                    /* On: the keys, and the unlit buttons glow; Keys: no glow */
         const char *n = v == 2 ? "Keys" : v ? "On" : "Off";
         while ((*b++ = *n++))
@@ -268,6 +294,10 @@ static void knob_set(int k, int v)
     if (k < P_NPARAMS) {
         proj.par[k] = (int16_t)v;
         en_set(k, v);
+    } else if (k >= K_U) {
+        proj.user[EDIT_LAYER].v[k - K_U] = (uint8_t)v;
+        en_user_set(EDIT_LAYER, &proj.user[EDIT_LAYER]);
+        en_user_hear(EDIT_LAYER);
     } else if (k == K_LEDS) {
         proj.leds = (uint8_t)v;
     }
@@ -372,6 +402,8 @@ static int sound_turn(int knob, int32_t e, int hold)   /* 1: it was a sound's */
             en_param_text(p, proj.par[p], t);
             if (p == P_MELSND)
                 en_mel_hear();
+            else if (p == P_KEYSND || p == P_BASSSND || p == P_PADSND)
+                en_user_hear(p == P_KEYSND ? EN_U_KEYS : p == P_BASSSND ? EN_U_BASS : EN_U_PAD);   /* (the engine knows it for what it is: a sound the player built) */
             if (p == P_MELMODE)
                 keys_mode();
             say(SOUND_KNOB[i].say, t);
@@ -381,6 +413,98 @@ static int sound_turn(int knob, int32_t e, int hold)   /* 1: it was a sound's */
         }
     return 0;
 }
+/* ---- the sound editor. A page within a layer's page: the four knobs are the sound's until a page's button or SEL + GLO, and the same four with SEL held are the rest of it. Coming in from a sound of the list, that sound's values are loaded and User is chosen, so it starts from what was sounding and nothing moves. (What was there before, if it had been built on, can be had back: Start, as Before, until the next piece) */
+static const char *const EDIT_NAME[EN_NUSER] = {"KEYS", "MELODY", "BASS", "PAD"};
+static const char *const EDIT_WORD[EN_NUSER] = {"Build keys", "Build melody", "Build bass", "Build pad"};
+static int page_knob(int i)                     /* what knob i is, here and now */
+{
+    static const uint8_t MAIN[4] = {K_U + EN_UP_RATIO, K_U + EN_UP_DEPTH, K_U + EN_UP_ATT, K_U + EN_UP_DEC}, ALT[4] = {K_UFROM, K_U + EN_UP_MOD, K_NONE, K_U + EN_UP_REL};
+    if (!ui.edit)
+        return VIEW_KNOB[ui.view][i];
+    return (ui.btn >> B_SEL & 1u ? ALT : MAIN)[i];
+}
+static const char *page_label(int i)
+{
+    return ui.edit ? knob_name(page_knob(i)) : KNOB_LABEL[ui.view][i];
+}
+static void user_load_from(int l, int from)     /* a sound's own values into the set. What it took the place of, if anything was built on it, stays to be had back */
+{
+    if (en_user_moved(l, &proj.user[l])) {
+        ui.before[l] = proj.user[l];
+        ui.have_before |= (uint8_t)(1u << l);
+    }
+    ui.on_before &= (uint8_t)~(1u << l);
+    en_user_load(l, from, &proj.user[l]);
+    en_user_set(l, &proj.user[l]);
+    mark_dirty();
+}
+static void edit_open(int l)
+{
+    const int p = en_user_par(l), now = proj.par[p];
+    ui.edit = (uint8_t)(l + 1);
+    ui.touched = -1;
+    if (now != en_user_value(l)) {
+        const int from = l == EN_U_MEL ? (now ? now - 1 : en_keys_timbre(proj.par[P_MTONE])) : now;
+        user_load_from(l, from);
+        knob_set(p, en_user_value(l));
+        say("BUILD FROM", en_user_from_name(l, from));
+    } else {
+        say("BUILD", EDIT_NAME[l]);
+    }
+    en_user_hear(l);
+}
+static void edit_close(void)
+{
+    const int l = EDIT_LAYER;
+    ui.edit = 0u;
+    ui.touched = -1;
+    say(EDIT_NAME[l], "SOUND KEPT");
+}
+static void edit_button(void)                   /* SEL + GLO. The Keys page has two sounds */
+{
+    if (ui.view != V_KEYS && ui.view != V_MOTIFS && ui.view != V_BASS)
+        return;
+    if (ui.edit - 1 == EN_U_KEYS)
+        edit_open(EN_U_PAD);
+    else if (ui.edit)
+        edit_close();
+    else
+        edit_open(ui.view == V_KEYS ? EN_U_KEYS : ui.view == V_MOTIFS ? EN_U_MEL : EN_U_BASS);
+}
+static void from_turn(int32_t e)                /* SEL + KNOB 1 in it: the next sound to start from, one a click, round and round; Before last, if there is one */
+{
+    const int l = EDIT_LAYER, n = from_count(l), at = (knob_get(K_UFROM) + (e > 0 ? 1 : -1) + n) % n;
+    if (at >= en_user_nfrom(l)) {                /* the one it took the place of, this one in its place */
+        const en_user_t now = proj.user[l];
+        proj.user[l] = ui.before[l];
+        ui.before[l] = now;
+        ui.on_before |= (uint8_t)(1u << l);
+        en_user_set(l, &proj.user[l]);
+        mark_dirty();
+        say("START FROM", "Before");
+    } else {
+        user_load_from(l, at);
+        say("START FROM", en_user_from_name(l, at));
+    }
+    en_user_hear(l);
+}
+static void edit_turn(int i, int32_t e)
+{
+    const int k = page_knob(i);
+    if (ui.btn >> B_SEL & 1u) {
+        ui.sel_layer = 1u;
+        ui.btn_used |= 1u << B_SEL;
+    }
+    if (k == K_NONE)
+        return;
+    if (k == K_UFROM)
+        from_turn(e);
+    else
+        turn(EN_K1 + i, k, e);
+    ui.touched = (int8_t)i;
+    ui.touch_until = plat_ms() + 1200u;
+}
+
 static int knob_hold(uint32_t btn)              /* what a knob is being turned under: -1 nothing. FX and GLO only on Space, where they have this job */
 {
     if (btn >> B_SEL & 1u)
@@ -492,6 +616,7 @@ static void set_piece(int i)                    /* the piece playing kept as it 
 {
     keys_let_go();
     project_piece(i);
+    ui.edit = ui.have_before = ui.on_before = 0u;  /* (the sounds are another piece's now) */
 #if defined PLAT_HOST && !defined PLAT_WEB
     host_pieces++;
 #endif
@@ -509,6 +634,7 @@ static void set_view(int v)
 {
     ui.view = (uint8_t)v;
     ui.touched = -1;
+    ui.edit = 0u;                                /* (and the page's own knobs) */
     scr.card_until = plat_ms();                  /* a page's button: the page, now */
 }
 
@@ -568,6 +694,8 @@ static int sel_button(int b)                     /* 1: it was a page's */
         mark_dirty();
         return 1;
     }
+    if (b == B_GLO)
+        edit_button();
     for (v = 0; v < NVIEWS; v++)
         if (VIEW_BTN[v] == b)
             return 1;
@@ -610,6 +738,10 @@ static void button_now(int b, int edit_sel)
     if (b == B_GLO && ui.view == V_SETUP) {      /* GLO on Setup: the reading starts afresh */
         app_render_max_us = 0;
         app_sheds = 0;
+    }
+    if (ui.edit && VIEW_BTN[ui.view] == b) {     /* the sound editor: its own page's button lets go of it */
+        edit_close();
+        return;
     }
     for (v = 0; v < NVIEWS; v++)                 /* a page's button: its page */
         if (VIEW_BTN[v] == b) {
@@ -783,6 +915,7 @@ static void input(void)
         ui.help = 0;
         keys_let_go();
         project_piece_reset();
+        ui.edit = ui.have_before = ui.on_before = 0u;
         owed |= OWE_APPLY | OWE_REGROW;
         owed_tick();
         say("RESET", piece_name(proj.piece));
@@ -791,7 +924,9 @@ static void input(void)
     for (i = 0; i < 4; i++)
         if ((e = plat_enc(EN_K1 + (int)i)) != 0) {
             const int hold = knob_hold(btn);
-            if (hold == B_GLO && !sound_turn((int)i, e, hold)) {
+            if (ui.edit) {
+                edit_turn((int)i, e);
+            } else if (hold == B_GLO && !sound_turn((int)i, e, hold)) {
                 ui.btn_used |= 1u << B_GLO;      /* (KNOB 2 and 4 have nothing under GLO: not the page's own value by accident, and no page on the release) */
             } else if (hold != B_GLO && (hold < 0 || !sound_turn((int)i, e, hold))) {
                 turn(EN_K1 + (int)i, VIEW_KNOB[ui.view][i], e);
@@ -858,7 +993,7 @@ static uint32_t hash_s(uint32_t h, const char *s)
 /* ---- the scene: what is on the screen, the first of these that holds */
 static int deg_shown(uint32_t now)     /* SEL held, alone, and no layer's button has gone with it */
 {
-    return (ui.btn >> B_SEL & 1u) && !(ui.btn & ~(1u << B_SEL)) && !ui.sel_layer && now - ui.down_t[B_SEL] >= DEG_HOLD;
+    return (ui.btn >> B_SEL & 1u) && !(ui.btn & ~(1u << B_SEL)) && !ui.sel_layer && !ui.edit && now - ui.down_t[B_SEL] >= DEG_HOLD;   /* (in the sound editor SEL has the knobs' other half to show) */
 }
 static int save_shown(uint32_t now)    /* SAVE's, not an autosave's; a failed one says so in the header instead */
 {
@@ -1179,6 +1314,13 @@ static void setup_read(char *c)
 static int page_sounds(int view, char *b, int leave, int tight)
 {
     int i, n = 0;
+    if (ui.edit) {                               /* which sound the knobs are */
+        const char *w = EDIT_WORD[EDIT_LAYER];
+        while (*w)
+            b[n++] = *w++;
+        b[n] = 0;
+        return n;
+    }
     if (view == V_SPACE) {                       /* each layer's effect, if it has one, with its Motion: KChor50/MFilt70. What else there is, says itself when turned */
         static const char *const FX_SHORT[EN_NFX] = {"", "Chor", "Pan", "Trem", "Filt"};
         for (i = 0; i < 2; i++) {
@@ -1307,7 +1449,7 @@ static uint32_t header_sig(int sc)
         return 0u;
     h = hash(h, proj.piece | (uint32_t)proj.par[P_ROOT] << 8 | (uint32_t)proj.pool << 12);
     h = hash(h, en_playing | ui.dirty << 4 | (uint32_t)en_ext << 6 | (uint32_t)proj.par[P_MODE] << 8);
-    h = hash(h, (uint32_t)proj.par[P_TEMPO] | (uint32_t)(batt() + 1) << 24);
+    h = hash(h, (uint32_t)proj.par[P_TEMPO] | (uint32_t)(batt() + 1) << 24 | (uint32_t)ui.edit << 8);
     if (sc == SC_PAGE && ui.view == V_SETUP)
         h = hash(hash(h, scr.r_cpu | scr.r_max << 8), scr.r_x | scr.r_s << 16);
     else if (sc == SC_PAGE || sc == SC_HOLD)
@@ -1463,12 +1605,12 @@ static int help_lines(int b, const char *l[HELP_LINES])
 #define L(t) (l[n++] = (t))
     switch (b) {
     case B_HOME: L("TEMPO, ENERGY, EVOLVE, STYLE"); L("HOLD + TURN SELECT: TEMPO"); L("SEL + KEY: CHORDS ON IT, OR NOT"); L("SEL + HOME: HANDS OR AUTO"); break;
-    case B_ENV: L("THE KEYS AND THE PAD"); L("LEVEL, BLOOM, BRIGHT, NOTES"); L("SEL + ENV: ON OR OFF"); L("SEL + KNOB 1, KNOB 2: THE SOUNDS"); break;
-    case B_ARP: L("THE MELODY: LEVEL, RATE, TONE, OCT"); L("IN KEYS, KEYS ARP THE KEYS PLAY IT"); L("SEL + ARP: ON OR OFF"); L("SEL + KNOB 1-4: SOUND, MODE,"); L(" PATTERN, SKIP. SEL + REC: LATCH"); break;
-    case B_LFO: L("THE BASS"); L("LEVEL, MOVE, GLIDE, OCTAVE"); L("SEL + LFO: ON OR OFF"); L("SEL + KNOB 1: THE SOUND"); break;
+    case B_ENV: L("THE KEYS AND THE PAD"); L("LEVEL, BLOOM, BRIGHT, NOTES"); L("SEL + ENV: ON OR OFF"); L("SEL + KNOB 1, KNOB 2: THE SOUNDS"); L("SEL + GLO: BUILD ONE, AGAIN THE PAD"); break;
+    case B_ARP: L("THE MELODY: LEVEL, RATE, TONE, OCT"); L("IN KEYS, KEYS ARP THE KEYS PLAY IT"); L("SEL + ARP: ON OR OFF. SEL + GLO: BUILD"); L("SEL + KNOB 1-4: SOUND, MODE,"); L(" PATTERN, SKIP. SEL + REC: LATCH"); break;
+    case B_LFO: L("THE BASS"); L("LEVEL, MOVE, GLIDE, OCTAVE"); L("SEL + LFO: ON OR OFF"); L("SEL + KNOB 1: THE SOUND"); L("SEL + GLO: BUILD ONE"); break;
     case B_SEQ: L("THE DRUMS"); L("LEVEL, BREAKS, HATS, KIT"); L("SEL + SEQ: KICK AND SNARE"); L(" ON OR OFF"); break;
     case B_FX: L("THE SPACE: ECHO, TIME, REVERB, SIZE"); L("SEL + FX: HATS ON OR OFF"); L("KNOBS 1-2 KEYS, 3-4 MELODY:"); L("SEL: EFFECT, MOTION. HOLD FX: ECHO,"); L(" REVERB. HOLD GLO: DEPTH (1, 3)"); break;
-    case B_GLO: L("SETUP: ROOT, TUNE, MIDI OUT, LIGHTS"); L("CPU LOAD, M WORST BLOCK,"); L(" X MISSED, S SHED"); L("AGAIN: THE READING AFRESH"); break;
+    case B_GLO: L("SETUP: ROOT, TUNE, MIDI OUT, LIGHTS"); L("CPU LOAD, M WORST BLOCK,"); L(" X MISSED, S SHED"); L("AGAIN: THE READING AFRESH"); L("SEL + GLO ON A LAYER: BUILD A SOUND"); break;
     case B_EDIT: L("THE NEXT SECTION,"); L(" ON THE NEXT BAR"); L("+ SELECT: A BREAK,"); L(" ON THE NEXT BAR"); break;
     case B_REC: L("HOLD: THE CHORD STAYS,"); L(" NO NEW SECTION"); L("THE REST PLAYS ON"); L("AGAIN: LET GO"); break;
     case B_OCTDN: L("THE MELODY AN OCTAVE DOWN"); L("WITH OCT+, 5 S: UPDATE MODE"); break;
@@ -1495,7 +1637,7 @@ static void draw_help(void)
 #define KCELL_W 60
 static void draw_knob(int i)
 {
-    const int k = VIEW_KNOB[ui.view][i], hot = scr.now < ui.touch_until && ui.touched == i;
+    const int k = page_knob(i), hot = scr.now < ui.touch_until && ui.touched == i;
     const int32_t x = i * KCELL_W, cx = x + 30;
     char t[16];
     int lo, hi, v;
@@ -1505,7 +1647,7 @@ static void draw_knob(int i)
         rect(x + 3, PANEL_Y + 2, 54, PANEL_H - 3, K_HOT);
     knob_range(k, &lo, &hi);
     v = knob_get(k);
-    caps(t, KNOB_LABEL[ui.view][i], sizeof t);
+    caps(t, page_label(i), sizeof t);
     text_c(cx, PANEL_Y + 2, &FONT_XS, t, hot ? K_INK : K_SOFT);
     arc(cx, PANEL_Y + 29, 11, hi > lo ? (float)(v - lo) / (float)(hi - lo) : 0.0f, K_TRACK, K_INK, lo < 0);
     knob_text(k, t);
@@ -1522,7 +1664,8 @@ static void draw_knobs(void)
 }
 static uint32_t knob_sig(int i)
 {
-    return (uint32_t)(knob_get(VIEW_KNOB[ui.view][i]) + 1024) << 2 | (uint32_t)mel_arp() << 1 | (uint32_t)(scr.now < ui.touch_until && ui.touched == i);
+    const int k = page_knob(i);
+    return (uint32_t)(k == K_NONE ? 0 : knob_get(k) + 1024) << 2 | (uint32_t)mel_arp() << 1 | (uint32_t)(scr.now < ui.touch_until && ui.touched == i) | (uint32_t)k << 16 | (uint32_t)(ui.edit ? proj.user[EDIT_LAYER].from : 0u) << 24;   /* (a value's words are what a set has them as) */
 }
 
 /* ---- the face: the closed cell, and patches of the others around the eyes and the mouth. Eyes closed while it listens (no drums), half open with drums, open on a
@@ -2264,6 +2407,7 @@ void ui_panic(void)                    /* the engine ends the duck itself: here,
 static struct {
     uint8_t view, help, ext, started, scene;
     int16_t val[4];
+    uint8_t edit;                              /* the sound editor as the knobs last were, with SEL */
     uint32_t chord;                            /* the chord's name, hashed */
 } sp;
 static char sp_buf[ANN_MAX + 1];
@@ -2306,6 +2450,12 @@ static void sp_value(int k)                    /* a value as it is said: as show
 }
 static void sp_knob(int view, int i)           /* "Bloom 60": the name the page gives it, then its value */
 {
+    if (ui.edit) {
+        sp_cat(page_label(i));
+        sp_cat(" ");
+        sp_value(page_knob(i));
+        return;
+    }
     sp_cat(KNOB_LABEL[view][i]);
     sp_cat(" ");
     sp_value(VIEW_KNOB[view][i]);
@@ -2338,6 +2488,18 @@ static void sp_page(int all)
     int i;
     sp_n = 0;
     sp_buf[0] = 0;
+    if (ui.edit) {                               /* the sound editor: all of it, both halves */
+        const int l = EDIT_LAYER;
+        static const uint8_t ORDER[EN_NUP] = {EN_UP_RATIO, EN_UP_DEPTH, EN_UP_ATT, EN_UP_DEC, EN_UP_REL, EN_UP_MOD};
+        sp_cat(EDIT_WORD[l]);
+        for (i = 0; i < EN_NUP; i++) {
+            sp_cat(i ? ", " : ": ");
+            sp_cat(en_user_name(l, ORDER[i]));
+            sp_cat(" ");
+            sp_value(K_U + ORDER[i]);
+        }
+        return;
+    }
     sp_cat(VIEW_NAME[ui.view]);
     sp_cat(" page");
     for (i = 0; i < 4; i++) {
@@ -2501,7 +2663,8 @@ static void sp_snap(void)
 {
     int i;
     for (i = 0; i < 4; i++)
-        sp.val[i] = (int16_t)knob_get(VIEW_KNOB[ui.view][i]);
+        sp.val[i] = (int16_t)(page_knob(i) == K_NONE ? 0 : knob_get(page_knob(i)));
+    sp.edit = ui.edit | (uint8_t)((ui.btn >> B_SEL & 1u) << 7);
     sp.view = ui.view;
     sp.help = ui.help;
     sp.ext = en_ext;
@@ -2581,8 +2744,10 @@ static void speak(void)
         ann_later(sp_buf, ANN_NOW, 200u, now);
         return;
     }
+    if (sp.edit != (ui.edit | (uint8_t)((ui.btn >> B_SEL & 1u) << 7)))   /* the knobs are others now: nobody has turned one */
+        sp_snap();
     for (i = 0; i < 4; i++) {                         /* a knob turning */
-        int v = knob_get(VIEW_KNOB[ui.view][i]);
+        int v = page_knob(i) == K_NONE ? 0 : knob_get(page_knob(i));
         if (v != sp.val[i]) {
             sp.val[i] = (int16_t)v;
             if (changed < 0)
@@ -2706,6 +2871,47 @@ static int ui_unfit(void)                             /* the host's "unfit": wha
         }
         proj = k;
     }
+    {                                                 /* the sound editor: its names, every value from every sound, what it says */
+        const uint8_t ke = ui.edit;
+        char c[24];
+        for (x = 0; x < EN_NUSER; x++) {
+            int f, p;
+            ui.edit = (uint8_t)(x + 1);
+            for (v = 0; v < NVIEWS; v++)
+                if (page_sound(v, c))
+                    n += unfit_one(&FONT_XS, c, HEADER_SOUND_ROOM(v), "the header's editor");
+            n += unfit_msg("BUILD", EDIT_NAME[x]);
+            n += unfit_msg(EDIT_NAME[x], "SOUND KEPT");
+            n += unfit_msg("START FROM", "Before");
+            n += unfit_one(&FONT_B, "Before", KNOB_ROOM, "value");
+            caps(t, "Start", sizeof t);
+            n += unfit_one(&FONT_XS, t, KNOB_ROOM, "label");
+            for (f = 0; f < en_user_nfrom(x); f++) {
+                n += unfit_msg("BUILD FROM", en_user_from_name(x, f));
+                n += unfit_msg("START FROM", en_user_from_name(x, f));
+                ui.btn |= 1u << B_SEL;
+                proj.user[x].from = (uint8_t)f;
+                knob_text(K_UFROM, t);
+                ui.btn &= ~(1u << B_SEL);
+                n += unfit_one(&FONT_B, t, KNOB_ROOM, "value");
+                en_user_load(x, f, &proj.user[x]);
+                for (p = 0; p < EN_NUP; p++) {
+                    int st;
+                    const int own = proj.user[x].v[p];
+                    caps(t, en_user_name(x, p), sizeof t);
+                    n += unfit_one(&FONT_XS, t, KNOB_ROOM, "label");
+                    for (st = 0; st < en_user_steps(x, p); st++) {
+                        proj.user[x].v[p] = (uint8_t)st;
+                        en_user_text(x, p, &proj.user[x], t);
+                        n += unfit_one(&FONT_B, t, KNOB_ROOM, "value");
+                    }
+                    proj.user[x].v[p] = (uint8_t)own;
+                }
+            }
+        }
+        ui.edit = ke;
+        proj = keep;
+    }
     n += unfit_msg("ARP LATCH", "OFF");
     n += unfit_msg("THE ROOT STAYS", "(SETUP)");
     n += unfit_msg("3 NOTES", "AT LEAST");
@@ -2767,6 +2973,42 @@ static void speak_dump(void)
             sp_print("MSG", t);
             proj = keep;
         }
+    {                                                 /* the sound editor: as a page says it, as a turn does, as it says itself */
+        const uint8_t ke = ui.edit;
+        for (x = 0; x < EN_NUSER; x++) {
+            int f, p, st;
+            ui.edit = (uint8_t)(x + 1);
+            ui.view = x == EN_U_MEL ? V_MOTIFS : x == EN_U_BASS ? V_BASS : V_KEYS;
+            sp_page(0);
+            sp_print("SCREEN", sp_buf);
+            msg_text("BUILD", EDIT_NAME[x], t);
+            sp_print("MSG", t);
+            msg_text(EDIT_NAME[x], "SOUND KEPT", t);
+            sp_print("MSG", t);
+            msg_text("START FROM", "Before", t);
+            sp_print("MSG", t);
+            for (f = 0; f < en_user_nfrom(x); f++) {
+                msg_text("BUILD FROM", en_user_from_name(x, f), t);
+                sp_print("MSG", t);
+                msg_text("START FROM", en_user_from_name(x, f), t);
+                sp_print("MSG", t);
+            }
+            en_user_load(x, 0, &proj.user[x]);
+            for (p = 0; p < EN_NUP; p++)
+                for (st = 0; st < en_user_steps(x, p); st++) {
+                    const int own = proj.user[x].v[p];
+                    proj.user[x].v[p] = (uint8_t)st;
+                    sp_n = 0;
+                    sp_cat(en_user_name(x, p));
+                    sp_cat(" ");
+                    sp_value(K_U + p);
+                    sp_print("KNOB", sp_buf);
+                    proj.user[x].v[p] = (uint8_t)own;
+                }
+        }
+        ui.edit = ke;
+        proj = keep;
+    }
     ui.view = keep_view;
     for (x = 0; x < 8; x++) {                         /* WHERE: growing, resting, unsaved, a clock, held, custom */
         ui.view = (uint8_t)(x * 3 % NVIEWS);

@@ -56,6 +56,8 @@ run sound sh -c "$CC -O2 -ffp-contract=off -std=c99 -D_DEFAULT_SOURCE -D_DARWIN_
     -o $OUT/sound_test tests/host/sound_test.c app/dsp/amb.c app/dsp/brk.c -lm && $OUT/sound_test"
 run fx sh -c "$CC -O2 -ffp-contract=off -std=c99 -D_DEFAULT_SOURCE -D_DARWIN_C_SOURCE -Wall -Wextra -Wdouble-promotion -Werror -DEN_HOST -Iapp/dsp -Ibase/include \
     -o $OUT/fx_test tests/host/fx_test.c app/dsp/amb.c app/dsp/brk.c -lm && perl -e 'alarm shift; exec @ARGV' 400 $OUT/fx_test"
+run user sh -c "$CC -O2 -ffp-contract=off -std=c99 -D_DEFAULT_SOURCE -D_DARWIN_C_SOURCE -Wall -Wextra -Wdouble-promotion -Werror -DEN_HOST -Iapp/dsp -Ibase/include \
+    -o $OUT/user_test tests/host/user_test.c app/dsp/amb.c app/dsp/brk.c -lm && perl -e 'alarm shift; exec @ARGV' 400 $OUT/user_test"
 run art sh -c "$CC -O2 -std=c99 -Wall -Wextra -Werror -Iapp -o $OUT/art_test tests/host/art_test.c && $OUT/art_test"
 if [ -f ../art/source/eyes.png ]; then
     run art-fresh perl -e 'alarm shift; exec @ARGV' 300 "$PY" -I tools/gen_art.py --check   # the header is what the owner's pictures give, the chapters what was approved

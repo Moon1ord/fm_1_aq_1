@@ -27,8 +27,13 @@ spin K1 1
 expect par28 3
 said KEYS SOUND Felt
 spin K1 1
+expect par28 4
+said KEYS SOUND User
+spin K1 1
 expect par28 0
 said KEYS SOUND Electric
+spin K1 -1
+expect par28 4
 spin K1 -1
 expect par28 3
 wait 600
@@ -135,8 +140,12 @@ wait 600
 shot melody_box.png
 spin K1 1
 spin K1 1
+expect par31 7
+said MELODY SOUND User
+spin K1 1
 expect par31 0
 said MELODY SOUND Auto
+spin K1 -1
 spin K1 -1
 spin K1 -1
 expect par31 5
@@ -257,7 +266,7 @@ turn PRESET -2 1
 wait 100
 expect par28 2
 # ---- a sound out of range in a save: it is damaged, the recipes. Each of them, on the piece playing and on a piece not playing
-storebad -1 28 4
+storebad -1 28 5
 reboot
 wait 300
 expect par28 0
@@ -266,11 +275,11 @@ storebad 3 29 -1
 reboot
 wait 300
 expect par29 0
-storebad 5 30 4
+storebad 5 30 5
 reboot
 wait 300
 expect par30 0
-storebad 7 31 7
+storebad 7 31 8
 reboot
 wait 300
 expect par31 0

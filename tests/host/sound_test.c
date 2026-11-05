@@ -88,7 +88,7 @@ static void start_playing(uint32_t seed, int hands)
 static const struct {
     int par, count;
     const char *name;
-} LAYER[4] = {{P_KEYSND, 4, "keys"}, {P_PADSND, 4, "pad"}, {P_BASSSND, 4, "bass"}, {P_MELSND, 7, "melody"}};
+} LAYER[4] = {{P_KEYSND, 5, "keys"}, {P_PADSND, 5, "pad"}, {P_BASSSND, 5, "bass"}, {P_MELSND, 8, "melody"}};   /* (each with User last: user_test) */
 
 /* ---- the table */
 static void t_table(void)
@@ -114,7 +114,7 @@ static void t_table(void)
         en_param_text(P_MELSND, v + 1, a);
         CHECK(!strcmp(a, EN_TIMBRE_NAME[v]), "the melody's %d: \"%s\"", v + 1, a);
     }
-    CHECK(en_param_info(P_MELSND)->hi == EN_NTIMBRES, "the melody has Auto and every timbre");
+    CHECK(en_param_info(P_MELSND)->hi == EN_NTIMBRES + 1, "the melody has Auto, every timbre and User");
     for (i = 0; i < EN_NPIECES; i++) {           /* the recipes' sounds are the first: a choice of the owner's to change */
         int16_t par[P_NPARAMS];
         uint16_t pool;
@@ -431,7 +431,7 @@ static void t_keys_measured(void)
     print_t e[4], l[4];
     float rise[4];
     int a, b;
-    const int n = en_param_info(P_KEYSND)->hi + 1;
+    const int n = en_param_info(P_KEYSND)->hi;   /* (the list: User is what the player makes it: user_test) */
     for (a = 0; a < n; a++) {
         key_note(a, &e[a], &l[a], &rise[a]);
         print_show("keys", a, &e[a], "early");
@@ -465,7 +465,7 @@ static void t_bass_measured(void)
     print_t p[4];
     float hold[4];
     int a, b;
-    const int n = en_param_info(P_BASSSND)->hi + 1;
+    const int n = en_param_info(P_BASSSND)->hi;
     for (a = 0; a < n; a++) {
         bass_alone(a, &p[a], &hold[a]);
         print_show("bass", a, &p[a], "");
@@ -587,7 +587,7 @@ static void t_keys_pad_in_the_song(void)
     int a, b, pad_only;
     for (pad_only = 0; pad_only < 2; pad_only++) {
         const int par = pad_only ? P_PADSND : P_KEYSND;
-        const int n = en_param_info(par)->hi + 1;
+        const int n = en_param_info(par)->hi;
         band_t o[4];
         for (a = 0; a < n; a++) {
             layer_alone(&o[a], par, a, pad_only, 21u);
